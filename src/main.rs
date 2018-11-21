@@ -1,3 +1,6 @@
+extern crate iron;
+extern crate router;
+extern crate rustc_serialize;
 extern crate clap;
 
 pub mod fingerprint;

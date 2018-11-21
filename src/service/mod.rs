@@ -1,4 +1,4 @@
-pub mod iron;
+pub mod ironservice;
 
 pub trait Service {
   fn port(&mut self, port: i32) -> Box<&mut Service>;
@@ -9,7 +9,7 @@ pub trait Service {
 
 pub fn create_service_by_name(name:&str) -> Option<Box<Service+'static>> {
   match name {
-    "iron" => return Some(Box::new(iron::IronWebService::new())),
+    "iron" => return Some(Box::new(ironservice::IronWebService::new())),
     _ => return None
   }
 }
