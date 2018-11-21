@@ -1,16 +1,15 @@
 use fingerprint::{Fingerprint};
 
-pub struct Gt521fx {}
+pub struct Gt521fx {
+}
 
 impl Gt521fx {
+  pub fn new() -> Self {
+    return Gt521fx {};
+  }
 }
 
 impl Fingerprint for Gt521fx {
-
-  fn new() -> Gt521fx {
-    return Gt521fx {};
-  }
-
   fn signature(&self) -> String {
     return String::from("gt521fx Fingerprint Module");
   }

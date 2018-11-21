@@ -1,0 +1,13 @@
+pub mod gt521fx;
+
+pub trait Fingerprint {
+  fn signature(&self) -> String;
+  fn start_enroll(&self) -> bool;
+}
+
+fn fingerprint(name: &str) -> Option<Box<Fingerprint>> {
+    match name {
+      "gt521fx" => return Some(Box::new(gt521fx::Gt521fx {} )),
+      _ => return Box::new(None)
+    }
+}
