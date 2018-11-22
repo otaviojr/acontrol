@@ -6,17 +6,17 @@ extern crate clap;
 pub mod fingerprint;
 pub mod nfc;
 pub mod service;
+pub mod system;
 
 use std::process;
-
 use clap::{Arg,App};
 
 const DEFAULT_LOGS_PATH:&str = "/var/log/acontrol";
 const HTTP_DEFAULT_PORT:i32 = 8088;
 
 fn main(){
-  let fingerprint_drv;
-  let nfcreader_drv;  
+  let mut fingerprint_drv;
+  let mut nfcreader_drv;  
   let mut http_port:i32 = HTTP_DEFAULT_PORT;
 
   let matches = App::new("Access Control")
@@ -72,6 +72,8 @@ fn main(){
 
   println!("Fingerprint driver: {}",fingerprint_drv.signature());
   println!("Nfc driver: {}",nfcreader_drv.signature());
+
+  system::init_acontrol_system(&fingerprint_drv, &nfcreader_drv);
 
   let service_b = service::create_service_by_name("iron");
   let mut service;
