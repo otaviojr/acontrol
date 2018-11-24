@@ -18,3 +18,7 @@ impl Fingerprint for Gt521fx {
     return true;
   }
 }
+
+unsafe impl Send for Gt521fx {}
+
+unsafe impl Sync for Gt521fx {}

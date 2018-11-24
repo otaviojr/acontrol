@@ -5,7 +5,7 @@ pub trait Fingerprint {
   fn start_enroll(&self) -> bool;
 }
 
-pub fn fingerprint_by_name(name: &str) -> Option<Box<Fingerprint+'static>> {
+pub fn fingerprint_by_name(name: &str) -> Option<Box<Fingerprint+Sync+Send>> {
     match name {
       "gt521fx" => return Some(Box::new(gt521fx::Gt521fx::new())),
       _ => return None

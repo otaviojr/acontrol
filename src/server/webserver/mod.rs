@@ -2,16 +2,16 @@ use iron::prelude::*;
 use router::Router;
 use rustc_serialize::json;
 
-use service::{Service};
+use server::{Server};
 
-pub struct IronWebService {
+pub struct WebServer {
   host: String,
-  port: i32,
+  port: u32,
 }
 
-impl IronWebService {
+impl WebServer {
   pub fn new() -> Self {
-    return IronWebService { host: "".to_string(), port: 0};
+    return WebServer { host: "".to_string(), port: 0};
   }
 
   fn hello_world(_: &mut Request) -> IronResult<Response> {
@@ -19,25 +19,25 @@ impl IronWebService {
   }
 }
 
-impl Service for IronWebService {
-  fn port(&mut self, port: i32) -> Box<&mut Service> {
+impl Server for WebServer {
+  fn port(&mut self, port: u32) -> Box<&mut Server> {
     self.port = port;
     return Box::new(self);
   }
 
-  fn host(&mut self, host: String) -> Box<&mut Service> {
-    self.host = host;
+  fn host(&mut self, host: &str) -> Box<&mut Server> {
+    self.host = host.to_string();
     return Box::new(self);
   }
 
   fn init(&self) -> bool {
     println!("{}",self.signature());
-    let mut chain = Chain::new(IronWebService::hello_world);
+    let mut chain = Chain::new(WebServer::hello_world);
     let _server = Iron::new(chain).http(format!("{}:{}",self.host,self.port.to_string())).unwrap();
     return true;
   }
 
   fn signature(&self) -> String {
-    return format!("{}{}",String::from("Iron WebService running at port "), self.port);
+    return format!("{}{}:{}",String::from("WebServer running: "), self.host, self.port);
   }
 }
