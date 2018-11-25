@@ -7,9 +7,11 @@ extern crate lazy_static;
 extern crate clap;
 
 extern crate spidev;
+extern crate sysfs_gpio;
 
 pub mod fingerprint;
 pub mod nfc;
+pub mod audio;
 pub mod server;
 pub mod system;
 
@@ -24,6 +26,7 @@ const HTTP_DEFAULT_PORT:u32 = 8088;
 fn main(){
   let fingerprint_drv;
   let nfcreader_drv;
+  let audio_drv;
 
   let matches = App::new("Access Control")
 	.version("0.0.1")
@@ -41,6 +44,12 @@ fn main(){
                 .short("n")
                 .long("nfc-module")
                 .help("Available modules: mfrc522"))
+        .arg(Arg::with_name("audio-module")
+                .required(true)
+                .takes_value(true)
+                .short("a")
+                .long("audio-module")
+                .help("Available modules: buzzer"))
         .arg(Arg::with_name("http-server-port")
                 .required(false)
                 .takes_value(true)
@@ -60,9 +69,11 @@ fn main(){
 
   let fingerprint = matches.value_of("fingerprint-module").unwrap();
   let nfc = matches.value_of("nfc-module").unwrap();
+  let audio = matches.value_of("audio-module").unwrap();
 
   let fingerprint_b = fingerprint::fingerprint_by_name(fingerprint);
   let nfcreader_b = nfc::nfcreader_by_name(nfc);
+  let audio_b = audio::audio_by_name(audio);
 
   if fingerprint_b.is_none() {
     eprintln!("fingerprint module \"{}\" not found!", fingerprint);
@@ -78,10 +89,18 @@ fn main(){
     nfcreader_drv = nfcreader_b.unwrap();
   }
 
+  if audio_b.is_none() {
+    eprintln!("audio module \"{}\" not found!", audio);
+    process::exit(-1);
+  } else {
+    audio_drv = audio_b.unwrap();
+  }
+
   println!("Fingerprint driver: {}",fingerprint_drv.signature());
   println!("Nfc driver: {}",nfcreader_drv.signature());
+  println!("Audio driver: {}", audio_drv.signature());
 
-  if !system::init_acontrol_system(fingerprint_drv, nfcreader_drv) {
+  if !system::init_acontrol_system(fingerprint_drv, nfcreader_drv, audio_drv) {
     process::exit(1);
   }
 
