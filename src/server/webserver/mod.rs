@@ -30,11 +30,13 @@ impl Server for WebServer {
     return Box::new(self);
   }
 
-  fn init(&self) -> bool {
+  fn init(&self) -> Result<(), String> {
     println!("{}",self.signature());
     let mut chain = Chain::new(WebServer::hello_world);
-    let _server = Iron::new(chain).http(format!("{}:{}",self.host,self.port.to_string())).unwrap();
-    return true;
+    if let Err(err) = Iron::new(chain).http(format!("{}:{}",self.host,self.port.to_string())) {
+      return Err(format!("{}(=> {})", "Error initializing webserver",err));
+    }
+    Ok( () )
   }
 
   fn signature(&self) -> String {

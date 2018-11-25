@@ -42,8 +42,15 @@ impl Buzzer {
   }
 }
 
+impl Drop for Buzzer {
+  fn drop(&mut self) {
+    println!("Unloading audio driver");
+    let _res = self.unload();
+  }
+}
+
 impl Audio for Buzzer {
-  fn init(&mut self) -> Result<String, String> {
+  fn init(&mut self) -> Result<(), String> {
     let mut buzzer = self.buzzer.clone();
 
     let pin = Pin::new(5);
@@ -62,7 +69,17 @@ impl Audio for Buzzer {
         buzzer.lock().unwrap().set_buzz(false);
     });
     
-    Ok(String::from("Ok"))
+    Ok( () )
+  }
+
+  fn unload(&mut self) -> Result<(), String>{
+    println!("Audio driver unloading");
+    let buzzer = self.buzzer.clone();
+    let pin = buzzer.lock().unwrap().pin.unwrap();
+    if let Err(err) = pin.unexport() {
+      return Err(format!("{}(=>{})", "Audio driver error",err));
+    }
+    Ok(())
   }
 
   fn signature(&self) -> String {

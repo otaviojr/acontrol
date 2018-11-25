@@ -34,6 +34,23 @@ lazy_static!{
   static ref ACONTROL_SYSTEM: Mutex<AControlSystem> = Mutex::new(AControlSystem {fingerprint_drv: None, nfc_drv: None, audio_drv: None});
 }
 
+pub fn end_acontrol_system() -> bool {
+  println!("Cleaning all suffs");
+  match ACONTROL_SYSTEM.lock().unwrap().audio_drv  {
+    Some(ref drv) => {
+      if let Err(err) = drv.lock().unwrap().unload() {
+        eprintln!("Error unloading audio device (=> {})", err);
+        return false;
+      }
+    },
+    None => {
+      eprintln!("Audio device not found");
+      return false;
+    }
+  }
+  return true;
+}
+
 pub fn init_acontrol_system(fingerprint_drv: Box<Fingerprint+Sync+Send>, nfc_drv: Box<NfcReader+Sync+Send>, audio_drv: Box<Audio+Sync+Send>) -> bool {
   ACONTROL_SYSTEM.lock().unwrap().set_fingerprint_drv(fingerprint_drv);
   ACONTROL_SYSTEM.lock().unwrap().set_nfc_drv(nfc_drv);

@@ -3,7 +3,7 @@ pub mod webserver;
 pub trait Server {
   fn port(&mut self, port: u32) -> Box<&mut Server>;
   fn host(&mut self, host: &str) -> Box<&mut Server>;
-  fn init(&self) -> bool;
+  fn init(&self) -> Result<(),String>;
   fn signature(&self) -> String;
 }
 

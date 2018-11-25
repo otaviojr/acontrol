@@ -1,3 +1,5 @@
+
+extern crate nix;
 extern crate iron;
 extern crate router;
 extern crate rustc_serialize;
@@ -15,6 +17,7 @@ pub mod audio;
 pub mod server;
 pub mod system;
 
+use nix::sys::signal;
 use std::process;
 use clap::{Arg,App};
 
@@ -23,10 +26,25 @@ const DEFAULT_LOGS_PATH:&str = "/var/log/acontrol";
 const HTTP_DEFAULT_HOST:&str = "localhost";
 const HTTP_DEFAULT_PORT:u32 = 8088;
 
+extern "C" fn handle_sigint(_:i32) {
+  println!("Exiting...");
+  system::end_acontrol_system();
+  process::exit(0);
+}
+
 fn main(){
   let fingerprint_drv;
   let nfcreader_drv;
   let audio_drv;
+
+  let sig_action = signal::SigAction::new(signal::SigHandler::Handler(handle_sigint),
+                                          signal::SaFlags::empty(),
+                                          signal::SigSet::empty());
+
+  unsafe{
+    signal::sigaction(signal::SIGINT, &sig_action);
+    signal::sigaction(signal::SIGKILL, &sig_action);
+  }
 
   let matches = App::new("Access Control")
 	.version("0.0.1")
@@ -113,5 +131,9 @@ fn main(){
   } else {
     server = server_b.unwrap();
   }
-  server.host(http_host).port(http_port).init();
+
+  if let Err(err) = server.host(http_host).port(http_port).init() {
+    eprintln!("{}",err);
+  }
+  system::end_acontrol_system();
 }

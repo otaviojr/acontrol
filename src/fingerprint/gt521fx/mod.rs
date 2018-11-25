@@ -20,5 +20,4 @@ impl Fingerprint for Gt521fx {
 }
 
 unsafe impl Send for Gt521fx {}
-
 unsafe impl Sync for Gt521fx {}
