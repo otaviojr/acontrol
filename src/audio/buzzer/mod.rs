@@ -50,7 +50,8 @@ impl Audio for Buzzer {
     if let Err(err) = pin.export() {
       return Err(format!("{}: {}","Error initializing audio drive",err));
     }
-
+    //for non root users, exporting a pin could have a delay to show up at sysfs
+    thread::sleep(Duration::from_millis(100));
     pin.set_direction(Direction::Out).unwrap();
 
     buzzer.lock().unwrap().pin = Some(pin);
