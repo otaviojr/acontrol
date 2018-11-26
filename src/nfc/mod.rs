@@ -1,7 +1,8 @@
 pub mod mfrc522;
 
 pub trait NfcReader {
-  fn init(&mut self) -> Result<String, String>;
+  fn init(&mut self) -> Result<(), String>;
+  fn unload(&mut self) -> Result<(), String>;
   fn signature(&self) -> String;
 }
 

@@ -48,6 +48,20 @@ pub fn end_acontrol_system() -> bool {
       return false;
     }
   }
+
+  match ACONTROL_SYSTEM.lock().unwrap().nfc_drv  {
+    Some(ref drv) => {
+      if let Err(err) = drv.lock().unwrap().unload() {
+        eprintln!("Error unloading nfc device (=> {})", err);
+        return false;
+      }
+    },
+    None => {
+      eprintln!("NFC device not found");
+      return false;
+    }
+  }
+
   return true;
 }
 
