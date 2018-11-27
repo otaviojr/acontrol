@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration,Instant};
 
 use std::io::prelude::*;
 use spidev::{Spidev, SpidevOptions, SpidevTransfer, SPI_MODE_0};
@@ -51,6 +51,64 @@ impl Register {
     }
 }
 
+#[derive(Clone, Copy)]
+enum Command {
+  Idle			= 0b0000,
+  Mem			= 0b0001,
+  GenerateRandomID	= 0b0010,
+  CalcCRC		= 0b0011,
+  Transmit		= 0b0100,
+  NoCmdChange		= 0b0111,
+  Receive		= 0b1000,
+  Transceive		= 0b1100,
+  MFAuthent		= 0b1110,
+  SoftReset		= 0b1111
+}
+
+impl Command {
+  fn name(&self) -> &'static str {
+    match *self {
+      Command::Idle => "Idle",
+      Command::Mem => "Mem",
+      Command::GenerateRandomID => "GenerateRandomID",
+      Command::CalcCRC => "CalcCRC",
+      Command::Transmit => "Transmit",
+      Command::NoCmdChange => "NoCmdChange",
+      Command::Receive => "Receive",
+      Command::Transceive => "Transceive",
+      Command::MFAuthent => "MFAuthent",
+      Command::SoftReset => "SoftReset"
+    }
+  }
+
+  fn value(&self) -> u8 {
+    let value = *self as u8;
+    value
+  }
+}
+
+#[derive(Debug)]
+enum Error {
+  /// FIFO buffer overflow
+  BufferOverflow,
+  /// Collision
+  Collision,
+  /// Wrong CRC
+  Crc,
+  /// Incomplete RX frame
+  IncompleteFrame,
+  /// Internal temperature sensor detects overheating
+  Overheating,
+  /// Parity check failed
+  Parity,
+  /// Error during MFAuthent operation
+  Protocol,
+  /// Write Error
+  Wr,
+  /// SPI Error
+  SPI,
+}
+
 struct Mfrc522ThreadSafe {
   spidev: Option<Spidev>,
   ss: Option<Pin>
@@ -83,6 +141,26 @@ impl Mfrc522ThreadSafe {
     })
   }
 
+  fn read_many<'a>(&mut self, reg: Register, buffer: &'a mut [u8]) -> Result<&'a mut [u8], std::io::Error> {
+    let mut rx_buf = [0 ; 1];
+    self.with_ss(|ref mut mfrc| {
+      if  let Some(ref mut spidev) = mfrc.spidev {
+        let addr = reg.read();
+        try!(spidev.write(&[addr]));
+        try!(spidev.read(&mut rx_buf));
+
+        let buffer_len = buffer.len();
+        for byte in &mut buffer[..buffer_len - 1] {
+          try!(spidev.write(&[addr]));
+          try!(spidev.read(&mut rx_buf));
+          *byte = rx_buf[0];
+        }
+        return Ok(buffer);
+      }
+      Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
+    })
+  }
+
   fn write(&mut self, reg: Register, val: u8) -> Result<(), std::io::Error>{
     self.with_ss(|ref mut mfrc| {
       if let Some(ref mut spidev) = mfrc.spidev {
@@ -90,6 +168,111 @@ impl Mfrc522ThreadSafe {
       }
       return Ok(())
     })
+  }
+
+  fn write_many(&mut self, reg: Register, buffer: &[u8]) -> Result<(), std::io::Error>{
+    self.with_ss(|ref mut mfrc| {
+      if let Some(ref mut spidev) = mfrc.spidev {
+        try!(spidev.write(&[reg.write()]));
+        try!(spidev.write(buffer));
+        return Ok(());
+      }
+      Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
+    })
+  }
+
+  fn command(&mut self, command: Command) -> Result<(), std::io::Error> {
+    self.write(Register::Command, command.value())
+  }
+
+  fn set_bit_mask(&mut self, reg: Register, mask: u8) -> Result<(),std::io::Error> {
+    match self.read(reg) {
+      Ok(val) => {
+        let new_val = val | mask;
+        return self.write(reg, new_val);
+      },
+      Err(err) => return Err(err)
+    }
+  }
+
+  fn clear_bit_mask(&mut self, reg: Register, mask: u8) -> Result<(), std::io::Error> {
+    match self.read(reg) {
+      Ok(val) => {
+        let new_val = val & !mask;
+        return self.write(reg, new_val);
+      },
+      Err(err) => return Err(err)
+    }
+  }
+
+  fn version(&mut self) -> Result<u8, std::io::Error>{
+    self.read(Register::Version)
+  }
+
+  fn flush_fifo(&mut self) -> Result<(),std::io::Error>{
+    try!(self.write(Register::FifoLevel, 1 << 7));
+    Ok(())
+  }
+
+  fn calc_crc(&mut self, data: &[u8]) -> Result<[u8;2], std::io::Error> {
+    //stop the ongoing command
+    try!(self.command(Command::Idle));
+    //clear CRC_IRQ flag
+    try!(self.clear_bit_mask(Register::DivIrq, 1<<2));
+    //clear fifo buffer
+    try!(self.flush_fifo());
+    //write our data to fifo buffer
+    try!(self.write_many(Register::FifoData, data));
+    //calc crc command
+    try!(self.command(Command::CalcCRC));
+    
+    let mut irq: u8;
+    let now = Instant::now();
+    loop {
+      let sec = (now.elapsed().as_secs() as f64) + (now.elapsed().subsec_nanos() as f64 / 1000_000_000.0);
+
+      if sec > 5.0 {
+        break Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "CRC Timeout"));
+      }
+
+      if let Ok(irq) = self.read(Register::DivIrq) {
+        //check if crc calculation cames to an end
+        if irq & (1<<2) != 0 {
+          //stop execution
+          try!(self.command(Command::Idle));
+          //read crc
+          let crc = [try!(self.read(Register::CrcResultL)),
+                     try!(self.read(Register::CrcResultH))];
+          break Ok(crc);
+        }
+      }
+    }
+  }
+
+  fn check_error(&mut self) -> Result<(),Error> {
+
+    let err = match self.read(Register::Error) {
+      Err(err) => return Err(Error::SPI),
+      Ok(err) => err
+    };
+
+    if err & (1 << 0) != 0 {
+      Err(Error::Protocol)
+    } else if err & (1 << 1) != 0 {
+      Err(Error::Parity)
+    } else if err & (1 << 2) != 0 {
+      Err(Error::Crc)
+    } else if err & (1 << 3) != 0 {
+      Err(Error::Collision)
+    } else if err & (1 << 4) != 0 {
+      Err(Error::BufferOverflow)
+    } else if err & (1 << 6) != 0 {
+      Err(Error::Overheating)
+    } else if err & (1 << 7) != 0 {
+      Err(Error::Wr)
+    } else {
+      Ok(())
+    }
   }
 }
 
@@ -137,7 +320,7 @@ impl NfcReader for Mfrc522 {
 
     mfrc522.lock().unwrap().ss = Some(pin);
 
-    if let Ok(version) = mfrc522.lock().unwrap().read(Register::Version) {
+    if let Ok(version) = mfrc522.lock().unwrap().version() {
       println!("NFC hardware version: 0x{:X}",version);
       if version != 0x91 && version != 0x92 {
         return Err(format!("{}(=>0x{:X})", "NFC Hardware with an invalid version",version));
