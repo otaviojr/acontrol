@@ -1,4 +1,4 @@
-use nfc::{NfcReader};
+use nfc::{NfcReader, PICC};
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -87,26 +87,37 @@ impl Command {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Error {
   /// FIFO buffer overflow
-  BufferOverflow,
+  BufferOverflow	= 0x01,
   /// Collision
-  Collision,
+  Collision		= 0x02,
   /// Wrong CRC
-  Crc,
+  Crc			= 0x03,
   /// Incomplete RX frame
-  IncompleteFrame,
+  IncompleteFrame	= 0x04,
   /// Internal temperature sensor detects overheating
-  Overheating,
+  Overheating		= 0x05,
   /// Parity check failed
-  Parity,
+  Parity		= 0x06,
   /// Error during MFAuthent operation
-  Protocol,
+  Protocol		= 0x07,
   /// Write Error
-  Wr,
+  Wr			= 0x08,
+  /// Timeout Error
+  Timeout		= 0x09,
+  //// No Memory
+  NoMem			= 0x10,
   /// SPI Error
-  SPI,
+  SPI			= 0x11,
+}
+
+impl Error {
+  fn value(&mut self) -> u8 {
+    let value = *self as u8;
+    value
+  }
 }
 
 struct Mfrc522ThreadSafe {
@@ -150,6 +161,7 @@ impl Mfrc522ThreadSafe {
         try!(spidev.read(&mut rx_buf));
 
         let buffer_len = buffer.len();
+        println!("read_many: buffer length: {} bytes", buffer_len);
         for byte in &mut buffer[..buffer_len - 1] {
           try!(spidev.write(&[addr]));
           try!(spidev.read(&mut rx_buf));
@@ -249,7 +261,7 @@ impl Mfrc522ThreadSafe {
     }
   }
 
-  fn check_error(&mut self) -> Result<(),Error> {
+  fn check_error(&mut self) -> Result<(), Error> {
 
     let err = match self.read(Register::Error) {
       Err(err) => return Err(Error::SPI),
@@ -273,6 +285,92 @@ impl Mfrc522ThreadSafe {
     } else {
       Ok(())
     }
+  }
+
+  fn transceive<'a>(&mut self, tx_buffer: &[u8], bits: u8) -> Result<Vec<u8>,Error>{
+    // stop any ongoing command
+    self.command(Command::Idle).map_err(|_err| return Error::SPI);
+    // clear all interrupt flags
+    self.write(Register::ComIrq, 0x7f).map_err( |_err| return Error::SPI);
+    // cler the fifo buffer
+    self.flush_fifo().map_err(|err| return Error::SPI);
+    // write data to transmit to the fifo buffer
+    self.write_many(Register::FifoData, tx_buffer).map_err(|_err| return Error::SPI);
+    // send tranceive command
+    self.command(Command::Transceive).map_err(|_err| return Error::SPI);
+    // configure bit framing
+    self.write(Register::BitFraming, (1 << 7) | bits).map_err(|_err| return Error::SPI);
+
+    let mut irq;
+    let now = Instant::now();
+    loop {
+      let sec = (now.elapsed().as_secs() as f64) + (now.elapsed().subsec_nanos() as f64 / 1000_000_000.0);
+
+      if sec > 1.0 {
+        return  Err(Error::Timeout);
+      }
+
+      irq = 0;
+      self.read(Register::ComIrq).map(|val| irq = val);
+
+      if irq & ( (1 << 5) | (1 << 1) | (1 << 4) ) != 0 {
+        break;
+      } else if irq & (1 << 0) != 0{
+        return Err(Error::Timeout);
+      }
+    }
+
+    //check for errors
+    self.check_error()?;
+
+    let mut received:usize = 0;
+    match self.read(Register::FifoLevel) {
+      Ok(val) => received = val as usize,
+      Err(_err) => return Err(Error::SPI)
+    }
+
+    println!("Tranceive received {} bytes", received);
+    
+    let mut rx_buffer:Vec<u8> = vec![0 ; received];
+    self.read_many(Register::FifoData, &mut rx_buffer);
+
+    Ok(rx_buffer)
+  }
+
+  fn initialize(&mut self) -> Result<(), std::io::Error> {
+    // soft reset
+    try!(self.command(Command::SoftReset));
+    
+    // check the power down flag and wait until reset finish
+    let now = Instant::now();
+    loop {
+      let sec = (now.elapsed().as_secs() as f64) + (now.elapsed().subsec_nanos() as f64 / 1000_000_000.0);
+      if sec > 1.0 {
+        return  Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "Reset Timeout"));
+      }
+      if try!(self.read(Register::Command)) & (1 << 4) == 0 {
+        break;
+      }
+    }
+
+    // timer at 10Khz
+    try!(self.write(Register::Demod, 0x4d | (1 << 4) ));
+    try!(self.write(Register::TMode, 0x0 | (1 << 7) | 0b10 ));
+    try!(self.write(Register::TPrescaler, 165));
+    
+    // 5ms timeout
+    try!(self.write(Register::ReloadL, 50));
+
+    // 100% ASK modulation
+    try!(self.write(Register::TxAsk, 1 << 6 ));
+
+    // CRC preset value to 0x6363
+    try!(self.write(Register::Mode, (0x3F & (!0b11) | 0b01) ));
+
+    // enable antenna
+    try!(self.write(Register::TxControl, 0xB0 | 0b11));
+
+    Ok(())
   }
 }
 
@@ -329,6 +427,31 @@ impl NfcReader for Mfrc522 {
       return Err(format!("{}", "NFC error. Could not retrieve hardware version"));
     }
 
+    if let Err(_err) = mfrc522.lock().unwrap().initialize() {
+      return Err(format!("{}", "NFC error. Error initializing device"));
+    } else {
+      println!("NFC device initialized successfully");
+    }
+
+    Ok(())
+  }
+
+  fn find_tag(&mut self) -> Result<(),String>
+  {
+    let mut mfrc522 = self.mfrc522.clone();
+
+    let _handler = thread::spawn(move || {
+      loop {
+        println!("Searching tag...");
+        match mfrc522.lock().unwrap().transceive(&[PICC::REQIDL.value()],7) {
+          Ok(val) => println!("Card Answer {:?}", val),
+          Err(ref mut err) => println!("Error Reading Card 0x{:X}", err.value())
+        }
+        //buzzer.lock().unwrap().set_buzz(true);
+        thread::sleep(Duration::from_millis(500));
+        //buzzer.lock().unwrap().set_buzz(false);
+      }
+    });
     Ok(())
   }
 

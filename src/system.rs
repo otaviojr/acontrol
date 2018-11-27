@@ -91,6 +91,7 @@ pub fn init_acontrol_system(fingerprint_drv: Box<Fingerprint+Sync+Send>, nfc_drv
         eprintln!("Error initializing nfc (=> {})", err);
         return false;
       }
+      drv.lock().unwrap().find_tag().unwrap();
     },
     None => {
       eprintln!("Nfc driver not found!");

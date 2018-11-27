@@ -18,15 +18,16 @@ pub enum PICC {
   HALT		= 0x50
 }
 
-pub enum MiResult {
-  OK		= 0,
-  NOTAGERR	= 1,
-  ERR		= 2
+impl PICC {
+  fn value(&self) -> u8 {
+    return (*self) as u8;
+  }
 }
 
 pub trait NfcReader {
   fn init(&mut self) -> Result<(), String>;
   fn unload(&mut self) -> Result<(), String>;
+  fn find_tag(&mut self) -> Result<(), String>;
   fn signature(&self) -> String;
 }
 

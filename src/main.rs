@@ -1,4 +1,3 @@
-
 extern crate nix;
 extern crate iron;
 extern crate router;
