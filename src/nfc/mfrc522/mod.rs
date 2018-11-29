@@ -1,4 +1,4 @@
-use nfc::{NfcReader, PICC};
+use nfc::{NfcReader, MiFare, PICC};
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -28,6 +28,8 @@ enum Register {
     ReloadH = 0x2c,
     ReloadL = 0x2d,
     RxMode = 0x13,
+    Status1 = 0x07,
+    Status2 = 0x08,
     TCountValH = 0x2e,
     TCountValL = 0x2f,
     TMode = 0x2a,
@@ -153,20 +155,20 @@ impl Mfrc522ThreadSafe {
   }
 
   fn read_many<'a>(&mut self, reg: Register, buffer: &'a mut [u8]) -> Result<&'a mut [u8], std::io::Error> {
-    let mut rx_buf = [0 ; 1];
+    let mut rx_buf = vec![0 ; buffer.len() + 1];
+    let tx_buf = vec![ reg.read() ; buffer.len() + 1];
+
     self.with_ss(|ref mut mfrc| {
       if  let Some(ref mut spidev) = mfrc.spidev {
-        let addr = reg.read();
-        try!(spidev.write(&[addr]));
-        try!(spidev.read(&mut rx_buf));
-
-        let buffer_len = buffer.len();
-        println!("read_many: buffer length: {} bytes", buffer_len);
-        for byte in &mut buffer[..buffer_len - 1] {
-          try!(spidev.write(&[addr]));
-          try!(spidev.read(&mut rx_buf));
-          *byte = rx_buf[0];
+        {
+	  let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
+          try!(spidev.transfer(&mut transfer));
         }
+
+        for i in 1..rx_buf.len() {
+          buffer[i-1] = rx_buf[i];
+        }
+
         return Ok(buffer);
       }
       Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
@@ -321,7 +323,7 @@ impl Mfrc522ThreadSafe {
     }
 
     //check for errors
-    self.check_error()?;
+    try!(self.check_error());
 
     let mut received:usize = 0;
     match self.read(Register::FifoLevel) {
@@ -376,6 +378,62 @@ impl Mfrc522ThreadSafe {
 
 unsafe impl Send for Mfrc522ThreadSafe {}
 unsafe impl Sync for Mfrc522ThreadSafe {}
+
+impl MiFare for Mfrc522ThreadSafe {
+  fn send_reqA(&mut self) -> Result<Vec<u8>, String> {
+    match self.transceive(&[PICC::REQIDL.value()],7) {
+      Ok(val) => Ok(val),
+      Err(ref mut err) => Err(format!("{} => 0x{:X}","NFC MiFare REQA error", err.value()))
+    }
+  }
+
+  fn select(&mut self, cascade: u8, uuid: &Vec<u8>) -> Result<Vec<u8>, String> {
+    let mut tx_buf = vec![cascade,0x70];
+    let mut serial: u8 = 0;
+    
+    for i in uuid {
+      tx_buf.push(*i);
+      serial ^= *i;
+    }
+
+    tx_buf.push(serial);
+
+    self.calc_crc(&tx_buf).map(|val| {
+      tx_buf.push(val[0]); 
+      tx_buf.push(val[1])
+    });
+
+    self.clear_bit_mask(Register::Status2, 0x08);
+
+    match self.transceive(&tx_buf, 0) {
+      Ok(val) => {
+        Ok(val)
+      },
+      Err(ref mut err) => Err(format!("{} => 0x{:X}","NFC MiFare SELECT error", err.value()))
+    }
+  }
+
+  fn anticoll(&mut self, cascade: u8, uuid: &Vec<u8>) -> Result<Vec<u8>, String> {
+    let mut tx_buf = vec![cascade,0x20];
+    let mut serial: u8 = 0;
+
+    for i in uuid {
+      tx_buf.push(*i);
+      serial ^= *i;
+    }
+    if uuid.len() > 0 {
+      tx_buf.push(serial);
+    }
+
+    match self.transceive(&tx_buf, 0) {
+      Ok(val) => {
+        Ok(val)
+      },
+      Err(ref mut err) => Err(format!("{} => 0x{:X}","NFC MiFare anti collision loop error", err.value()))
+    }
+  }
+
+}
 
 pub struct Mfrc522 {
   mfrc522: Arc<Mutex<Mfrc522ThreadSafe>>
@@ -442,10 +500,42 @@ impl NfcReader for Mfrc522 {
 
     let _handler = thread::spawn(move || {
       loop {
+        let mut mfrc522_inner = mfrc522.lock().unwrap();
+
         println!("Searching tag...");
-        match mfrc522.lock().unwrap().transceive(&[PICC::REQIDL.value()],7) {
-          Ok(val) => println!("Card Answer {:?}", val),
-          Err(ref mut err) => println!("Error Reading Card 0x{:X}", err.value())
+        match mfrc522_inner.send_reqA() {
+          Ok(val) => {
+            println!("Card Answer {:?}", val);
+            match mfrc522_inner.anticoll(PICC::ANTICOLL1.value(), &Vec::new()){
+              Ok(val) => {
+                println!("ANTICOLL value: {:?}", val[..4].to_vec());
+                match mfrc522_inner.select(PICC::ANTICOLL1.value(),&val[..4].to_vec()) {
+                  Ok(val) => {
+                    println!("SELECT CASCADE 1 answer: {:?}",val);
+                    if val[0] == 0x88 {
+                      match mfrc522_inner.anticoll(PICC::ANTICOLL2.value(), &Vec::new()){
+                        Ok(val) => {
+                          println!("ANTICOLL value: {:?}", val);
+                          match mfrc522_inner.select(PICC::ANTICOLL2.value(),&val[..4].to_vec()) {
+                            Ok(val) => {
+                              println!("SELECT CASCADE 2 answer: {:?}",val);
+                              if val[0] == 0x88 {
+                              }
+                            },
+                            Err(ref mut err) => eprintln!("SELECT CASCADE 2 => {}", err)
+                          }
+                        },
+                        Err(ref mut err) => eprintln!("ANTICOLL 2 => {}", err)
+                      }
+                    }
+                  },
+                  Err(ref mut err) => eprintln!("SELECT CASCADE 1 => {}", err)
+                }
+              },
+              Err(ref mut err) => eprintln!("ANTICOLL 1 => {}", err)
+            }
+          },
+          Err(ref mut err) => eprintln!("REQA => {}", err)
         }
         //buzzer.lock().unwrap().set_buzz(true);
         thread::sleep(Duration::from_millis(500));
