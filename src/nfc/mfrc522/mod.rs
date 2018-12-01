@@ -14,6 +14,7 @@ use sysfs_gpio::{Direction, Pin};
 enum Register {
     BitFraming = 0x0d,
     Coll = 0x0e,
+    ComIEn = 0x02,
     ComIrq = 0x04,
     Command = 0x01,
     CrcResultH = 0x21,
@@ -124,7 +125,10 @@ impl Error {
 
 struct Mfrc522ThreadSafe {
   spidev: Option<Spidev>,
-  ss: Option<Pin>
+  ss: Option<Pin>,
+  mifare_key_a: Vec<u8>,
+  mifare_key_b: Vec<u8>,
+  mifare_access_bits: Vec<u8>
 }
 
 impl Mfrc522ThreadSafe {
@@ -155,8 +159,8 @@ impl Mfrc522ThreadSafe {
   }
 
   fn read_many<'a>(&mut self, reg: Register, buffer: &'a mut [u8]) -> Result<&'a mut [u8], std::io::Error> {
-    let mut rx_buf = vec![0 ; buffer.len() + 1];
-    let tx_buf = vec![ reg.read() ; buffer.len() + 1];
+    let mut rx_buf = vec![0 ; buffer.len()+1];
+    let tx_buf = vec![ reg.read() ; buffer.len()+1];
 
     self.with_ss(|ref mut mfrc| {
       if  let Some(ref mut spidev) = mfrc.spidev {
@@ -224,7 +228,7 @@ impl Mfrc522ThreadSafe {
   }
 
   fn flush_fifo(&mut self) -> Result<(),std::io::Error>{
-    try!(self.write(Register::FifoLevel, 1 << 7));
+    try!(self.set_bit_mask(Register::FifoLevel, 0x80));
     Ok(())
   }
 
@@ -290,18 +294,34 @@ impl Mfrc522ThreadSafe {
   }
 
   fn transceive<'a>(&mut self, tx_buffer: &[u8], bits: u8) -> Result<Vec<u8>,Error>{
+    self.send(Command::Transceive, tx_buffer, bits)
+  }
+
+  fn authent<'a>(&mut self, tx_buffer: &[u8], bits: u8) -> Result<Vec<u8>,Error>{
+    self.send(Command::MFAuthent, tx_buffer, bits)
+  }
+
+  fn send<'a>(&mut self, command: Command, tx_buffer: &[u8], bits: u8) -> Result<Vec<u8>,Error>{
+
+    let irq_wait = if command.value() == Command::Transceive.value() { 0x30 } else { 0x10 };
+
     // stop any ongoing command
     self.command(Command::Idle).map_err(|_err| return Error::SPI);
+    // set interruption
+    self.write(Register::ComIEn, 0x77 | 0x80);
     // clear all interrupt flags
     self.write(Register::ComIrq, 0x7f).map_err( |_err| return Error::SPI);
     // cler the fifo buffer
     self.flush_fifo().map_err(|err| return Error::SPI);
     // write data to transmit to the fifo buffer
     self.write_many(Register::FifoData, tx_buffer).map_err(|_err| return Error::SPI);
-    // send tranceive command
-    self.command(Command::Transceive).map_err(|_err| return Error::SPI);
-    // configure bit framing
-    self.write(Register::BitFraming, (1 << 7) | bits).map_err(|_err| return Error::SPI);
+    // send tranceive or MFauth command
+    self.command(command).map_err(|_err| return Error::SPI);
+
+    if command.value() == Command::Transceive.value() {
+      // configure bit framing
+      self.write(Register::BitFraming, (1 << 7) | bits).map_err(|_err| return Error::SPI);
+    }
 
     let mut irq;
     let now = Instant::now();
@@ -315,15 +335,15 @@ impl Mfrc522ThreadSafe {
       irq = 0;
       self.read(Register::ComIrq).map(|val| irq = val);
 
-      if irq & ( (1 << 5) | (1 << 1) | (1 << 4) ) != 0 {
+      if irq & irq_wait != 0 {
         break;
-      } else if irq & (1 << 0) != 0{
+      } else if irq & 0x01 != 0{
         return Err(Error::Timeout);
       }
     }
 
     //check for errors
-    try!(self.check_error());
+    self.check_error()?;
 
     let mut received:usize = 0;
     match self.read(Register::FifoLevel) {
@@ -379,6 +399,10 @@ impl Mfrc522ThreadSafe {
 unsafe impl Send for Mfrc522ThreadSafe {}
 unsafe impl Sync for Mfrc522ThreadSafe {}
 
+static MIFARE_DEFAULT_KEY_A:       &'static [u8] = &[0xff,0xff,0xff,0xff,0xff,0xff];
+static MIFARE_DEFAULT_KEY_B:       &'static [u8] = &[0x00,0x00,0x00,0x00,0x00,0x00];
+static MIFARE_DEFAULT_ACCESS_BITS: &'static [u8] = &[0xff,0x07,0x80,0x00];
+
 impl MiFare for Mfrc522ThreadSafe {
   fn send_reqA(&mut self) -> Result<Vec<u8>, String> {
     match self.transceive(&[PICC::REQIDL.value()],7) {
@@ -399,8 +423,8 @@ impl MiFare for Mfrc522ThreadSafe {
     tx_buf.push(serial);
 
     self.calc_crc(&tx_buf).map(|val| {
-      tx_buf.push(val[0]); 
-      tx_buf.push(val[1])
+      tx_buf.push(val[0]);
+      tx_buf.push(val[1]);
     });
 
     self.clear_bit_mask(Register::Status2, 0x08);
@@ -433,6 +457,17 @@ impl MiFare for Mfrc522ThreadSafe {
     }
   }
 
+  fn auth(&mut self, auth_mode: u8, addr: u8, uuid: &Vec<u8>) -> Result<(), String> {
+    let mut tx_buf = vec![auth_mode, addr];
+    tx_buf.extend(&self.mifare_key_a);
+    tx_buf.extend(uuid);
+
+    match self.authent(&tx_buf, 0) {
+      Ok(val) => Ok(()),
+      Err(err) => Err(format!("{}","Error authenticating"))
+    }
+  }
+
 }
 
 pub struct Mfrc522 {
@@ -441,7 +476,15 @@ pub struct Mfrc522 {
 
 impl Mfrc522 {
   pub fn new() -> Self {
-    return Mfrc522 {mfrc522: Arc::new(Mutex::new(Mfrc522ThreadSafe {spidev: None, ss: None}))};
+    return Mfrc522 {mfrc522: Arc::new(Mutex::new(Mfrc522ThreadSafe 
+      {
+        spidev: None, 
+        ss: None, 
+        mifare_key_a: vec![0xff,0xff,0xff,0xff,0xff,0xff], 
+        mifare_key_b: vec![0x00,0x00,0x00,0x00,0x00,0x00], 
+        mifare_access_bits: vec![0xff,0x07,0x80,0x69]
+      }
+    ))};
   }
 }
 
@@ -494,54 +537,130 @@ impl NfcReader for Mfrc522 {
     Ok(())
   }
 
-  fn find_tag(&mut self) -> Result<(),String>
-  {
+  fn find_tag(&mut self, func: fn(Vec<u8>, Vec<u8>) -> bool) -> Result<(),String> {
     let mut mfrc522 = self.mfrc522.clone();
-
+    
     let _handler = thread::spawn(move || {
       loop {
-        let mut mfrc522_inner = mfrc522.lock().unwrap();
+        let mut ret: Result<(), String>;
+        let mut uuid:Vec<u8> = Vec::new();
+        let mut sak:Vec<u8> = Vec::new();
+        let mut complete:bool = false;
+        {
+          let mut mfrc522_inner = mfrc522.lock().unwrap();
 
-        println!("Searching tag...");
-        match mfrc522_inner.send_reqA() {
-          Ok(val) => {
-            println!("Card Answer {:?}", val);
-            match mfrc522_inner.anticoll(PICC::ANTICOLL1.value(), &Vec::new()){
-              Ok(val) => {
-                println!("ANTICOLL value: {:?}", val[..4].to_vec());
-                match mfrc522_inner.select(PICC::ANTICOLL1.value(),&val[..4].to_vec()) {
-                  Ok(val) => {
-                    println!("SELECT CASCADE 1 answer: {:?}",val);
-                    if val[0] == 0x88 {
-                      match mfrc522_inner.anticoll(PICC::ANTICOLL2.value(), &Vec::new()){
-                        Ok(val) => {
-                          println!("ANTICOLL value: {:?}", val);
-                          match mfrc522_inner.select(PICC::ANTICOLL2.value(),&val[..4].to_vec()) {
-                            Ok(val) => {
-                              println!("SELECT CASCADE 2 answer: {:?}",val);
-                              if val[0] == 0x88 {
-                              }
-                            },
-                            Err(ref mut err) => eprintln!("SELECT CASCADE 2 => {}", err)
-                          }
-                        },
-                        Err(ref mut err) => eprintln!("ANTICOLL 2 => {}", err)
+          println!("Searching tag...");
+          ret = match mfrc522_inner.send_reqA() {
+            Ok(val) => {
+              println!("Card Answer {:?}", val);
+              let ret: Result<(), String> = match mfrc522_inner.anticoll(PICC::ANTICOLL1.value(), &Vec::new()){
+                Ok(val) => {
+                  println!("ANTICOLL CASCADE 1 value: {:?}", val);
+                  if val[0] == 0x88 { complete = false; uuid.extend_from_slice(&val[1..val.len()-1]); } else { complete = true; uuid.extend_from_slice(&val[..val.len()-1]); }
+                  let ret:Result<(), String> = match mfrc522_inner.select(PICC::ANTICOLL1.value(),&uuid) {
+                    Ok(val) => {
+                      let ret1: Result<(), String>;
+                      println!("SELECT CASCADE 1 answer: {:?}",val);
+                      if complete == false {
+                        ret1 = match mfrc522_inner.anticoll(PICC::ANTICOLL2.value(), &uuid){
+                          Ok(val) => {
+                            println!("ANTICOLL CASCADE 2 value: {:?}", val);
+                            if val[0] == 0x88 { complete = false; uuid.extend_from_slice(&val[1..val.len()-1]); } else { complete = true; uuid.extend_from_slice(&val[..val.len()-1]); }                          
+                            let ret: Result<(), String> = match mfrc522_inner.select(PICC::ANTICOLL2.value(),&uuid) {
+                              Ok(val) => {
+                                let ret2:Result<(),String>;
+                                println!("SELECT CASCADE 2 answer: {:?}",val);
+                                if complete == false {
+                                  ret2 = Err(format!("{}","Tripple byte card not implemented yet!"));
+                                } else {
+                                  sak = val;
+                                  ret2 = Ok(());
+                                }
+                                ret2
+                              },
+                              Err(ref mut err) => Err(format!("SELECT CASCADE 2 => {}", err))
+                            };
+                            ret
+                          },
+                          Err(ref mut err) => Err(format!("ANTICOLL 2 => {}", err))
+                        };
+                      } else {
+                        sak = val;
+                        ret1 = Ok(());
                       }
-                    }
-                  },
-                  Err(ref mut err) => eprintln!("SELECT CASCADE 1 => {}", err)
-                }
-              },
-              Err(ref mut err) => eprintln!("ANTICOLL 1 => {}", err)
-            }
-          },
-          Err(ref mut err) => eprintln!("REQA => {}", err)
+                      ret1
+                    },
+                    Err(ref mut err) => Err(format!("SELECT CASCADE 1 => {}", err))
+                  };
+                  ret
+                },
+                Err(ref mut err) => Err(format!("ANTICOLL 1 => {}", err))
+              };
+              //println!("Card Found: uuid={:?}, sak={:?}", uuid, sak);
+              //func(uuid, sak);
+              //TODO: proccess card
+              ret
+            },
+            Err(ref mut err) => Err(format!("REQA => {}", err))
+          }
+        };
+
+        if let Ok(val) = ret {
+          func(uuid, sak);
         }
+
+        if let Err(val) = ret {
+          eprintln!("{}", val);
+        }
+
         //buzzer.lock().unwrap().set_buzz(true);
         thread::sleep(Duration::from_millis(500));
         //buzzer.lock().unwrap().set_buzz(false);
       }
     });
+    Ok(())
+  }
+
+  fn set_auth_keys(&mut self, key_a: Vec<u8>, key_b: Vec<u8>) -> Result<(), String> {
+    Ok(())
+  }
+
+  fn set_auth_bits(&mut self, access_bits: Vec<u8>) -> Result<(), String> {
+    Ok(())
+  }
+
+  fn format(&mut self) -> Result<(), String> {
+    Ok(())
+  }
+
+  fn restore(&mut self) -> Result<(), String> {
+    Ok(())
+  }
+
+  fn read_data(&mut self, uuid: &Vec<u8>) -> Result<(), String> {
+    let mut mfrc522 = self.mfrc522.clone();
+    let mut mfrc522_inner = mfrc522.lock().unwrap();
+    
+    println!("{}","read_data: reached");
+
+    let mut addr:u8 = 1;
+    let mut buffer: Vec<u8> = Vec::new();
+
+    loop {
+      match mfrc522_inner.auth(PICC::AUTH1A.value(), addr, uuid) {
+        Ok(val) => {
+           println!("Successfuly authenticated on block {}", addr);
+           if addr < 255 { addr+=1; } else { break; }
+           if (addr+1) % 4 == 0 { addr += 1; }
+        },
+        Err(err) => return Err(err)
+      }
+    }
+
+    Ok(())
+  }
+
+  fn write_data(&mut self, uuid: Vec<u8>, data: Vec<u8>) -> Result<(), String> {
     Ok(())
   }
 

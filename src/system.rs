@@ -87,11 +87,26 @@ pub fn init_acontrol_system(fingerprint_drv: Box<Fingerprint+Sync+Send>, nfc_drv
   //initializing nfc device
   match ACONTROL_SYSTEM.lock().unwrap().nfc_drv {
     Some(ref drv) => {
-      if let Err(err) = drv.lock().unwrap().init() {
+      let mut drv_inner = drv.lock().unwrap();
+
+      if let Err(err) = drv_inner.init() {
         eprintln!("Error initializing nfc (=> {})", err);
         return false;
       }
-      drv.lock().unwrap().find_tag().unwrap();
+
+      drv_inner.find_tag(|uuid, sak|{
+        match ACONTROL_SYSTEM.lock().unwrap().nfc_drv {
+          Some(ref drv) => {
+            println!("Card Found: UUID={:?}, SAK={:?}", uuid,sak);
+
+            drv.lock().unwrap().read_data(&uuid);
+
+            return true;
+          },
+          None => return false,
+        }
+      }).unwrap();
+
     },
     None => {
       eprintln!("Nfc driver not found!");
