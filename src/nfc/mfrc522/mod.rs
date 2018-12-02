@@ -351,7 +351,7 @@ impl Mfrc522ThreadSafe {
       Err(_err) => return Err(Error::SPI)
     }
 
-    println!("Tranceive received {} bytes", received);
+    //println!("Tranceive received {} bytes", received);
     
     let mut rx_buffer:Vec<u8> = vec![0 ; received];
     self.read_many(Register::FifoData, &mut rx_buffer);
@@ -465,6 +465,31 @@ impl MiFare for Mfrc522ThreadSafe {
     match self.authent(&tx_buf, 0) {
       Ok(val) => Ok(()),
       Err(err) => Err(format!("{}","Error authenticating"))
+    }
+  }
+
+  fn read_data(&mut self, addr: u8) -> Result<(Vec<u8>), String> {
+    let mut tx_buf = vec![PICC::READ.value(), addr];
+
+    self.calc_crc(&tx_buf).map(|crc| {
+      tx_buf.push(crc[0]);
+      tx_buf.push(crc[1]);
+    });
+    
+    match self.transceive(&tx_buf, 0) {
+      Ok(val) => {
+        let buf: Vec<u8> = val[..16].to_vec();
+
+        self.calc_crc(&buf).map(|crc| {
+          if crc[0] != val[16] || crc[1] != val[17] {
+            return Err(format!("NFC MiFare read crc error reading address {}", addr));
+          }
+          Ok(())
+        });
+
+        Ok(buf)
+      },
+      Err(ref mut err) => Err(format!("{} {} => 0x{:X}","NFC MiFare error reading address {}", addr, err.value()))    
     }
   }
 
@@ -596,9 +621,6 @@ impl NfcReader for Mfrc522 {
                 },
                 Err(ref mut err) => Err(format!("ANTICOLL 1 => {}", err))
               };
-              //println!("Card Found: uuid={:?}, sak={:?}", uuid, sak);
-              //func(uuid, sak);
-              //TODO: proccess card
               ret
             },
             Err(ref mut err) => Err(format!("REQA => {}", err))
@@ -637,7 +659,7 @@ impl NfcReader for Mfrc522 {
     Ok(())
   }
 
-  fn read_data(&mut self, uuid: &Vec<u8>) -> Result<(), String> {
+  fn read_data(&mut self, uuid: &Vec<u8>) -> Result<(Vec<u8>), String> {
     let mut mfrc522 = self.mfrc522.clone();
     let mut mfrc522_inner = mfrc522.lock().unwrap();
     
@@ -649,15 +671,24 @@ impl NfcReader for Mfrc522 {
     loop {
       match mfrc522_inner.auth(PICC::AUTH1A.value(), addr, uuid) {
         Ok(val) => {
-           println!("Successfuly authenticated on block {}", addr);
-           if addr < 255 { addr+=1; } else { break; }
-           if (addr+1) % 4 == 0 { addr += 1; }
+          //println!("Successfuly authenticated on block {}", addr);
+
+          match mfrc522_inner.read_data(addr) {
+            Ok(val) => {
+              //println!("Addr {} => {:?}", addr, val);
+              buffer.extend(val);
+            },
+            Err(err) => return Err(err),
+          }
+
+          if addr < 62 { addr+=1; } else { break; }
+          if (addr+1) % 4 == 0 { addr += 1; }
         },
         Err(err) => return Err(err)
       }
     }
 
-    Ok(())
+    Ok(buffer)
   }
 
   fn write_data(&mut self, uuid: Vec<u8>, data: Vec<u8>) -> Result<(), String> {

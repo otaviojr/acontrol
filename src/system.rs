@@ -99,7 +99,14 @@ pub fn init_acontrol_system(fingerprint_drv: Box<Fingerprint+Sync+Send>, nfc_drv
           Some(ref drv) => {
             println!("Card Found: UUID={:?}, SAK={:?}", uuid,sak);
 
-            drv.lock().unwrap().read_data(&uuid);
+            match drv.lock().unwrap().read_data(&uuid) {
+	      Ok(val) => {
+                println!("Card's read value is: {:?}", val);
+              },
+              Err(err) => {
+                println!("Error reading card: {}", err);
+              }
+            }
 
             return true;
           },
