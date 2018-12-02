@@ -33,7 +33,7 @@ pub trait NfcReader {
   fn format(&mut self) -> Result<(), String>;
   fn restore(&mut self) -> Result<(), String>;
   fn read_data(&mut self, uuid: &Vec<u8>) -> Result<(Vec<u8>), String>;
-  fn write_data(&mut self, uuid: Vec<u8>, data: Vec<u8>) -> Result<(), String>;
+  fn write_data(&mut self, uuid: &Vec<u8>, data: &Vec<u8>) -> Result<(), String>;
   fn signature(&self) -> String;
 }
 
@@ -43,6 +43,7 @@ pub trait MiFare {
   fn anticoll(&mut self, cascade: u8, uuid: &Vec<u8>) -> Result<Vec<u8>, String>;
   fn auth(&mut self, auth_mode: u8, addr: u8, uuid: &Vec<u8>) -> Result<(), String>;
   fn read_data(&mut self, addr: u8) -> Result<Vec<u8>, String>;
+  fn write_data(&mut self, addr: u8, data: &Vec<u8>) -> Result<(), String>;
 }
 
 pub fn nfcreader_by_name(name: &str) -> Option<Box<NfcReader+Sync+Send>> {

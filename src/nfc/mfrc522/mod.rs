@@ -1,5 +1,6 @@
 use nfc::{NfcReader, MiFare, PICC};
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -468,6 +469,38 @@ impl MiFare for Mfrc522ThreadSafe {
     }
   }
 
+  fn write_data(&mut self, addr: u8, data: &Vec<u8>) -> Result<(), String> {
+    let mut tx_buf = vec![PICC::WRITE.value(), addr];
+
+    if data.len() < 16 {
+      return Err(format!("{}","write_data error: Invalid stream size"));
+    }
+
+    self.calc_crc(&tx_buf).map(|crc| {
+      tx_buf.push(crc[0]);
+      tx_buf.push(crc[1]);
+    });
+
+    match self.transceive(&tx_buf, 0) {
+      Ok(val) => {
+        let mut buf: Vec<u8> = data[..16].to_vec();
+
+        self.calc_crc(&buf).map(|crc| {
+          buf.push(crc[0]);
+          buf.push(crc[1]);
+        });
+
+        match self.transceive(&buf, 0) {
+          Ok(val) => {
+            Ok(())
+          },
+          Err(ref mut err) => Err(format!("{} {} => 0x{:X}","NFC MiFare error reading address {}", addr, err.value()))
+        }
+      },
+      Err(ref mut err) => Err(format!("{} {} => 0x{:X}","NFC MiFare error reading address {}", addr, err.value()))
+    }
+  }
+
   fn read_data(&mut self, addr: u8) -> Result<(Vec<u8>), String> {
     let mut tx_buf = vec![PICC::READ.value(), addr];
 
@@ -492,7 +525,6 @@ impl MiFare for Mfrc522ThreadSafe {
       Err(ref mut err) => Err(format!("{} {} => 0x{:X}","NFC MiFare error reading address {}", addr, err.value()))    
     }
   }
-
 }
 
 pub struct Mfrc522 {
@@ -691,7 +723,49 @@ impl NfcReader for Mfrc522 {
     Ok(buffer)
   }
 
-  fn write_data(&mut self, uuid: Vec<u8>, data: Vec<u8>) -> Result<(), String> {
+  fn write_data(&mut self, uuid: &Vec<u8>, data: &Vec<u8>) -> Result<(), String> {
+    let mut mfrc522 = self.mfrc522.clone();
+    let mut mfrc522_inner = mfrc522.lock().unwrap();
+
+    println!("{}","write_data: reached");
+
+    let mut addr:u8 = 1;
+    let mut buffer:VecDeque<u8> = VecDeque::new();
+    let mut packet:Vec<u8> = Vec::new();
+
+    buffer.extend(data);
+
+    loop {
+      match mfrc522_inner.auth(PICC::AUTH1A.value(), addr, uuid) {
+        Ok(val) => {
+          
+          packet.clear();
+
+          if buffer.len() == 0 { break; }
+
+          loop {
+              match buffer.pop_front(){
+                Some(val) => packet.push(val),
+                None => packet.push(0),
+              }
+              if packet.len() >= 16 { break  };
+          }
+
+          println!("Writing {:?} to addr {}",packet, addr);
+          match mfrc522_inner.write_data(addr, &packet) {
+            Ok(val) => {
+              println!("Addr {} => write successfully", addr);
+            },
+            Err(err) => return Err(err),
+          }
+
+          if addr < 62 { addr+=1; } else { break; }
+          if (addr+1) % 4 == 0 { addr += 1; }
+        },
+        Err(err) => return Err(err)
+      }
+    }
+
     Ok(())
   }
 
