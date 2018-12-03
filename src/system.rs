@@ -99,7 +99,7 @@ pub fn init_acontrol_system(fingerprint_drv: Box<Fingerprint+Sync+Send>, nfc_drv
           Some(ref drv) => {
             println!("Card Found: UUID={:?}, SAK={:?}", uuid,sak);
 
-            if let Ok(blocks) = drv.lock().unwrap().write_data(&uuid,1,&"OTÁVIO".as_bytes().to_vec()) {
+            if let Ok(blocks) = drv.lock().unwrap().write_data(&uuid,1,&"VALÉRIA".as_bytes().to_vec()) {
               println!("Data written with success. Used {} blocks", blocks);
             }
 
