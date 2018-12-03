@@ -4,8 +4,19 @@ use audio::{Audio};
 
 use std::sync::Mutex;
 
+enum NFCSystemState {
+  READING,
+  WRITING,
+  FORMATING,
+  AUTHORIZE
+}
+
+struct ASystemState {
+  nfc_state: Mutex<NFCSystemState>
+}
+
 pub struct AControlSystem {
-  fingerprint_drv: Option<Box<Fingerprint + Send + Sync>>,
+  fingerprint_drv: Option<Mutex<Box<Fingerprint + Send + Sync>>>,
   nfc_drv: Option<Mutex<Box<NfcReader + Send + Sync>>>,
   audio_drv: Option<Mutex<Box<Audio + Send + Sync>>>,
 }
@@ -13,7 +24,7 @@ pub struct AControlSystem {
 impl AControlSystem {
   pub fn set_fingerprint_drv(&mut self, drv: Box<Fingerprint+Sync+Send>){
     unsafe {
-      self.fingerprint_drv = Some(Box::from_raw(Box::into_raw(drv)));
+      self.fingerprint_drv = Some(Mutex::new(Box::from_raw(Box::into_raw(drv))));
     }
   }
 
@@ -31,7 +42,12 @@ impl AControlSystem {
 }
 
 lazy_static!{
-  static ref ACONTROL_SYSTEM: Mutex<AControlSystem> = Mutex::new(AControlSystem {fingerprint_drv: None, nfc_drv: None, audio_drv: None});
+  static ref ACONTROL_SYSTEM: Mutex<AControlSystem> = Mutex::new(AControlSystem {
+    fingerprint_drv: None, 
+    nfc_drv: None, audio_drv: None,
+  });
+
+  static ref ACONTROL_SYSTEM_STATE: ASystemState = ASystemState {nfc_state: Mutex::new(NFCSystemState::READING) };
 }
 
 pub fn end_acontrol_system() -> bool {
@@ -70,8 +86,10 @@ pub fn init_acontrol_system(fingerprint_drv: Box<Fingerprint+Sync+Send>, nfc_drv
   ACONTROL_SYSTEM.lock().unwrap().set_nfc_drv(nfc_drv);
   ACONTROL_SYSTEM.lock().unwrap().set_audio_drv(audio_drv);
 
+  let asystem = ACONTROL_SYSTEM.lock().unwrap();
+
   //initializing audio device
-  match ACONTROL_SYSTEM.lock().unwrap().audio_drv  {
+  match asystem.audio_drv  {
     Some(ref drv) => {
       if let Err(err) = drv.lock().unwrap().init() {
         eprintln!("Error initializing audio device (=> {})", err);
@@ -85,7 +103,7 @@ pub fn init_acontrol_system(fingerprint_drv: Box<Fingerprint+Sync+Send>, nfc_drv
   }
 
   //initializing nfc device
-  match ACONTROL_SYSTEM.lock().unwrap().nfc_drv {
+  match asystem.nfc_drv {
     Some(ref drv) => {
       let mut drv_inner = drv.lock().unwrap();
 
@@ -99,25 +117,39 @@ pub fn init_acontrol_system(fingerprint_drv: Box<Fingerprint+Sync+Send>, nfc_drv
           Some(ref drv) => {
             println!("Card Found: UUID={:?}, SAK={:?}", uuid,sak);
 
-            if let Ok(blocks) = drv.lock().unwrap().write_data(&uuid,1,&"VALÉRIA".as_bytes().to_vec()) {
-              println!("Data written with success. Used {} blocks", blocks);
-            }
-
-            match drv.lock().unwrap().read_data(&uuid,1,0) {
-	      Ok(val) => {
-                println!("Card's read value is: {}", String::from_utf8(val).unwrap());
+            match *ACONTROL_SYSTEM_STATE.nfc_state.lock().unwrap() {
+              NFCSystemState::READING => {
+                //TODO: Check tag and allow access
               },
-              Err(err) => {
-                println!("Error reading card: {}", err);
+              NFCSystemState::WRITING => {
+                //TODO: Write the security mark
+              },
+              NFCSystemState::FORMATING => {
+                //TODO: Write security blocks with our key
+              }
+              NFCSystemState::AUTHORIZE => {
+                //TODO: Persist card to check on reading state
               }
             }
+
+            //if let Ok(blocks) = drv.lock().unwrap().write_data(&uuid,1,&"VALÉRIA".as_bytes().to_vec()) {
+            //  println!("Data written with success. Used {} blocks", blocks);
+            //}
+
+            //match drv.lock().unwrap().read_data(&uuid,1,0) {
+	      //Ok(val) => {
+              //  println!("Card's read value is: {}", String::from_utf8(val).unwrap());
+              //},
+              //Err(err) => {
+                //println!("Error reading card: {}", err);
+              //}
+            //}
 
             return true;
           },
           None => return false,
         }
       }).unwrap();
-
     },
     None => {
       eprintln!("Nfc driver not found!");
