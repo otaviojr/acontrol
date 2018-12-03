@@ -606,6 +606,11 @@ impl NfcReader for Mfrc522 {
         {
           let mut mfrc522_inner = mfrc522.lock().unwrap();
 
+          if let Err(err) = mfrc522_inner.initialize() {
+            println!("Error initializing reader");
+            break;
+          }
+
           println!("Searching tag...");
           ret = match mfrc522_inner.send_reqA() {
             Ok(val) => {
@@ -691,21 +696,24 @@ impl NfcReader for Mfrc522 {
     Ok(())
   }
 
-  fn read_data(&mut self, uuid: &Vec<u8>) -> Result<(Vec<u8>), String> {
+  fn read_data(&mut self, uuid: &Vec<u8>, addr: u8, blocks: u8) -> Result<(Vec<u8>), String> {
     let mut mfrc522 = self.mfrc522.clone();
     let mut mfrc522_inner = mfrc522.lock().unwrap();
     
     println!("{}","read_data: reached");
 
-    let mut addr:u8 = 1;
+    let mut cur_addr:u8 = addr;
     let mut buffer: Vec<u8> = Vec::new();
 
     loop {
-      match mfrc522_inner.auth(PICC::AUTH1A.value(), addr, uuid) {
+
+      if cur_addr+1 % 4 == 0 { cur_addr += 1; }
+
+      match mfrc522_inner.auth(PICC::AUTH1A.value(), cur_addr, uuid) {
         Ok(val) => {
           //println!("Successfuly authenticated on block {}", addr);
 
-          match mfrc522_inner.read_data(addr) {
+          match mfrc522_inner.read_data(cur_addr) {
             Ok(val) => {
               //println!("Addr {} => {:?}", addr, val);
               buffer.extend(val);
@@ -713,8 +721,7 @@ impl NfcReader for Mfrc522 {
             Err(err) => return Err(err),
           }
 
-          if addr < 62 { addr+=1; } else { break; }
-          if (addr+1) % 4 == 0 { addr += 1; }
+          if cur_addr < addr+blocks { cur_addr+=1; } else { break; }
         },
         Err(err) => return Err(err)
       }
@@ -723,20 +730,23 @@ impl NfcReader for Mfrc522 {
     Ok(buffer)
   }
 
-  fn write_data(&mut self, uuid: &Vec<u8>, data: &Vec<u8>) -> Result<(), String> {
+  fn write_data(&mut self, uuid: &Vec<u8>, addr: u8, data: &Vec<u8>) -> Result<(u8), String> {
     let mut mfrc522 = self.mfrc522.clone();
     let mut mfrc522_inner = mfrc522.lock().unwrap();
 
     println!("{}","write_data: reached");
 
-    let mut addr:u8 = 1;
+    let mut cur_addr:u8 = addr;
     let mut buffer:VecDeque<u8> = VecDeque::new();
     let mut packet:Vec<u8> = Vec::new();
 
     buffer.extend(data);
 
     loop {
-      match mfrc522_inner.auth(PICC::AUTH1A.value(), addr, uuid) {
+
+      if cur_addr+1 % 4 == 0 { cur_addr += 1; }
+
+      match mfrc522_inner.auth(PICC::AUTH1A.value(), cur_addr, uuid) {
         Ok(val) => {
           
           packet.clear();
@@ -751,22 +761,17 @@ impl NfcReader for Mfrc522 {
               if packet.len() >= 16 { break  };
           }
 
-          println!("Writing {:?} to addr {}",packet, addr);
-          match mfrc522_inner.write_data(addr, &packet) {
-            Ok(val) => {
-              println!("Addr {} => write successfully", addr);
-            },
-            Err(err) => return Err(err),
+          if let Err(err) = mfrc522_inner.write_data(cur_addr, &packet) {
+            return Err(err);
           }
 
-          if addr < 62 { addr+=1; } else { break; }
-          if (addr+1) % 4 == 0 { addr += 1; }
+          if cur_addr < 62 { cur_addr+=1; } else { break; }
         },
         Err(err) => return Err(err)
       }
     }
 
-    Ok(())
+    Ok(cur_addr - addr)
   }
 
   fn unload(&mut self) -> Result<(), String>{
