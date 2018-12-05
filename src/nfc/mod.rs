@@ -1,6 +1,7 @@
 pub mod mfrc522;
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum PICC {
   REQIDL	= 0x26,
   REQALL	= 0x52,
@@ -24,26 +25,43 @@ impl PICC {
   }
 }
 
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub enum MifareAuthKey {
+  DefaultKeyA,
+  DefaultKeyB,
+  CustomKeyA,
+  CustomKeyB
+}
+
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub enum WriteSecMode {
+  Format,
+  Restore
+}
+
 pub trait NfcReader {
   fn init(&mut self) -> Result<(), String>;
   fn unload(&mut self) -> Result<(), String>;
   fn find_tag(&mut self, func: fn(Vec<u8>,Vec<u8>) -> bool) -> Result<(), String>;
-  fn set_auth_keys(&mut self, key_a: Vec<u8>, key_b: Vec<u8>) -> Result<(), String>;
+  fn set_auth_keys(&mut self, key_a: &Vec<u8>, key_b: &Vec<u8>) -> Result<(), String>;
   fn set_auth_bits(&mut self, access_bits: Vec<u8>) -> Result<(), String>;
-  fn format(&mut self) -> Result<(), String>;
-  fn restore(&mut self) -> Result<(), String>;
+  fn format(&mut self, uuid: &Vec<u8>) -> Result<(), String>;
+  fn restore(&mut self, uuid: &Vec<u8>) -> Result<(), String>;
   fn read_data(&mut self, uuid: &Vec<u8>, addr: u8, blocks: u8) -> Result<(Vec<u8>), String>;
   fn write_data(&mut self, uuid: &Vec<u8>, addr: u8, data: &Vec<u8>) -> Result<(u8), String>;
   fn signature(&self) -> String;
 }
 
 pub trait MiFare {
-  fn send_reqA(&mut self) -> Result<Vec<u8>, String>;
+  fn send_req_a(&mut self) -> Result<Vec<u8>, String>;
   fn select(&mut self, cascade: u8, uuid: &Vec<u8>) -> Result<Vec<u8>, String>;
   fn anticoll(&mut self, cascade: u8, uuid: &Vec<u8>) -> Result<Vec<u8>, String>;
-  fn auth(&mut self, auth_mode: u8, addr: u8, uuid: &Vec<u8>) -> Result<(), String>;
+  fn auth(&mut self, auth_mode: u8, addr: u8, uuid: &Vec<u8>, key: MifareAuthKey) -> Result<(), String>;
   fn read_data(&mut self, addr: u8) -> Result<Vec<u8>, String>;
   fn write_data(&mut self, addr: u8, data: &Vec<u8>) -> Result<(), String>;
+  fn write_sec(&mut self, uuid: &Vec<u8>, mode: WriteSecMode) -> Result<(), String>;
 }
 
 pub fn nfcreader_by_name(name: &str) -> Option<Box<NfcReader+Sync+Send>> {

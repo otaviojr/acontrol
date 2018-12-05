@@ -51,7 +51,7 @@ impl Drop for Buzzer {
 
 impl Audio for Buzzer {
   fn init(&mut self) -> Result<(), String> {
-    let mut buzzer = self.buzzer.clone();
+    let buzzer = self.buzzer.clone();
 
     let pin = Pin::new(5);
     if let Err(err) = pin.export() {

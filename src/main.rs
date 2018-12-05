@@ -24,10 +24,11 @@ const DEFAULT_LOGS_PATH:&str = "/var/log/acontrol";
 
 const HTTP_DEFAULT_HOST:&str = "localhost";
 const HTTP_DEFAULT_PORT:u32 = 8088;
+const MIFARE_DEFAULT_KEY:&str = "0xFF,0xFF,0xFF,0xFF,0xFF,0xFF";
 
 extern "C" fn handle_sigint(_:i32) {
   println!("Exiting...");
-  system::end_acontrol_system();
+  system::acontrol_system_end();
   process::exit(0);
 }
 
@@ -41,8 +42,8 @@ fn main(){
                                           signal::SigSet::empty());
 
   unsafe{
-    signal::sigaction(signal::SIGINT, &sig_action);
-    signal::sigaction(signal::SIGKILL, &sig_action);
+    let _ = signal::sigaction(signal::SIGINT, &sig_action);
+    let _ = signal::sigaction(signal::SIGKILL, &sig_action);
   }
 
   let matches = App::new("Access Control")
@@ -90,6 +91,25 @@ fn main(){
   let http_port:u32 = value_t!(matches, "http-server-port",u32).unwrap_or(HTTP_DEFAULT_PORT);
   let http_host:&str = matches.value_of("http-server-host").unwrap_or(HTTP_DEFAULT_HOST);
 
+  let p:&[_] = &['0','x','X'];
+  let mifare_key= matches.value_of("mifare-key").unwrap_or(MIFARE_DEFAULT_KEY);
+  let mifare_vec=mifare_key.split(",");
+  
+  let mut mifare_key_bytes: Vec<u8> = Vec::new();
+  for key in mifare_vec {
+    if let Ok(byte) = u8::from_str_radix(key.trim_matches(p),16) {
+      mifare_key_bytes.push(byte);
+    } else {
+      eprintln!("invalid mifare key");
+      process::exit(-1);
+    }
+  }
+
+  if mifare_key_bytes.len() != 6 {
+    eprintln!("invalid mifare key");
+    process::exit(-1);
+  }
+
   let fingerprint = matches.value_of("fingerprint-module").unwrap();
   let nfc = matches.value_of("nfc-module").unwrap();
   let audio = matches.value_of("audio-module").unwrap();
@@ -123,8 +143,12 @@ fn main(){
   println!("Nfc driver: {}",nfcreader_drv.signature());
   println!("Audio driver: {}", audio_drv.signature());
 
-  if !system::init_acontrol_system(fingerprint_drv, nfcreader_drv, audio_drv) {
-    process::exit(1);
+  if !system::acontrol_system_init(fingerprint_drv, nfcreader_drv, audio_drv) {
+    process::exit(-1);
+  }
+
+  if !system::acontrol_system_set_mifare_keys(&mifare_key_bytes, &mifare_key_bytes) {
+    process::exit(-1);
   }
 
   let server_b = server::create_server_by_name("generic");
@@ -140,5 +164,5 @@ fn main(){
   if let Err(err) = server.host(http_host).port(http_port).init() {
     eprintln!("{}",err);
   }
-  system::end_acontrol_system();
+  system::acontrol_system_end();
 }

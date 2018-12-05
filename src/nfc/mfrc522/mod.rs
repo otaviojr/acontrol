@@ -1,4 +1,4 @@
-use nfc::{NfcReader, MiFare, PICC};
+use nfc::{NfcReader, MiFare, PICC, MifareAuthKey, WriteSecMode};
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -12,6 +12,7 @@ use spidev::{Spidev, SpidevOptions, SpidevTransfer, SPI_MODE_0};
 use sysfs_gpio::{Direction, Pin};
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 enum Register {
     BitFraming = 0x0d,
     Coll = 0x0e,
@@ -56,6 +57,7 @@ impl Register {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 enum Command {
   Idle			= 0b0000,
   Mem			= 0b0001,
@@ -69,6 +71,7 @@ enum Command {
   SoftReset		= 0b1111
 }
 
+#[allow(dead_code)]
 impl Command {
   fn name(&self) -> &'static str {
     match *self {
@@ -92,6 +95,7 @@ impl Command {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 enum Error {
   /// FIFO buffer overflow
   BufferOverflow	= 0x01,
@@ -307,21 +311,21 @@ impl Mfrc522ThreadSafe {
     let irq_wait = if command.value() == Command::Transceive.value() { 0x30 } else { 0x10 };
 
     // stop any ongoing command
-    self.command(Command::Idle).map_err(|_err| return Error::SPI);
+    if let Err(_err) = self.command(Command::Idle) { return Err(Error::SPI); }
     // set interruption
-    self.write(Register::ComIEn, 0x77 | 0x80);
+    if let Err(_err) = self.write(Register::ComIEn, 0x77 | 0x80) { return Err(Error::SPI); }
     // clear all interrupt flags
-    self.write(Register::ComIrq, 0x7f).map_err( |_err| return Error::SPI);
+    if let Err(_err) = self.write(Register::ComIrq, 0x7f) { return Err(Error::SPI); }
     // cler the fifo buffer
-    self.flush_fifo().map_err(|err| return Error::SPI);
+    if let Err(_err) = self.flush_fifo()  { return Err(Error::SPI); }
     // write data to transmit to the fifo buffer
-    self.write_many(Register::FifoData, tx_buffer).map_err(|_err| return Error::SPI);
+    if let Err(_err) = self.write_many(Register::FifoData, tx_buffer) { return Err(Error::SPI); }
     // send tranceive or MFauth command
-    self.command(command).map_err(|_err| return Error::SPI);
+    if let Err(_err) = self.command(command) { return Err(Error::SPI); }
 
     if command.value() == Command::Transceive.value() {
       // configure bit framing
-      self.write(Register::BitFraming, (1 << 7) | bits).map_err(|_err| return Error::SPI);
+      if let Err(_err) = self.write(Register::BitFraming, (1 << 7) | bits) { return Err(Error::SPI); }
     }
 
     let mut irq;
@@ -334,7 +338,9 @@ impl Mfrc522ThreadSafe {
       }
 
       irq = 0;
-      self.read(Register::ComIrq).map(|val| irq = val);
+      if let Err(_err) = self.read(Register::ComIrq).map(|val| irq = val) {
+        return Err(Error::SPI);
+      }
 
       if irq & irq_wait != 0 {
         break;
@@ -346,7 +352,7 @@ impl Mfrc522ThreadSafe {
     //check for errors
     self.check_error()?;
 
-    let mut received:usize = 0;
+    let received:usize;
     match self.read(Register::FifoLevel) {
       Ok(val) => received = val as usize,
       Err(_err) => return Err(Error::SPI)
@@ -355,7 +361,9 @@ impl Mfrc522ThreadSafe {
     //println!("Tranceive received {} bytes", received);
     
     let mut rx_buffer:Vec<u8> = vec![0 ; received];
-    self.read_many(Register::FifoData, &mut rx_buffer);
+    if let Err(_err) = self.read_many(Register::FifoData, &mut rx_buffer) {
+      return Err(Error::SPI);
+    }
 
     Ok(rx_buffer)
   }
@@ -405,7 +413,7 @@ static MIFARE_DEFAULT_KEY_B:       &'static [u8] = &[0x00,0x00,0x00,0x00,0x00,0x
 static MIFARE_DEFAULT_ACCESS_BITS: &'static [u8] = &[0xff,0x07,0x80,0x00];
 
 impl MiFare for Mfrc522ThreadSafe {
-  fn send_reqA(&mut self) -> Result<Vec<u8>, String> {
+  fn send_req_a(&mut self) -> Result<Vec<u8>, String> {
     match self.transceive(&[PICC::REQIDL.value()],7) {
       Ok(val) => Ok(val),
       Err(ref mut err) => Err(format!("{} => 0x{:X}","NFC MiFare REQA error", err.value()))
@@ -423,12 +431,17 @@ impl MiFare for Mfrc522ThreadSafe {
 
     tx_buf.push(serial);
 
-    self.calc_crc(&tx_buf).map(|val| {
+    if let Err(_err) = self.calc_crc(&tx_buf).map(|val| {
       tx_buf.push(val[0]);
       tx_buf.push(val[1]);
-    });
+    }) {
+      return Err(format!("NFC MiFare crc calc error when selecting card"));
+    }
 
-    self.clear_bit_mask(Register::Status2, 0x08);
+
+    if let Err(err) = self.clear_bit_mask(Register::Status2, 0x08) {
+      return Err(format!("select error: {}", err));
+    }
 
     match self.transceive(&tx_buf, 0) {
       Ok(val) => {
@@ -458,9 +471,14 @@ impl MiFare for Mfrc522ThreadSafe {
     }
   }
 
-  fn auth(&mut self, auth_mode: u8, addr: u8, uuid: &Vec<u8>) -> Result<(), String> {
+  fn auth(&mut self, auth_mode: u8, addr: u8, uuid: &Vec<u8>, key: MifareAuthKey) -> Result<(), String> {
     let mut tx_buf = vec![auth_mode, addr];
-    tx_buf.extend(&self.mifare_key_a);
+    match key {
+      MifareAuthKey::DefaultKeyA => tx_buf.extend(MIFARE_DEFAULT_KEY_A),
+      MifareAuthKey::DefaultKeyB => tx_buf.extend(MIFARE_DEFAULT_KEY_B),
+      MifareAuthKey::CustomKeyA => tx_buf.extend(&self.mifare_key_a),
+      MifareAuthKey::CustomKeyB => tx_buf.extend(&self.mifare_key_b)
+    }
     tx_buf.extend(uuid);
 
     match self.authent(&tx_buf, 0) {
@@ -476,19 +494,25 @@ impl MiFare for Mfrc522ThreadSafe {
       return Err(format!("{}","write_data error: Invalid stream size"));
     }
 
-    self.calc_crc(&tx_buf).map(|crc| {
+    if let Err(_err) = self.calc_crc(&tx_buf).map(|crc| {
       tx_buf.push(crc[0]);
       tx_buf.push(crc[1]);
-    });
+    }) {
+      return Err(format!("NFC MiFare crc calc error  at address {}", addr));
+    }
+
 
     match self.transceive(&tx_buf, 0) {
       Ok(val) => {
         let mut buf: Vec<u8> = data[..16].to_vec();
 
-        self.calc_crc(&buf).map(|crc| {
+        if let Err(_err) = self.calc_crc(&buf).map(|crc| {
           buf.push(crc[0]);
           buf.push(crc[1]);
-        });
+        }) {
+          return Err(format!("NFC MiFare crc calc error  at address {}", addr));
+        }
+
 
         match self.transceive(&buf, 0) {
           Ok(val) => {
@@ -504,27 +528,71 @@ impl MiFare for Mfrc522ThreadSafe {
   fn read_data(&mut self, addr: u8) -> Result<(Vec<u8>), String> {
     let mut tx_buf = vec![PICC::READ.value(), addr];
 
-    self.calc_crc(&tx_buf).map(|crc| {
+    if let Err(_err) = self.calc_crc(&tx_buf).map(|crc| {
       tx_buf.push(crc[0]);
       tx_buf.push(crc[1]);
-    });
+    }) {
+      return Err(format!("NFC MiFare crc calc error  at address {}", addr));
+    }
     
     match self.transceive(&tx_buf, 0) {
       Ok(val) => {
         let buf: Vec<u8> = val[..16].to_vec();
 
-        self.calc_crc(&buf).map(|crc| {
+        if let Err(_err) = self.calc_crc(&buf).map(|crc| {
           if crc[0] != val[16] || crc[1] != val[17] {
             return Err(format!("NFC MiFare read crc error reading address {}", addr));
           }
           Ok(())
-        });
+        }) {
+          return Err(format!("NFC MiFare crc calc error  at address {}", addr));
+        }
 
         Ok(buf)
       },
       Err(ref mut err) => Err(format!("{} {} => 0x{:X}","NFC MiFare error reading address {}", addr, err.value()))    
     }
   }
+
+  fn write_sec(&mut self, uuid: &Vec<u8>, mode: WriteSecMode) -> Result<(), String> {
+    println!("{}","write_sec: reached");
+
+    let mut addr:u8 = 3;
+    let mut packet:Vec<u8> = Vec::new();
+    let key:MifareAuthKey;
+
+    match mode {
+      WriteSecMode::Format => {
+        packet.extend(&self.mifare_key_a);
+        packet.extend(MIFARE_DEFAULT_ACCESS_BITS);
+        packet.extend(&self.mifare_key_b);
+        key = MifareAuthKey::DefaultKeyA;
+      },
+      WriteSecMode::Restore => {
+        packet.extend(MIFARE_DEFAULT_KEY_A);
+        packet.extend(MIFARE_DEFAULT_ACCESS_BITS);
+        packet.extend(MIFARE_DEFAULT_KEY_B);
+        key = MifareAuthKey::CustomKeyA;
+      }
+    }
+
+    loop {
+      match self.auth(PICC::AUTH1A.value(), addr, uuid, key) {
+        Ok(val) => {
+          if let Err(err) = self.write_data(addr, &packet) {
+            return Err(err);
+          }
+
+          if addr < 62 { addr+=4; } else { break; }
+        },
+        Err(err) => return Err(err)
+      }
+    }
+
+    Ok(())
+  }
+
+
 }
 
 pub struct Mfrc522 {
@@ -595,14 +663,15 @@ impl NfcReader for Mfrc522 {
   }
 
   fn find_tag(&mut self, func: fn(Vec<u8>, Vec<u8>) -> bool) -> Result<(),String> {
-    let mut mfrc522 = self.mfrc522.clone();
+    let mfrc522 = self.mfrc522.clone();
     
     let _handler = thread::spawn(move || {
       loop {
         let mut ret: Result<(), String>;
         let mut uuid:Vec<u8> = Vec::new();
         let mut sak:Vec<u8> = Vec::new();
-        let mut complete:bool = false;
+        let mut complete:bool;
+
         {
           let mut mfrc522_inner = mfrc522.lock().unwrap();
 
@@ -612,7 +681,7 @@ impl NfcReader for Mfrc522 {
           }
 
           println!("Searching tag...");
-          ret = match mfrc522_inner.send_reqA() {
+          ret = match mfrc522_inner.send_req_a() {
             Ok(val) => {
               println!("Card Answer {:?}", val);
               let ret: Result<(), String> = match mfrc522_inner.anticoll(PICC::ANTICOLL1.value(), &Vec::new()){
@@ -680,24 +749,40 @@ impl NfcReader for Mfrc522 {
     Ok(())
   }
 
-  fn set_auth_keys(&mut self, key_a: Vec<u8>, key_b: Vec<u8>) -> Result<(), String> {
+  fn set_auth_keys(&mut self, key_a: &Vec<u8>, key_b: &Vec<u8>) -> Result<(), String> {
+    let mfrc522 = self.mfrc522.clone();
+    let mut mfrc522_inner = mfrc522.lock().unwrap();
+
+    mfrc522_inner.mifare_key_a = key_a.to_vec();
+    mfrc522_inner.mifare_key_b = key_b.to_vec();
+
     Ok(())
   }
 
-  fn set_auth_bits(&mut self, access_bits: Vec<u8>) -> Result<(), String> {
+  fn set_auth_bits(&mut self, _access_bits: Vec<u8>) -> Result<(), String> {
     Ok(())
   }
 
-  fn format(&mut self) -> Result<(), String> {
-    Ok(())
+  fn format(&mut self, uuid: &Vec<u8>) -> Result<(), String> {
+    let mfrc522 = self.mfrc522.clone();
+    let mut mfrc522_inner = mfrc522.lock().unwrap();
+
+    println!("{}","format: reached");
+
+    mfrc522_inner.write_sec(uuid, WriteSecMode::Format)
   }
 
-  fn restore(&mut self) -> Result<(), String> {
-    Ok(())
+  fn restore(&mut self, uuid: &Vec<u8>) -> Result<(), String> {
+    let mfrc522 = self.mfrc522.clone();
+    let mut mfrc522_inner = mfrc522.lock().unwrap();
+
+    println!("{}","format: reached");
+
+    mfrc522_inner.write_sec(uuid, WriteSecMode::Restore)
   }
 
   fn read_data(&mut self, uuid: &Vec<u8>, addr: u8, blocks: u8) -> Result<(Vec<u8>), String> {
-    let mut mfrc522 = self.mfrc522.clone();
+    let mfrc522 = self.mfrc522.clone();
     let mut mfrc522_inner = mfrc522.lock().unwrap();
     
     println!("{}","read_data: reached");
@@ -709,7 +794,7 @@ impl NfcReader for Mfrc522 {
 
       if cur_addr+1 % 4 == 0 { cur_addr += 1; }
 
-      match mfrc522_inner.auth(PICC::AUTH1A.value(), cur_addr, uuid) {
+      match mfrc522_inner.auth(PICC::AUTH1A.value(), cur_addr, uuid, MifareAuthKey::CustomKeyA) {
         Ok(val) => {
           //println!("Successfuly authenticated on block {}", addr);
 
@@ -731,7 +816,7 @@ impl NfcReader for Mfrc522 {
   }
 
   fn write_data(&mut self, uuid: &Vec<u8>, addr: u8, data: &Vec<u8>) -> Result<(u8), String> {
-    let mut mfrc522 = self.mfrc522.clone();
+    let mfrc522 = self.mfrc522.clone();
     let mut mfrc522_inner = mfrc522.lock().unwrap();
 
     println!("{}","write_data: reached");
@@ -746,7 +831,7 @@ impl NfcReader for Mfrc522 {
 
       if cur_addr+1 % 4 == 0 { cur_addr += 1; }
 
-      match mfrc522_inner.auth(PICC::AUTH1A.value(), cur_addr, uuid) {
+      match mfrc522_inner.auth(PICC::AUTH1A.value(), cur_addr, uuid, MifareAuthKey::CustomKeyA) {
         Ok(val) => {
           
           packet.clear();

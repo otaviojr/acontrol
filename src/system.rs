@@ -4,15 +4,23 @@ use audio::{Audio};
 
 use std::sync::Mutex;
 
+#[allow(dead_code)]
 enum NFCSystemState {
   READING,
-  WRITING,
-  FORMATING,
-  AUTHORIZE
+//  FORMATING,
+//  WRITING,
+  AUTHORIZE,
+  RESTORE
 }
 
 struct ASystemState {
   nfc_state: Mutex<NFCSystemState>
+}
+
+impl ASystemState {
+  fn set_system_nfc_state(&mut self, state: NFCSystemState) {
+    *self.nfc_state.lock().unwrap() = state;
+  }
 }
 
 pub struct AControlSystem {
@@ -50,7 +58,7 @@ lazy_static!{
   static ref ACONTROL_SYSTEM_STATE: ASystemState = ASystemState {nfc_state: Mutex::new(NFCSystemState::READING) };
 }
 
-pub fn end_acontrol_system() -> bool {
+pub fn acontrol_system_end() -> bool {
   println!("Cleaning all suffs");
   match ACONTROL_SYSTEM.lock().unwrap().audio_drv  {
     Some(ref drv) => {
@@ -81,7 +89,21 @@ pub fn end_acontrol_system() -> bool {
   return true;
 }
 
-pub fn init_acontrol_system(fingerprint_drv: Box<Fingerprint+Sync+Send>, nfc_drv: Box<NfcReader+Sync+Send>, audio_drv: Box<Audio+Sync+Send>) -> bool {
+pub fn  acontrol_system_set_mifare_keys(key_a: &Vec<u8>, key_b: &Vec<u8>) -> bool {
+  let asystem = ACONTROL_SYSTEM.lock().unwrap();
+  match asystem.nfc_drv {
+    Some(ref drv) => {
+      let mut drv_inner = drv.lock().unwrap();
+      if let Err(_err) = drv_inner.set_auth_keys(key_a, key_b) {
+        return false;
+      }
+      return true;
+    },
+    None => return false
+  }
+}
+
+pub fn acontrol_system_init(fingerprint_drv: Box<Fingerprint+Sync+Send>, nfc_drv: Box<NfcReader+Sync+Send>, audio_drv: Box<Audio+Sync+Send>) -> bool {
   ACONTROL_SYSTEM.lock().unwrap().set_fingerprint_drv(fingerprint_drv);
   ACONTROL_SYSTEM.lock().unwrap().set_nfc_drv(nfc_drv);
   ACONTROL_SYSTEM.lock().unwrap().set_audio_drv(audio_drv);
@@ -121,14 +143,17 @@ pub fn init_acontrol_system(fingerprint_drv: Box<Fingerprint+Sync+Send>, nfc_drv
               NFCSystemState::READING => {
                 //TODO: Check tag and allow access
               },
-              NFCSystemState::WRITING => {
+//              NFCSystemState::WRITING => {
                 //TODO: Write the security mark
-              },
-              NFCSystemState::FORMATING => {
+//              },
+//              NFCSystemState::FORMATING => {
                 //TODO: Write security blocks with our key
-              }
+//              },
               NFCSystemState::AUTHORIZE => {
                 //TODO: Persist card to check on reading state
+              },
+              NFCSystemState::RESTORE => {
+                //TODO: Restore authentication's blocks to the original key_a and key_b
               }
             }
 
