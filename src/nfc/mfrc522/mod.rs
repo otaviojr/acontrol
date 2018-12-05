@@ -249,7 +249,7 @@ impl Mfrc522ThreadSafe {
     //calc crc command
     try!(self.command(Command::CalcCRC));
     
-    let mut irq: u8;
+    let irq: u8;
     let now = Instant::now();
     loop {
       let sec = (now.elapsed().as_secs() as f64) + (now.elapsed().subsec_nanos() as f64 / 1000_000_000.0);
@@ -396,7 +396,7 @@ impl Mfrc522ThreadSafe {
     try!(self.write(Register::TxAsk, 1 << 6 ));
 
     // CRC preset value to 0x6363
-    try!(self.write(Register::Mode, (0x3F & (!0b11) | 0b01) ));
+    try!(self.write(Register::Mode, 0x3F & (!0b11) | 0b01));
 
     // enable antenna
     try!(self.write(Register::TxControl, 0xB0 | 0b11));
@@ -667,7 +667,7 @@ impl NfcReader for Mfrc522 {
     
     let _handler = thread::spawn(move || {
       loop {
-        let mut ret: Result<(), String>;
+        let ret: Result<(), String>;
         let mut uuid:Vec<u8> = Vec::new();
         let mut sak:Vec<u8> = Vec::new();
         let mut complete:bool;
