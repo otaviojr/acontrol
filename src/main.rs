@@ -2,6 +2,7 @@ extern crate nix;
 extern crate iron;
 extern crate router;
 extern crate rustc_serialize;
+
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -10,17 +11,22 @@ extern crate clap;
 extern crate spidev;
 extern crate sysfs_gpio;
 
+extern crate rusqlite;
+
 pub mod fingerprint;
 pub mod nfc;
 pub mod audio;
 pub mod server;
+pub mod persist;
 pub mod system;
 
 use nix::sys::signal;
 use std::process;
 use clap::{Arg,App};
+use std::collections::HashMap;
 
 const DEFAULT_LOGS_PATH:&str = "/var/log/acontrol";
+const DEFAULT_DATA_PATH:&str = "/var/lib/acontrol";
 
 const HTTP_DEFAULT_HOST:&str = "localhost";
 const HTTP_DEFAULT_PORT:u32 = 8088;
@@ -143,7 +149,11 @@ fn main(){
   println!("Nfc driver: {}",nfcreader_drv.signature());
   println!("Audio driver: {}", audio_drv.signature());
 
-  if !system::acontrol_system_init(fingerprint_drv, nfcreader_drv, audio_drv) {
+  let mut params: HashMap<String,String> = HashMap::new();
+  params.insert("LOGS_PATH".to_string(), DEFAULT_LOGS_PATH.to_string());
+  params.insert("DATA_PATH".to_string(), DEFAULT_DATA_PATH.to_string());
+
+  if !system::acontrol_system_init(&params, fingerprint_drv, nfcreader_drv, audio_drv) {
     process::exit(-1);
   }
 
