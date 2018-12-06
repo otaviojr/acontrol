@@ -12,7 +12,11 @@ impl SQLitePersist {
 }
 
 impl Persist for SQLitePersist {
-  fn initialize(&mut self, params: &HashMap<String,String>) -> Result<(), String> {
+  fn init(&mut self, params: &HashMap<String,String>) -> Result<(), String> {
+    Ok(())
+  }
+
+  fn unload(&mut self) -> Result<(), String> {
     Ok(())
   }
 

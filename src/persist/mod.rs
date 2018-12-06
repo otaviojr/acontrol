@@ -3,7 +3,8 @@ pub mod sqlite_persist;
 use std::collections::HashMap;
 
 pub trait Persist {
-  fn initialize(&mut self, params: &HashMap<String,String>) -> Result<(), String>;
+  fn init(&mut self, params: &HashMap<String,String>) -> Result<(), String>;
+  fn unload(&mut self) -> Result<(), String>;
   fn nfc_save(&mut self, uuid: &Vec<u8>) -> Result<(), String>;
   fn nfc_find(&mut self, uuid: &Vec<u8>) -> Result<(), String>;
   fn nfc_delete(&mut self, uuid: &Vec<u8>) -> Result<(), String>;

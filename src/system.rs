@@ -1,6 +1,7 @@
 use fingerprint::{Fingerprint};
 use nfc::{NfcReader};
 use audio::{Audio};
+use persist::{Persist};
 
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -14,10 +15,11 @@ enum NFCSystemState {
   RESTORE
 }
 
-pub struct AControlSystem {
+struct AControlSystem {
   fingerprint_drv: Mutex<Option<Mutex<Box<Fingerprint + Send + Sync>>>>,
   nfc_drv: Mutex<Option<Mutex<Box<NfcReader + Send + Sync>>>>,
   audio_drv: Mutex<Option<Mutex<Box<Audio + Send + Sync>>>>,
+  persist_drv:  Mutex<Option<Mutex<Box<Persist + Send + Sync>>>>,
   nfc_state: Mutex<NFCSystemState>,
 }
 
@@ -29,6 +31,7 @@ lazy_static!{
     fingerprint_drv: Mutex::new(None), 
     nfc_drv: Mutex::new(None), 
     audio_drv: Mutex::new(None),
+    persist_drv:  Mutex::new(None),
     nfc_state: Mutex::new(NFCSystemState::READING),
   };
 
@@ -38,6 +41,7 @@ lazy_static!{
 
 pub fn acontrol_system_end() -> bool {
   println!("Cleaning all suffs");
+
   match *ACONTROL_SYSTEM.audio_drv.lock().unwrap()  {
     Some(ref drv) => {
       if let Err(err) = drv.lock().unwrap().unload() {
@@ -64,6 +68,19 @@ pub fn acontrol_system_end() -> bool {
     }
   }
 
+  match *ACONTROL_SYSTEM.nfc_drv.lock().unwrap() {
+    Some(ref drv) => {
+      if let Err(err) = drv.lock().unwrap().unload() {
+        eprintln!("Error unload persistence driver (=> {})", err);
+        return false;
+      }
+    },
+    None => {
+      eprintln!("Persistence driver not found");
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -80,13 +97,32 @@ pub fn  acontrol_system_set_mifare_keys(key_a: &Vec<u8>, key_b: &Vec<u8>) -> boo
   }
 }
 
-pub fn acontrol_system_init(params: &HashMap<String,String>, fingerprint_drv: Box<Fingerprint+Sync+Send>, nfc_drv: Box<NfcReader+Sync+Send>, audio_drv: Box<Audio+Sync+Send>) -> bool {
+pub fn acontrol_system_init(params: &HashMap<String,String>, 
+				fingerprint_drv: Box<Fingerprint+Sync+Send>, 
+				nfc_drv: Box<NfcReader+Sync+Send>, 
+				audio_drv: Box<Audio+Sync+Send>,
+				persist_drv: Box<Persist+Sync+Send>) -> bool {
 
   let asystem = &ACONTROL_SYSTEM;
   unsafe {
     *asystem.fingerprint_drv.lock().unwrap() = Some(Mutex::new(Box::from_raw(Box::into_raw(fingerprint_drv))));
     *asystem.nfc_drv.lock().unwrap() = Some(Mutex::new(Box::from_raw(Box::into_raw(nfc_drv))));
     *asystem.audio_drv.lock().unwrap() = Some(Mutex::new(Box::from_raw(Box::into_raw(audio_drv))));
+    *asystem.persist_drv.lock().unwrap() = Some(Mutex::new(Box::from_raw(Box::into_raw(persist_drv))));
+  }
+
+  //initializing persistence driver
+  match *asystem.persist_drv.lock().unwrap() {
+    Some(ref drv) => {
+      if let Err(err) = drv.lock().unwrap().init(params)  {
+        eprintln!("Error initializing persistence driver: {}", err);
+        return false;
+      }
+    },
+    None => {
+      eprintln!("Persistence driver not found");
+      return false;
+    }
   }
 
   //initializing audio device
@@ -131,8 +167,9 @@ pub fn acontrol_system_init(params: &HashMap<String,String>, fingerprint_drv: Bo
                 }
 
                 if let Err(err) = drv_inner.write_data(&uuid, *NFC_CARD_SIGNATURE_BLOCK, &NFC_CARD_SIGNATURE.as_bytes().to_vec()) {
+                } else {
+                  //TODO: Persist card to check on reading state
                 }
-                //TODO: Persist card to check on reading state
               },
               NFCSystemState::RESTORE => {
                 //TODO: Restore authentication's blocks to the original key_a and key_b
@@ -169,9 +206,4 @@ pub fn acontrol_system_init(params: &HashMap<String,String>, fingerprint_drv: Bo
 
 fn acontrol_system_set_nfc_state(state: NFCSystemState) {
   *ACONTROL_SYSTEM.nfc_state.lock().unwrap() = state;
-}
-
-
-pub fn get_acontrol_system<'a>() -> &'a AControlSystem {
-  return &ACONTROL_SYSTEM;
 }

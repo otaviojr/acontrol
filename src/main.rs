@@ -42,6 +42,7 @@ fn main(){
   let fingerprint_drv;
   let nfcreader_drv;
   let audio_drv;
+  let persist_drv;
 
   let sig_action = signal::SigAction::new(signal::SigHandler::Handler(handle_sigint),
                                           signal::SaFlags::empty(),
@@ -149,11 +150,20 @@ fn main(){
   println!("Nfc driver: {}",nfcreader_drv.signature());
   println!("Audio driver: {}", audio_drv.signature());
 
+  let persist_drv_b = persist::persist_by_name("sqlite");
+  if persist_drv_b.is_none() {
+    eprintln!("Error creating persistence driver");
+    process::exit(-1);
+  } else {
+    persist_drv = persist_drv_b.unwrap();
+  }
+
   let mut params: HashMap<String,String> = HashMap::new();
   params.insert("LOGS_PATH".to_string(), DEFAULT_LOGS_PATH.to_string());
   params.insert("DATA_PATH".to_string(), DEFAULT_DATA_PATH.to_string());
 
-  if !system::acontrol_system_init(&params, fingerprint_drv, nfcreader_drv, audio_drv) {
+  if !system::acontrol_system_init(&params, fingerprint_drv, 
+					nfcreader_drv, audio_drv, persist_drv) {
     process::exit(-1);
   }
 
