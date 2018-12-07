@@ -126,6 +126,22 @@ impl Error {
     let value = *self as u8;
     value
   }
+
+  fn name(&mut self) -> &str {
+    match *self {
+      Error::BufferOverflow => "BufferOverflow",
+      Error::Collision => "Collision",
+      Error::Crc => "CRC",
+      Error::IncompleteFrame => "IncompleteFrame",
+      Error::Overheating => "Overheating",
+      Error::Parity => "Parity",
+      Error::Protocol => "Protocol",
+      Error::Wr => "WR",
+      Error::Timeout => "Timeout",
+      Error::NoMem => "NoMem",
+      Error::SPI => "SPI",
+    }
+  }
 }
 
 struct Mfrc522ThreadSafe {
@@ -359,7 +375,7 @@ impl Mfrc522ThreadSafe {
     }
 
     //println!("Tranceive received {} bytes", received);
-    
+
     let mut rx_buffer:Vec<u8> = vec![0 ; received];
     if let Err(_err) = self.read_many(Register::FifoData, &mut rx_buffer) {
       return Err(Error::SPI);
@@ -403,6 +419,14 @@ impl Mfrc522ThreadSafe {
 
     Ok(())
   }
+
+  fn reset(&mut self) -> Result<(), String> {
+    if let Err(_err) = self.initialize() {
+      return Err(format!("{}", "NFC error. Error reseting device"));
+    }
+    Ok(())
+  }
+
 }
 
 unsafe impl Send for Mfrc522ThreadSafe {}
@@ -416,7 +440,7 @@ impl MiFare for Mfrc522ThreadSafe {
   fn send_req_a(&mut self) -> Result<Vec<u8>, String> {
     match self.transceive(&[PICC::REQIDL.value()],7) {
       Ok(val) => Ok(val),
-      Err(ref mut err) => Err(format!("{} => 0x{:X}","NFC MiFare REQA error", err.value()))
+      Err(ref mut err) => Err(format!("{} => {}","NFC MiFare REQA error", err.name()))
     }
   }
 
@@ -447,7 +471,7 @@ impl MiFare for Mfrc522ThreadSafe {
       Ok(val) => {
         Ok(val)
       },
-      Err(ref mut err) => Err(format!("{} => 0x{:X}","NFC MiFare SELECT error", err.value()))
+      Err(ref mut err) => Err(format!("{} => {}","NFC MiFare SELECT error", err.name()))
     }
   }
 
@@ -467,7 +491,7 @@ impl MiFare for Mfrc522ThreadSafe {
       Ok(val) => {
         Ok(val)
       },
-      Err(ref mut err) => Err(format!("{} => 0x{:X}","NFC MiFare anti collision loop error", err.value()))
+      Err(ref mut err) => Err(format!("{} => {}","NFC MiFare anti collision loop error", err.name()))
     }
   }
 
@@ -518,10 +542,10 @@ impl MiFare for Mfrc522ThreadSafe {
           Ok(val) => {
             Ok(())
           },
-          Err(ref mut err) => Err(format!("{} {} => 0x{:X}","NFC MiFare error reading address {}", addr, err.value()))
+          Err(ref mut err) => Err(format!("{} {} => {}","NFC MiFare error reading address {}", addr, err.name()))
         }
       },
-      Err(ref mut err) => Err(format!("{} {} => 0x{:X}","NFC MiFare error reading address {}", addr, err.value()))
+      Err(ref mut err) => Err(format!("{} {} => {}","NFC MiFare error reading address {}", addr, err.name()))
     }
   }
 
@@ -550,7 +574,7 @@ impl MiFare for Mfrc522ThreadSafe {
 
         Ok(buf)
       },
-      Err(ref mut err) => Err(format!("{} {} => 0x{:X}","NFC MiFare error reading address {}", addr, err.value()))    
+      Err(ref mut err) => Err(format!("{} {} => {}","NFC MiFare error reading address {}", addr, err.name()))    
     }
   }
 
@@ -675,8 +699,8 @@ impl NfcReader for Mfrc522 {
         {
           let mut mfrc522_inner = mfrc522.lock().unwrap();
 
-          if let Err(err) = mfrc522_inner.initialize() {
-            println!("Error initializing reader");
+          if let Err(err) = mfrc522_inner.reset() {
+            println!("Error reseting reader");
             break;
           }
 

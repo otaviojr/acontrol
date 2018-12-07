@@ -1,7 +1,8 @@
+
 use fingerprint::{Fingerprint};
 use nfc::{NfcReader};
 use audio::{Audio};
-use persist::{Persist};
+use persist::{Persist, Card};
 
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -68,7 +69,7 @@ pub fn acontrol_system_end() -> bool {
     }
   }
 
-  match *ACONTROL_SYSTEM.nfc_drv.lock().unwrap() {
+  match *ACONTROL_SYSTEM.persist_drv.lock().unwrap() {
     Some(ref drv) => {
       if let Err(err) = drv.lock().unwrap().unload() {
         eprintln!("Error unload persistence driver (=> {})", err);
@@ -158,6 +159,28 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
 
             match *ACONTROL_SYSTEM.nfc_state.lock().unwrap() {
               NFCSystemState::READING => {
+                match *ACONTROL_SYSTEM.persist_drv.lock().unwrap() {
+                  Some(ref mut drv) => {
+                    match drv_inner.read_data(&uuid,*NFC_CARD_SIGNATURE_BLOCK,0) {
+                      Ok(val) => {
+                        if String::from_utf8(val).unwrap() == String::from_utf8(NFC_CARD_SIGNATURE.as_bytes().to_vec()).unwrap() {
+                          if let Ok(card) = drv.lock().unwrap().nfc_find(&uuid) {
+                            //TODO: Access Granted
+                          } else {
+                            println!("Card {:?} not found!",uuid);
+                          }
+                        } else {
+                          println!("Invalid card signature");
+                        }
+                      },
+                      Err(err) => {
+                        println!("Error reading card: {}", err);
+                      }
+                    }
+                  },
+                  None => {
+                  }
+                }
                 //TODO: Check tag and allow access
               },
               NFCSystemState::AUTHORIZE => {
@@ -167,7 +190,18 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                 }
 
                 if let Err(err) = drv_inner.write_data(&uuid, *NFC_CARD_SIGNATURE_BLOCK, &NFC_CARD_SIGNATURE.as_bytes().to_vec()) {
+                  eprintln!("No... we really have a problem here. Can't write either.");
                 } else {
+                  println!("Ok... signature written successfully!");
+                  match *ACONTROL_SYSTEM.persist_drv.lock().unwrap() {
+                    Some(ref drv) => {
+                      if let Err(err) = drv.lock().unwrap().nfc_save(&uuid) {
+                        eprintln!("Error persisting card info. Card not authorized!");
+                      }
+                    },
+                    None => {
+                    }
+                  }
                   //TODO: Persist card to check on reading state
                 }
               },
