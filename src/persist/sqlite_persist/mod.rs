@@ -59,7 +59,7 @@ impl Persist for SQLitePersist {
 
     if let Some(ref conn) = self.conn {
       let mut stmt = conn
-        .prepare("SELECT uuid FROM cards")
+        .prepare("SELECT id,uuid FROM cards")
         .unwrap();
 
       let card_iter = stmt

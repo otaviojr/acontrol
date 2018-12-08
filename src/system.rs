@@ -8,10 +8,9 @@ use std::sync::Mutex;
 use std::collections::HashMap;
 
 #[allow(dead_code)]
-enum NFCSystemState {
-  READING,
-//  FORMATING,
-//  WRITING,
+pub enum NFCSystemState {
+  READ,
+  WRITE,
   AUTHORIZE,
   RESTORE
 }
@@ -33,10 +32,10 @@ lazy_static!{
     nfc_drv: Mutex::new(None), 
     audio_drv: Mutex::new(None),
     persist_drv:  Mutex::new(None),
-    nfc_state: Mutex::new(NFCSystemState::READING),
+    nfc_state: Mutex::new(NFCSystemState::READ),
   };
 
-  static ref NFC_CARD_SIGNATURE: &'static str = &"ACONTROL_CARD";
+  static ref NFC_CARD_SIGNATURE: &'static str = &"ACONTROL_CARD\0\0\0";
   static ref NFC_CARD_SIGNATURE_BLOCK: u8 = 1;
 }
 
@@ -153,24 +152,29 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
       drv_inner.find_tag(|uuid, sak|{
         match *ACONTROL_SYSTEM.nfc_drv.lock().unwrap() {
           Some(ref mut drv) => {
+            let mut next_nfc_system_state: Option<NFCSystemState> = None;
             let mut drv_inner = drv.lock().unwrap();
 
             println!("Card Found: UUID={:?}, SAK={:?}", uuid,sak);
 
             match *ACONTROL_SYSTEM.nfc_state.lock().unwrap() {
-              NFCSystemState::READING => {
+              NFCSystemState::READ => {
                 match *ACONTROL_SYSTEM.persist_drv.lock().unwrap() {
                   Some(ref mut drv) => {
                     match drv_inner.read_data(&uuid,*NFC_CARD_SIGNATURE_BLOCK,0) {
-                      Ok(val) => {
-                        if String::from_utf8(val).unwrap() == String::from_utf8(NFC_CARD_SIGNATURE.as_bytes().to_vec()).unwrap() {
+                      Ok(ref val) => {
+                        if String::from_utf8(val.to_vec()).unwrap() == 
+                           String::from_utf8(NFC_CARD_SIGNATURE.as_bytes().to_vec()).unwrap() {
+
                           if let Ok(card) = drv.lock().unwrap().nfc_find(&uuid) {
+                            println!("Card {:?} authorized!", uuid);
                             //TODO: Access Granted
                           } else {
-                            println!("Card {:?} not found!",uuid);
+                            println!("Card {:?} not found!", uuid);
                           }
+
                         } else {
-                          println!("Invalid card signature");
+                          println!("Invalid card signature: {:?} - {:?}",val, NFC_CARD_SIGNATURE.as_bytes().to_vec());
                         }
                       },
                       Err(err) => {
@@ -179,9 +183,9 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                     }
                   },
                   None => {
+                    println!("Persistence driver not found");
                   }
                 }
-                //TODO: Check tag and allow access
               },
               NFCSystemState::AUTHORIZE => {
                 if let Err(err) = drv_inner.format(&uuid) {
@@ -189,6 +193,9 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                   eprintln!("format return: {}", err);
                 }
 
+                next_nfc_system_state = Some(NFCSystemState::WRITE)
+              }
+              NFCSystemState::WRITE => {
                 if let Err(err) = drv_inner.write_data(&uuid, *NFC_CARD_SIGNATURE_BLOCK, &NFC_CARD_SIGNATURE.as_bytes().to_vec()) {
                   eprintln!("No... we really have a problem here. Can't write either.");
                 } else {
@@ -200,28 +207,25 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                       }
                     },
                     None => {
+                      eprintln!("Persistence driver not found");
                     }
                   }
-                  //TODO: Persist card to check on reading state
                 }
+                next_nfc_system_state = Some(NFCSystemState::READ);
               },
               NFCSystemState::RESTORE => {
-                //TODO: Restore authentication's blocks to the original key_a and key_b
+                if let Err(err) = drv_inner.restore(&uuid) {
+                  eprintln!("Error restoring!");
+                  eprintln!("format return: {}", err);
+                }
+                next_nfc_system_state = Some(NFCSystemState::READ)
               }
             }
 
-            //if let Ok(blocks) = drv.lock().unwrap().write_data(&uuid,1,&"VALÉRIA".as_bytes().to_vec()) {
-            //  println!("Data written with success. Used {} blocks", blocks);
-            //}
-
-            //match drv.lock().unwrap().read_data(&uuid,1,0) {
-	      //Ok(val) => {
-              //  println!("Card's read value is: {}", String::from_utf8(val).unwrap());
-              //},
-              //Err(err) => {
-                //println!("Error reading card: {}", err);
-              //}
-            //}
+            if let Some(state) = next_nfc_system_state {
+              acontrol_system_set_nfc_state(state);
+              next_nfc_system_state = None;
+            }
 
             return true;
           },
@@ -238,6 +242,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
   return true;
 }
 
-fn acontrol_system_set_nfc_state(state: NFCSystemState) {
+pub fn acontrol_system_set_nfc_state(state: NFCSystemState) {
+  println!("Changing NFC System State");
   *ACONTROL_SYSTEM.nfc_state.lock().unwrap() = state;
 }

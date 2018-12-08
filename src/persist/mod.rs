@@ -5,7 +5,7 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub struct Card  {
   id: i32,
-  uuid: String,
+  uuid: Vec<u8>,
 }
 
 pub trait Persist {

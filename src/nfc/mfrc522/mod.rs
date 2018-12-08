@@ -507,7 +507,7 @@ impl MiFare for Mfrc522ThreadSafe {
 
     match self.authent(&tx_buf, 0) {
       Ok(val) => Ok(()),
-      Err(err) => Err(format!("{}","Error authenticating"))
+      Err(ref mut err) => Err(format!("Error authenticating ({})",err.name()))
     }
   }
 
