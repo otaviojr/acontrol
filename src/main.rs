@@ -1,17 +1,17 @@
 extern crate nix;
 extern crate iron;
 extern crate router;
-extern crate rustc_serialize;
-
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate clap;
-
 extern crate spidev;
 extern crate sysfs_gpio;
-
 extern crate rusqlite;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde;
+extern crate serde_json;
 
 pub mod fingerprint;
 pub mod nfc;

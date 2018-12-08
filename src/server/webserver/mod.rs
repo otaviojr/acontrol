@@ -1,6 +1,5 @@
 use iron::prelude::*;
 use router::Router;
-use rustc_serialize::json;
 use system;
 
 use server::{Server};
@@ -15,10 +14,10 @@ impl WebServer {
     return WebServer { host: "".to_string(), port: 0};
   }
 
-  fn hello_world(req: &mut Request) -> IronResult<Response> {
-    let ref query = req.extensions.get::<Router>().unwrap().find("query").unwrap_or("Unknow");
-    Ok(Response::with((iron::status::Ok, format!("Hello {}", query))))
-  }
+  //fn hello_world(req: &mut Request) -> IronResult<Response> {
+  //  let ref query = req.extensions.get::<Router>().unwrap().find("query").unwrap_or("Unknow");
+  //  Ok(Response::with((iron::status::Ok, format!("Hello {}", query))))
+  //}
 
   fn nfc_authorize(req: &mut Request) -> IronResult<Response> {
     system::acontrol_system_set_nfc_state(system::NFCSystemState::AUTHORIZE);
