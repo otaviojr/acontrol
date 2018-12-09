@@ -1,4 +1,3 @@
-
 use fingerprint::{Fingerprint};
 use nfc::{NfcReader};
 use audio::{Audio};
