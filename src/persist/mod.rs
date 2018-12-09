@@ -4,14 +4,15 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Card  {
-  id: i32,
-  uuid: Vec<u8>,
+  pub id: i32,
+  pub uuid: Vec<u8>,
+  pub name: Vec<u8>
 }
 
 pub trait Persist {
   fn init(&mut self, params: &HashMap<String,String>) -> Result<(), String>;
   fn unload(&mut self) -> Result<(), String>;
-  fn nfc_save(&mut self, uuid: &Vec<u8>) -> Result<(), String>;
+  fn nfc_save(&mut self, uuid: &Vec<u8>, name: &Vec<u8>) -> Result<(), String>;
   fn nfc_find(&mut self, uuid: &Vec<u8>) -> Result<(Card), String>;
   fn nfc_delete(&mut self, uuid: &Vec<u8>) -> Result<(), String>;
 }

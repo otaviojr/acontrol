@@ -21,6 +21,7 @@ struct AControlSystem {
   audio_drv: Mutex<Option<Mutex<Box<Audio + Send + Sync>>>>,
   persist_drv:  Mutex<Option<Mutex<Box<Persist + Send + Sync>>>>,
   nfc_state: Mutex<NFCSystemState>,
+  nfc_state_params: Mutex<HashMap<String,String>>,
 }
 
 impl AControlSystem {
@@ -33,6 +34,7 @@ lazy_static!{
     audio_drv: Mutex::new(None),
     persist_drv:  Mutex::new(None),
     nfc_state: Mutex::new(NFCSystemState::READ),
+    nfc_state_params: Mutex::new(HashMap::new())
   };
 
   static ref NFC_CARD_SIGNATURE: &'static str = &"ACONTROL_CARD\0\0\0";
@@ -167,7 +169,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                            String::from_utf8(NFC_CARD_SIGNATURE.as_bytes().to_vec()).unwrap() {
 
                           if let Ok(card) = drv.lock().unwrap().nfc_find(&uuid) {
-                            println!("Card {:?} authorized!", uuid);
+                            println!("Card {:?} from {} authorized!", uuid, String::from_utf8(card.name).unwrap());
                             //TODO: Access Granted
                           } else {
                             println!("Card {:?} not found!", uuid);
@@ -202,7 +204,9 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                   println!("Ok... signature written successfully!");
                   match *ACONTROL_SYSTEM.persist_drv.lock().unwrap() {
                     Some(ref drv) => {
-                      if let Err(err) = drv.lock().unwrap().nfc_save(&uuid) {
+                      let params: &HashMap<String,String> = &*ACONTROL_SYSTEM.nfc_state_params.lock().unwrap();
+
+                      if let Err(err) = drv.lock().unwrap().nfc_save(&uuid, &params[&String::from("name")].as_bytes().to_vec()) {
                         eprintln!("Error persisting card info. Card not authorized!");
                       }
                     },
@@ -223,7 +227,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
             }
 
             if let Some(state) = next_nfc_system_state {
-              acontrol_system_set_nfc_state(state);
+              acontrol_system_set_nfc_state(state,None);
               next_nfc_system_state = None;
             }
 
@@ -242,7 +246,10 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
   return true;
 }
 
-pub fn acontrol_system_set_nfc_state(state: NFCSystemState) {
+pub fn acontrol_system_set_nfc_state(state: NFCSystemState, params: Option<HashMap<String,String>>) {
   println!("Changing NFC System State");
+  if let Some(p) = params {
+    *ACONTROL_SYSTEM.nfc_state_params.lock().unwrap() = p;
+  }
   *ACONTROL_SYSTEM.nfc_state.lock().unwrap() = state;
 }
