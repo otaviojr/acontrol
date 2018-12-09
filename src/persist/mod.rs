@@ -2,6 +2,9 @@ pub mod sqlite_persist;
 
 use std::collections::HashMap;
 
+pub enum PersistError {
+}
+
 #[derive(Debug)]
 pub struct Card  {
   pub id: i32,

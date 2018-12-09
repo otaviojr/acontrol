@@ -205,9 +205,13 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                   match *ACONTROL_SYSTEM.persist_drv.lock().unwrap() {
                     Some(ref drv) => {
                       let params: &HashMap<String,String> = &*ACONTROL_SYSTEM.nfc_state_params.lock().unwrap();
-
-                      if let Err(err) = drv.lock().unwrap().nfc_save(&uuid, &params[&String::from("name")].as_bytes().to_vec()) {
-                        eprintln!("Error persisting card info. Card not authorized!");
+                      let ref mut persist_drv = &mut drv.lock().unwrap();
+                      if let Err(_err) = persist_drv.nfc_find(&uuid) {
+                        if let Err(err) = persist_drv.nfc_save(&uuid, &params[&String::from("name")].as_bytes().to_vec()) {
+                          eprintln!("Error persisting card info. Card not authorized! => ({})",err);
+                        }
+                      } else {
+                        println!("Card already white listed");
                       }
                     },
                     None => {
