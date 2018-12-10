@@ -44,7 +44,7 @@ impl Persist for SQLitePersist {
     Ok(())
   }
 
-  fn nfc_save(&mut self, uuid: &Vec<u8>, name: &Vec<u8>)-> Result<(), String> {
+  fn nfc_add(&mut self, uuid: &Vec<u8>, name: &Vec<u8>)-> Result<(), String> {
     if let Some(ref conn) = self.conn {
       if let Err(err) = conn.execute("INSERT INTO cards (uuid, name) VALUES (?1,?2)",
           &[uuid as &ToSql, name as &ToSql],
@@ -56,6 +56,33 @@ impl Persist for SQLitePersist {
     Ok(())
   }
 
+  fn nfc_list(&mut self) -> Result<Vec<Card>, String> {
+
+    let mut ret: Vec<Card> = Vec::new();   
+
+    if let Some(ref conn) = self.conn {
+      let mut stmt = conn
+        .prepare("SELECT id,uuid,name FROM cards")
+        .unwrap();
+
+      let card_iter = stmt
+        .query_map(NO_PARAMS, |row| Card {
+            id: row.get(0),
+            uuid: row.get(1),
+            name: row.get(2),
+        }).unwrap();
+
+      for card in card_iter {
+        ret.push(card.unwrap());
+      }
+      return Ok(ret);
+    } else {
+      return Err(format!("{}","Database not connected"));
+    }
+
+    Err(format!("{}","Card Not Found"))
+  }
+  
   fn nfc_find(&mut self, uuid: &Vec<u8>) -> Result<(Card), String> {
 
     if let Some(ref conn) = self.conn {
@@ -73,6 +100,8 @@ impl Persist for SQLitePersist {
       for card in card_iter {
         return Ok(card.unwrap());
       }
+    } else {
+      return Err(format!("{}","Database not connected"));
     }
 
     Err(format!("{}","Card Not Found"))

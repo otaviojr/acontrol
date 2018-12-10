@@ -6,16 +6,12 @@ use serde;
 use serde_json;
 
 use system;
-use server::{Server};
+use server::{Server,WebServerDefaultResponse,WebCard,WebServerNfcListResponse};
 
 use std::collections::HashMap;
 use std::ptr::null;
 
-#[derive(Serialize, Deserialize)]
-struct WebServerDefaultResponse {
-  ret: bool,
-  msg: String
-}
+use persist::Card;
 
 pub struct WebServer {
   host: String,
@@ -91,6 +87,46 @@ impl WebServer {
 
     Ok(resp)
   }
+
+  fn nfc_list(req: &mut Request) -> IronResult<Response> {
+    let mut cards: Vec<WebCard> = Vec::new();
+    let mut resp: Option<Response> = None;
+
+    system::acontrol_system_get_persist_drv(|ref drv| {
+      match drv {
+        Some(ref persist) => {
+          if let Ok(ret) =  persist.lock().unwrap().nfc_list() {
+            for card in ret {
+              cards.push(WebCard {id: card.id, uuid: card.uuid, name: String::from_utf8(card.name).unwrap()});
+            }
+          } else {
+            resp = Some(Response::with((iron::status::InternalServerError,
+              serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("Error searching cards")} ).unwrap())
+            ));
+          }
+        },
+        None => {
+          resp = Some(Response::with((iron::status::InternalServerError,
+            serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("Persistence driver not found")} ).unwrap())
+          ));
+        }
+      }
+    }); 
+
+    if resp.is_none() {
+      resp = Some(Response::with((iron::status::Ok,
+         serde_json::to_string(&WebServerNfcListResponse {ret: true, msg: String::from("Ok"), cards: cards} ).unwrap())
+      ));
+    }
+
+    let mut resp_final = resp.unwrap();
+
+    resp_final.headers.set(iron::headers::ContentType(
+      iron::mime::Mime(iron::mime::TopLevel::Application, iron::mime::SubLevel::Json, vec![])
+    ));
+
+    Ok(resp_final)
+  }
 }
 
 impl Server for WebServer {
@@ -112,6 +148,7 @@ impl Server for WebServer {
     //router.get("/", WebServer::hello_world, "index");
     //router.get("/:query", WebServer::hello_world, "query");
 
+    router.get("/nfc/card", WebServer::nfc_list, "nfc_list");
     router.post("/nfc/card/authorize", WebServer::nfc_authorize,"nfc_authorize");
     router.get("/nfc/card/restore", WebServer::nfc_restore, "nfc_restore");
     let mut chain = Chain::new(router);

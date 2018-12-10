@@ -5,7 +5,6 @@ use std::collections::HashMap;
 pub enum PersistError {
 }
 
-#[derive(Debug)]
 pub struct Card  {
   pub id: i32,
   pub uuid: Vec<u8>,
@@ -15,8 +14,9 @@ pub struct Card  {
 pub trait Persist {
   fn init(&mut self, params: &HashMap<String,String>) -> Result<(), String>;
   fn unload(&mut self) -> Result<(), String>;
-  fn nfc_save(&mut self, uuid: &Vec<u8>, name: &Vec<u8>) -> Result<(), String>;
+  fn nfc_add(&mut self, uuid: &Vec<u8>, name: &Vec<u8>) -> Result<(), String>;
   fn nfc_find(&mut self, uuid: &Vec<u8>) -> Result<(Card), String>;
+  fn nfc_list(&mut self) -> Result<Vec<Card>, String>;
   fn nfc_delete(&mut self, uuid: &Vec<u8>) -> Result<(), String>;
 }
 

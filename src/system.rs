@@ -206,7 +206,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                       let params: &HashMap<String,String> = &*ACONTROL_SYSTEM.nfc_state_params.lock().unwrap();
                       let ref mut persist_drv = &mut drv.lock().unwrap();
                       if let Err(_err) = persist_drv.nfc_find(&uuid) {
-                        if let Err(err) = persist_drv.nfc_save(&uuid, &params[&String::from("name")].as_bytes().to_vec()) {
+                        if let Err(err) = persist_drv.nfc_add(&uuid, &params[&String::from("name")].as_bytes().to_vec()) {
                           eprintln!("Error persisting card info. Card not authorized! => ({})",err);
                         }
                       } else {
@@ -255,4 +255,10 @@ pub fn acontrol_system_set_nfc_state(state: NFCSystemState, params: Option<HashM
     *ACONTROL_SYSTEM.nfc_state_params.lock().unwrap() = p;
   }
   *ACONTROL_SYSTEM.nfc_state.lock().unwrap() = state;
+}
+
+pub fn acontrol_system_get_persist_drv<F, T>(f: F) -> T
+  where F: FnOnce(&Option<Mutex<Box<Persist + Send + Sync>>>) -> T, {
+  let mut persist_drv = &*ACONTROL_SYSTEM.persist_drv.lock().unwrap();
+  f(persist_drv)
 }
