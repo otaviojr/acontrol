@@ -1,3 +1,5 @@
+extern crate libc;
+#[macro_use]
 extern crate nix;
 extern crate iron;
 extern crate router;
@@ -22,6 +24,7 @@ pub mod audio;
 pub mod server;
 pub mod persist;
 pub mod system;
+pub mod display;
 
 use nix::sys::signal;
 use std::process;
@@ -46,6 +49,7 @@ fn main(){
   let nfcreader_drv;
   let audio_drv;
   let persist_drv;
+  let display_drv;
 
   let sig_action = signal::SigAction::new(signal::SigHandler::Handler(handle_sigint),
                                           signal::SaFlags::empty(),
@@ -161,12 +165,20 @@ fn main(){
     persist_drv = persist_drv_b.unwrap();
   }
 
+  let display_drv_b = display::display_by_name("neopixel");
+  if display_drv_b.is_none() {
+    eprintln!("Error creating display driver");
+    process::exit(-1);
+  } else {
+    display_drv = display_drv_b.unwrap();
+  }
+
   let mut params: HashMap<String,String> = HashMap::new();
   params.insert("LOGS_PATH".to_string(), DEFAULT_LOGS_PATH.to_string());
   params.insert("DATA_PATH".to_string(), DEFAULT_DATA_PATH.to_string());
 
   if !system::acontrol_system_init(&params, fingerprint_drv, 
-					nfcreader_drv, audio_drv, persist_drv) {
+					nfcreader_drv, audio_drv, persist_drv, display_drv) {
     process::exit(-1);
   }
 

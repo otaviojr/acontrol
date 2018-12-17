@@ -2,6 +2,7 @@ use fingerprint::{Fingerprint};
 use nfc::{NfcReader};
 use audio::{Audio};
 use persist::{Persist, Card};
+use display::{Display, DisplayState};
 
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -19,6 +20,7 @@ struct AControlSystem {
   nfc_drv: Mutex<Option<Mutex<Box<NfcReader + Send + Sync>>>>,
   audio_drv: Mutex<Option<Mutex<Box<Audio + Send + Sync>>>>,
   persist_drv:  Mutex<Option<Mutex<Box<Persist + Send + Sync>>>>,
+  display_drv: Mutex<Option<Mutex<Box<Display + Send + Sync>>>>,
   nfc_state: Mutex<NFCSystemState>,
   nfc_state_params: Mutex<HashMap<String,String>>,
 }
@@ -32,6 +34,7 @@ lazy_static!{
     nfc_drv: Mutex::new(None), 
     audio_drv: Mutex::new(None),
     persist_drv:  Mutex::new(None),
+    display_drv: Mutex::new(None),
     nfc_state: Mutex::new(NFCSystemState::READ),
     nfc_state_params: Mutex::new(HashMap::new())
   };
@@ -102,7 +105,8 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
 				fingerprint_drv: Box<Fingerprint+Sync+Send>, 
 				nfc_drv: Box<NfcReader+Sync+Send>, 
 				audio_drv: Box<Audio+Sync+Send>,
-				persist_drv: Box<Persist+Sync+Send>) -> bool {
+				persist_drv: Box<Persist+Sync+Send>,
+                                display_drv: Box<Display+Sync+Send>) -> bool {
 
   let asystem = &ACONTROL_SYSTEM;
   unsafe {
@@ -110,6 +114,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
     *asystem.nfc_drv.lock().unwrap() = Some(Mutex::new(Box::from_raw(Box::into_raw(nfc_drv))));
     *asystem.audio_drv.lock().unwrap() = Some(Mutex::new(Box::from_raw(Box::into_raw(audio_drv))));
     *asystem.persist_drv.lock().unwrap() = Some(Mutex::new(Box::from_raw(Box::into_raw(persist_drv))));
+    *asystem.display_drv.lock().unwrap() = Some(Mutex::new(Box::from_raw(Box::into_raw(display_drv))));
   }
 
   //initializing persistence driver
@@ -136,6 +141,20 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
     },
     None => {
       eprintln!("Audio device not found");
+      return false;
+    }
+  }
+
+  //initializing display device
+  match *asystem.display_drv.lock().unwrap()  {
+    Some(ref drv) => {
+      if let Err(err) = drv.lock().unwrap().init() {
+        eprintln!("Error initializing display device (=> {})", err);
+        return false;
+      }
+    },
+    None => {
+      eprintln!("Display device not found");
       return false;
     }
   }
