@@ -131,6 +131,7 @@ fn main(){
   let fingerprint_b = fingerprint::fingerprint_by_name(fingerprint);
   let nfcreader_b = nfc::nfcreader_by_name(nfc);
   let audio_b = audio::audio_by_name(audio);
+  let display_drv_b = display::display_by_name("neopixel");
 
   if fingerprint_b.is_none() {
     eprintln!("fingerprint module \"{}\" not found!", fingerprint);
@@ -153,9 +154,18 @@ fn main(){
     audio_drv = audio_b.unwrap();
   }
 
+  if display_drv_b.is_none() {
+    eprintln!("Error creating display driver");
+    process::exit(-1);
+  } else {
+    display_drv = display_drv_b.unwrap();
+  }
+
+
   println!("Fingerprint driver: {}",fingerprint_drv.signature());
   println!("Nfc driver: {}",nfcreader_drv.signature());
   println!("Audio driver: {}", audio_drv.signature());
+  println!("Display driver: {}", display_drv.signature());
 
   let persist_drv_b = persist::persist_by_name("sqlite");
   if persist_drv_b.is_none() {
@@ -163,14 +173,6 @@ fn main(){
     process::exit(-1);
   } else {
     persist_drv = persist_drv_b.unwrap();
-  }
-
-  let display_drv_b = display::display_by_name("neopixel");
-  if display_drv_b.is_none() {
-    eprintln!("Error creating display driver");
-    process::exit(-1);
-  } else {
-    display_drv = display_drv_b.unwrap();
   }
 
   let mut params: HashMap<String,String> = HashMap::new();

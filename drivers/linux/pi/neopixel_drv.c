@@ -40,7 +40,7 @@
 #include "neopixel_ioctl.h"
 #include "neopixel_drv.h"
 
-static char* module_version = "0.1";
+static char* module_version = "0.0.1";
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Otavio Ribeiro");
@@ -132,8 +132,8 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
 {
   long ret = 0;
 
-  if (_IOC_TYPE(cmd) != NEOPIXEL_IOC_MAGIC) return -ENOTTY;
-  if (_IOC_NR(cmd) > NEOPIXEL_IOCTL_MAX_CMD) return -ENOTTY;
+  if (_IOC_TYPE(cmd) != NEOPIXEL_IOC_MAGIC) return -EINVAL;
+  if (_IOC_NR(cmd) > NEOPIXEL_IOCTL_MAX_CMD) return -EINVAL;
 
   if (_IOC_DIR(cmd) & _IOC_READ) {
     ret = !access_ok(VERIFY_WRITE, (void *)arg, _IOC_SIZE(cmd));
@@ -141,17 +141,18 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
     ret = !access_ok(VERIFY_READ, (void *)arg, _IOC_SIZE(cmd));
   }
 
-  if (ret) return -EFAULT;
+  if (ret) return -EACCES;
 
   switch(cmd){
     case NEOPIXEL_IOCTL_GET_VERSION:
       if(copy_to_user((char*)arg, module_version, strlen(module_version) )){
-        return -EFAULT;
+        return -EACCES;
       }
       break;
 
     default:
-      return -ENOTTY;
+      printk("NEOPIXEL: Unknow ioctl command");
+      return -EINVAL;
   }
 
   return ret;
@@ -166,6 +167,7 @@ static void __exit neopixel_exit(void){
   gpio_unexport(gpio_neopixel_data);
   gpio_free(gpio_neopixel_data);
 
+  device_destroy(device_class, dev);
   cdev_del(&c_dev);
   unregister_chrdev_region(dev,MINOR_CNT);
   class_destroy(device_class);

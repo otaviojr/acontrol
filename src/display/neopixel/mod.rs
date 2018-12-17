@@ -18,7 +18,7 @@ use std::ptr;
 use nix::sys::ioctl;
 
 mod neopixel_ioctl {
-  const NEOPIXEL_IOC_MAGIC: u8 = '0' as u8;
+  const NEOPIXEL_IOC_MAGIC: u8 = b'N';
   const NEOPIXEL_IOCTL_GET_VERSION: u8 = 1;
 
   ioctl_read_buf!(get_version, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_GET_VERSION, u8);
@@ -50,14 +50,16 @@ impl Display for NeoPixel {
 
     self.driver_fd = Some(devfile.as_raw_fd());
 
-    let mut version: Vec<u8> = Vec::new();
+    let mut version:[u8;6] = [0;6];
+
     unsafe {
       if let Err(error) = neopixel_ioctl::get_version(self.driver_fd.unwrap(), &mut version) {
         println!("Error get neopixel driver version {}", error);
+        return Err(format!("{}","NeoPixel device driver not found!"));
       }
     }
 
-    println!("NeoPixel driver version {:?} found!", String::from_utf8(version));
+    println!("NeoPixel driver version {} found!", String::from_utf8(version.to_vec()).unwrap());
 
     Ok(())
   }
