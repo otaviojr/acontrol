@@ -39,7 +39,6 @@
 
 #include "neopixel_ioctl.h"
 #include "neopixel_drv.h"
-#include "neopixel_pwm.h"
 
 static char* module_version = "0.0.1";
 
@@ -116,8 +115,6 @@ static int __init neopixel_init(void)
     return PTR_ERR(char_device_object);
   }
 
-  neopixel_pwm_init();
-
   return 0;
 }
 
@@ -166,9 +163,6 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
  *  Cleanup to exit
  */
 static void __exit neopixel_exit(void){
-
-  neopixel_pwm_unload();
-
   gpio_set_value(gpio_neopixel_data, 0);
   gpio_unexport(gpio_neopixel_data);
   gpio_free(gpio_neopixel_data);

@@ -1,5 +1,5 @@
 obj-m += neopixel.o
-neopixel-objs := neopixel_drv.o 
+neopixel-objs := neopixel_drv.o neopixel_pwm.o
 
 # EXTRA_CFLAGS := 
 
