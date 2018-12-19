@@ -59,7 +59,7 @@
 #define DMA_CS_END			(1<<1)
 #define DMA_CS_ACTIVE			(1<<0)
 
-int neopixel_pwm_init( void* __iomem base_addr );
+int neopixel_pwm_init( void* __iomem dma_base_addr, void* __iomem pwm_base_addr );
 int neopixel_pwm_unload( void );
 
 #endif //__NEOPIXEL_PWM_H__

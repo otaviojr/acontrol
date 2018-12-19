@@ -76,9 +76,11 @@ static dev_t dev;
 static struct cdev c_dev;
 static struct device *char_device_object;
 
-struct resource *io_res;
-void * __iomem base_addr; /* I/O Memory Base Address */
-unsigned long remap_size; /* I/O Memory Size */
+
+struct resource* dma_io_res;
+struct resource* pwm_io_res;
+void * __iomem dma_base_addr; /* DMA Base Address */
+void * __iomem pwm_base_addr; /* PWM Base Address */
 
 static int dev_open(struct inode* inodep, struct file* filep)
 {
@@ -123,29 +125,54 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
 static int bcm2835_neopixel_probe(struct platform_device *pdev)
 {
   int result = 0;
-
   int num_leds = 0;
-
   struct device_node *np = pdev->dev.of_node;
 
   printk("NEOPIXEL: probe entered");
 
-  io_res = platform_get_resource(pdev, IORESOURCE_MEM,0);
-  if(!io_res){
+  dma_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "dma");
+  if(!dma_io_res){
     printk("NEOPIXEL: dma base address not found");
     return -ENODEV;
   } else {
-    printk("NEOPIXEL: Ok... we have an address 0x%lx - 0x%lx", (long unsigned int)io_res->start, (long unsigned int)io_res->end);
+    printk("NEOPIXEL: dma base address 0x%lx - 0x%lx", (long unsigned int)dma_io_res->start, (long unsigned int)dma_io_res->end);
   }
 
-  remap_size = io_res->end - io_res->start + 1;
-  base_addr = ioremap(io_res->start, remap_size);
+//  if  (!request_mem_region(dma_io_res->start, resource_size(dma_io_res), "neopixel_dma")) {
+//    dev_err(&pdev->dev, "dma -  request_mem_region");
+//    printk("NEOPIXEL: dma request region failed. Region already in use?");
+//    return -EINVAL;
+//  }  
 
-  if(!base_addr){
-    printk("NWOPIXEL: Error remapping io memory");
+  dma_base_addr = ioremap(dma_io_res->start, resource_size(dma_io_res));
+
+  if(!dma_base_addr){
+    printk("NWOPIXEL: Error remapping DMA io memory");
     return -ENOMEM;
   } else {
-    printk("NEOPIXEL: Address remapped");
+    printk("NEOPIXEL: DMA address remapped");
+  }
+
+  pwm_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "pwm");
+  if(!pwm_io_res){
+    printk("NEOPIXEL: pwm base address not found");
+    return -ENODEV;
+  } else {
+    printk("NEOPIXEL: pwm base address 0x%lx - 0x%lx", (long unsigned int)pwm_io_res->start, (long unsigned int)pwm_io_res->end);
+  }
+
+//  if  (!request_mem_region(pwm_io_res->start, resource_size(pwm_io_res), "neopixel_pwm")) {
+//    dev_err(&pdev->dev, "pwm -  request_mem_region");
+//    printk("NEOPIXEL: pwm request region failed. Region already in use?");
+//    return -EINVAL;
+//  }  
+  pwm_base_addr = ioremap(pwm_io_res->start, resource_size(pwm_io_res));
+
+  if(!pwm_base_addr){
+    printk("NWOPIXEL: Error remapping pwm io memory");
+    return -ENOMEM;
+  } else {
+    printk("NEOPIXEL: PWM address remapped");
   }
 
   if(of_property_read_u32(np, "num-leds", &num_leds) ) {
@@ -191,7 +218,7 @@ static int bcm2835_neopixel_probe(struct platform_device *pdev)
     return PTR_ERR(char_device_object);
   }
 
-  neopixel_pwm_init(base_addr);
+  neopixel_pwm_init(dma_base_addr, pwm_base_addr);
 
   return 0;
 }
@@ -213,8 +240,11 @@ static int bcm2835_neopixel_remove(struct platform_device *pdev)
   unregister_chrdev_region(dev,MINOR_CNT);
   class_destroy(device_class);
 
-  iounmap(base_addr);
+  iounmap(dma_base_addr);
+  iounmap(pwm_base_addr);
 
+  //release_mem_region(dma_io_res->start, resource_size(dma_io_res));
+  //release_mem_region(pwm_io_res->start, resource_size(pwm_io_res));
   return 0;
 }
 
