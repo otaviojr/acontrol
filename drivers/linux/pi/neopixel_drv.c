@@ -30,6 +30,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/ioctl.h>
+#include <linux/platform_device.h>
 #include <linux/uaccess.h>
 #include <linux/cdev.h>
 #include <linux/gpio.h>                 // Required for the GPIO functions
@@ -43,6 +44,7 @@
 
 static char* module_version = "0.0.1";
 
+MODULE_ALIAS("platform:bcm2835-neopixel");
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Otavio Ribeiro");
 MODULE_DESCRIPTION("acontrol neopixel kernel driver");
@@ -70,56 +72,9 @@ static dev_t dev;
 static struct cdev c_dev;
 static struct device *char_device_object;
 
-/** @brief The LKM initialization function
- *  This function sets up the GPIOs, PWM, IRQ, char device and sysfs interfaces
- *  @return returns 0 if successful
- */
-static int __init neopixel_init(void)
-{
-  int result = 0;
-
-  printk(KERN_INFO "NEOPIXEL: Loading kernel module\n");
-
-  /* request the gpio connected to our neopixel strip data pin */
-  gpio_request(gpio_neopixel_data, "sysfs");
-  /* set as output and turn it off */
-  gpio_direction_output(gpio_neopixel_data, 0);
-  /* export and do not allow direction change */
-  gpio_export(gpio_neopixel_data, false);
-
-   device_class = class_create(THIS_MODULE, "neopixel");
-   if(IS_ERR(device_class))
-   {
-      printk(KERN_ALERT "NEOPIXEL: Failed to create device class");
-      return PTR_ERR(device_class);
-   }
-
-  /* character device interface */
-  result = alloc_chrdev_region(&dev, FIRST_MINOR, MINOR_CNT, "neopixel");
-  if(result < 0)
-  {
-    printk(KERN_ALERT "NEOPIXEL: Failed registering region");
-    return result;
-  }
-  cdev_init(&c_dev, &dev_file_operations);
-  result = cdev_add(&c_dev, dev, MINOR_CNT);
-  if(result < 0)
-  {
-    printk(KERN_ALERT "NEOPIXEL: Error adding char device to region");
-    return result;
-  }
-
-  char_device_object = device_create(device_class, NULL, dev, NULL,  "neopixel");
-  if(IS_ERR(char_device_object))
-  {
-    printk(KERN_ALERT "NEOPIXEL: Failed to create char device");
-    return PTR_ERR(char_device_object);
-  }
-
-  neopixel_pwm_init();
-
-  return 0;
-}
+struct resource *io_res;
+void * __iomem base_addr; /* Virtual Base Address */
+unsigned long remap_size; /* Device Memory Size */
 
 static int dev_open(struct inode* inodep, struct file* filep)
 {
@@ -161,11 +116,74 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
   return ret;
 }
 
+static int bcm2835_neopixel_probe(struct platform_device *pdev)
+{
+  int result = 0;
 
-/** @brief The LKM cleanup function
- *  Cleanup to exit
- */
-static void __exit neopixel_exit(void){
+  printk("NEOPIXEL: probe entered");
+
+  io_res = platform_get_resource(pdev, IORESOURCE_MEM,0);
+  if(!io_res){
+    printk("NEOPIXEL: dma base address not found");
+  } else {
+    printk("NEOPIXEL: Ok... we have an address 0x%lx - 0x%lx", io_res->start, io_res->end);
+  }
+
+  remap_size = io_res->end - io_res->start + 1;
+  base_addr = ioremap(io_res->start, remap_size);
+
+  if(!base_addr){
+    printk("NWOPIXEL: Error remapping io memory");
+  } else {
+    printk("NEOPIXEL: Address remapped");
+  }
+
+  /* request the gpio connected to our neopixel strip data pin */
+  gpio_request(gpio_neopixel_data, "sysfs");
+  /* set as output and turn it off */
+  gpio_direction_output(gpio_neopixel_data, 0);
+  /* export and do not allow direction change */
+  gpio_export(gpio_neopixel_data, false);
+
+   device_class = class_create(THIS_MODULE, "neopixel");
+   if(IS_ERR(device_class))
+   {
+      printk(KERN_ALERT "NEOPIXEL: Failed to create device class");
+      return PTR_ERR(device_class);
+   }
+
+  /* character device interface */
+  result = alloc_chrdev_region(&dev, FIRST_MINOR, MINOR_CNT, "neopixel");
+  if(result < 0)
+  {
+    printk(KERN_ALERT "NEOPIXEL: Failed registering region");
+    return result;
+  }
+  cdev_init(&c_dev, &dev_file_operations);
+  result = cdev_add(&c_dev, dev, MINOR_CNT);
+  if(result < 0)
+  {
+    printk(KERN_ALERT "NEOPIXEL: Error adding char device to region");
+    return result;
+  }
+
+  char_device_object = device_create(device_class, NULL, dev, NULL,  "neopixel");
+  if(IS_ERR(char_device_object))
+  {
+    printk(KERN_ALERT "NEOPIXEL: Failed to create char device");
+    return PTR_ERR(char_device_object);
+  }
+
+  neopixel_pwm_init(base_addr);
+
+  return 0;
+}
+
+static int bcm2835_neopixel_remove(struct platform_device *pdev)
+{
+  printk("NEOPIXEL: remove entered");
+
+  //neopixel_pwm_init();
 
   neopixel_pwm_unload();
 
@@ -177,9 +195,26 @@ static void __exit neopixel_exit(void){
   cdev_del(&c_dev);
   unregister_chrdev_region(dev,MINOR_CNT);
   class_destroy(device_class);
+
+  iounmap(base_addr);
+
+  return 0;
 }
 
-/// This next calls are  mandatory -- they identify the initialization function
-/// and the cleanup function (as above).
-module_init(neopixel_init);
-module_exit(neopixel_exit);
+static const struct of_device_id bcm2835_neopixel_match[] = {
+    { .compatible = "bcm2835-neopixel" },
+    { }
+};
+MODULE_DEVICE_TABLE(of, bcm2835_neopixel_match);
+
+static struct platform_driver bcm2835_neopixel_driver = {
+	.probe	= bcm2835_neopixel_probe,
+	.remove	= bcm2835_neopixel_remove,
+	.driver = {
+		.name = "bcm2835-neopixel",
+                .owner = THIS_MODULE,
+		.of_match_table = of_match_ptr(bcm2835_neopixel_match),
+	},
+};
+
+module_platform_driver(bcm2835_neopixel_driver);

@@ -2,14 +2,14 @@
 #define __NEOPIXEL_PWM_H__
 
 /* registers base address */
-#define IO_BASE			0x20000000
+#define IO_BASE			0x3F000000
 #define IO_LEN			0xFFFFFF
 #define PWM_OFFSET		0x0020C000
 #define DMA_OFFSET		0x00007000
 #define CLK_OFFSET	        0x00101000
 #define GPIO_OFFSET		0x00200000
 
-#define	PWM_CTL  0x00		// Control Register
+#define	PWM_CTL  0x00	// Control Register
 #define PWM_STA  0x04	// Status Register
 #define PWM_DMAC 0x08	// DMA Control Register
 #define PWM_RNG1 0x10	// Channel 1 Range
@@ -59,7 +59,7 @@
 #define DMA_CS_END			(1<<1)
 #define DMA_CS_ACTIVE			(1<<0)
 
-int neopixel_pwm_init( void );
+int neopixel_pwm_init( void* __iomem base_addr );
 int neopixel_pwm_unload( void );
 
 #endif //__NEOPIXEL_PWM_H__

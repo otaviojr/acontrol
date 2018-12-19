@@ -1,0 +1,20 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2710","brcm,bcm2709";
+
+    fragment@0 {
+      target-path = "/";
+      __overlay__ {
+        #address-cells = <0x1>;
+        #size-cells = <0x1>;
+        neopixel@0x3F000000 {
+          compatible = "bcm2835-neopixel";
+          #address-cells = <0x1>;
+          #size-cells = <0x1>;
+	  reg = <0x3F000000 0xFFFFFF>;
+        };
+      };
+    };
+};

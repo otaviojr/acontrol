@@ -30,24 +30,18 @@
 
 #include "neopixel_pwm.h"
 
-static void __iomem *io_base;
-
-int neopixel_pwm_init( void )
+int neopixel_pwm_init( void* __iomem base_addr)
 {
   u32 v32;
 
-  io_base = ioremap(IO_BASE, 1024*7);
-
   //stop all DMA operations
-  v32 = readl(io_base + DMA_OFFSET + DMA_CS);
-  writel(v32 | DMA_CS_ABORT | DMA_CS_RESET, io_base + DMA_OFFSET + DMA_CS);
+  v32 = readl(base_addr + DMA_CHANNEL_0 + DMA_CS);
+  writel(v32 | DMA_CS_ABORT | DMA_CS_RESET, base_addr + DMA_CHANNEL_0 + DMA_CS);
 
   return 0;
 }
 
 int neopixel_pwm_unload( void )
 {
-  iounmap(io_base);
-
   return 0;
 }
