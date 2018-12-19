@@ -55,6 +55,10 @@ static unsigned int gpio_neopixel_data = 6;
 module_param(gpio_neopixel_data, uint, S_IRUGO);
 MODULE_PARM_DESC(gpio_neopixel_data, " GPIO NEOPIXEL DATA PIN (default=6)");
 
+/* platform driver */
+static int bcm2835_neopixel_probe(struct platform_device *pdev);
+static int bcm2835_neopixel_remove(struct platform_device *pdev);
+
 /* char device interface */
 static int dev_open(struct inode* inodep, struct file* filep);
 static int dev_release(struct inode* inodep, struct file* filep);
@@ -73,8 +77,8 @@ static struct cdev c_dev;
 static struct device *char_device_object;
 
 struct resource *io_res;
-void * __iomem base_addr; /* Virtual Base Address */
-unsigned long remap_size; /* Device Memory Size */
+void * __iomem base_addr; /* I/O Memory Base Address */
+unsigned long remap_size; /* I/O Memory Size */
 
 static int dev_open(struct inode* inodep, struct file* filep)
 {
@@ -120,13 +124,18 @@ static int bcm2835_neopixel_probe(struct platform_device *pdev)
 {
   int result = 0;
 
+  int num_leds = 0;
+
+  struct device_node *np = pdev->dev.of_node;
+
   printk("NEOPIXEL: probe entered");
 
   io_res = platform_get_resource(pdev, IORESOURCE_MEM,0);
   if(!io_res){
     printk("NEOPIXEL: dma base address not found");
+    return -ENODEV;
   } else {
-    printk("NEOPIXEL: Ok... we have an address 0x%lx - 0x%lx", io_res->start, io_res->end);
+    printk("NEOPIXEL: Ok... we have an address 0x%lx - 0x%lx", (long unsigned int)io_res->start, (long unsigned int)io_res->end);
   }
 
   remap_size = io_res->end - io_res->start + 1;
@@ -134,8 +143,16 @@ static int bcm2835_neopixel_probe(struct platform_device *pdev)
 
   if(!base_addr){
     printk("NWOPIXEL: Error remapping io memory");
+    return -ENOMEM;
   } else {
     printk("NEOPIXEL: Address remapped");
+  }
+
+  if(of_property_read_u32(np, "num-leds", &num_leds) ) {
+    dev_err(&pdev->dev, "of_property_read_u32\n");
+    return -EINVAL;
+  } else {
+    printk("NEOPIXEL: number of leds = %d", num_leds);
   }
 
   /* request the gpio connected to our neopixel strip data pin */
