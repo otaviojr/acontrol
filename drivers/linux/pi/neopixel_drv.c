@@ -89,6 +89,8 @@ static int dev_release(struct inode* inodep, struct file* filep)
 static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
 {
   long ret = 0;
+  long value = 0;
+  struct neopixel_pixel pixel;
 
   if (_IOC_TYPE(cmd) != NEOPIXEL_IOC_MAGIC) return -EINVAL;
   if (_IOC_NR(cmd) > NEOPIXEL_IOCTL_MAX_CMD) return -EINVAL;
@@ -105,6 +107,27 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
     case NEOPIXEL_IOCTL_GET_VERSION:
       if(copy_to_user((char*)arg, module_version, strlen(module_version) )){
         return -EACCES;
+      }
+      break;
+
+    case  NEOPIXEL_IOCTL_GET_NUM_LEDS:
+      value = neopixel_pwm_get_num_leds();
+      if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
+        return -EFAULT;
+      }
+      break;
+
+    case NEOPIXEL_IOCTL_SET_PIXEL:
+      if(copy_from_user((struct neopixel_pixel*)&pixel, (struct neopixel_pixel*)arg, sizeof(struct neopixel_pixel))){
+        return -EFAULT;
+      }
+      neopixel_pwm_set_pixel(pixel.pixel, pixel.red, pixel.green, pixel.blue);
+      break;
+
+    case NEOPIXEL_IOCTL_SHOW:
+      value = neopixel_pwm_show();
+      if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
+        return -EFAULT;
       }
       break;
 

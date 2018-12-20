@@ -32,4 +32,11 @@
   #define FIRST_MINOR       1
   #define MINOR_CNT         3
 
+  struct neopixel_pixel {
+    unsigned long pixel;
+    unsigned char red;
+    unsigned char green;
+    unsigned char blue;
+  };
+
 #endif //__NEOPIXEK_DRV_H__

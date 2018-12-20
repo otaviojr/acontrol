@@ -125,7 +125,7 @@ static int start_dma( void )
   return 0;
 }
 
-void neopixel_pwm_setpixel(unsigned int pixel, unsigned char  red, unsigned char green, unsigned char blue)
+void neopixel_pwm_set_pixel(unsigned int pixel, unsigned char  red, unsigned char green, unsigned char blue)
 {
   uint32_t color = (green << 16) | (red << 8) | blue;
   uint8_t* buffer_ptr;
@@ -157,6 +157,11 @@ void neopixel_pwm_setpixel(unsigned int pixel, unsigned char  red, unsigned char
     }
     color <<= 1;
   }
+}
+
+int neopixel_pwm_get_num_leds( void )
+{
+  return num_leds;
 }
 
 int neopixel_pwm_show( void )
