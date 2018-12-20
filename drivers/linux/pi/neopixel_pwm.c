@@ -75,6 +75,7 @@ static int pwm_init( void )
 
   writel(reg, pwm_base_addr + PWM_DMAC);
 
+  //PLLD - 500Mhz - MASH 1
   reg = readl(pwmctl_cm_base_addr + PWM_CM_CTL);
   reg |= PWM_CM_CTL_MASH(1) | PWM_CM_CTL_SRC(6);
   writel(reg, pwmctl_cm_base_addr + PWM_CM_CTL);
@@ -121,12 +122,43 @@ static int start_dma( void )
   return 0;
 }
 
-int neopixel_pwm_start_transfer( void )
+void neopixel_pwm_setpixel(unsigned int pixel, unsigned char  red, unsigned char green, unsigned char blue)
+{
+  uint32_t color = (green << 16) | (red << 8) | blue;
+  uint8_t* buffer_ptr;
+  uint8_t i, j, bits=0;
+
+  if(pixel > num_leds) return;
+
+  buffer_ptr = &buffer[(pixel * 24 * 3)/8];
+
+  for(i = 0; i < 24; i++)
+  {
+    if((color & 0x1000000) == 1){
+      for(j = 0; j < 3; j++){
+        bits++;
+        if(bits % 8 == 0) { buffer_ptr++; bits = 0; }
+        *buffer_ptr <<=1;
+        *buffer_ptr |= (j <= 1 ? 1 : 0);
+      }
+    } else {
+      for(j = 0; j < 3; j++){ 
+        bits++;
+        if(bits % 8 == 0) { buffer_ptr++; bits = 0; }
+        *buffer_ptr <<=1;
+        *buffer_ptr |= (j == 0 ? 1 : 0);
+      }
+    }
+    color <<= 1;
+  }
+}
+
+int neopixel_pwm_show( void )
 {
   return start_dma();
 }
 
-int neopixel_pwm_init( struct platform_device *pdev)
+int neopixel_pwm_init( struct platform_device *pdev )
 {
   struct device_node *np = pdev->dev.of_node;
   struct dma_slave_config cfg =
@@ -150,11 +182,12 @@ int neopixel_pwm_init( struct platform_device *pdev)
     printk("NEOPIXEL: pwm base address 0x%lx - 0x%lx", (long unsigned int)pwm_io_res->start, (long unsigned int)pwm_io_res->end);
   }
 
-//  if  (!request_mem_region(pwm_io_res->start, resource_size(pwm_io_res), "neopixel-pwm")) {
-//    dev_err(&pdev->dev, "pwm -  request_mem_region");
-//    printk("NEOPIXEL: pwm request region failed. Region already in use?");
-//    return -EINVAL;
-//  }  
+  if  (!request_mem_region(pwm_io_res->start, resource_size(pwm_io_res), "neopixel-pwm")) {
+    dev_err(&pdev->dev, "pwm -  request_mem_region");
+    printk("NEOPIXEL: pwm request region failed. Region already in use?");
+    return -EINVAL;
+  }
+
   pwm_base_addr = ioremap(pwm_io_res->start, resource_size(pwm_io_res));
 
   if(!pwm_base_addr){
@@ -172,11 +205,12 @@ int neopixel_pwm_init( struct platform_device *pdev)
     printk("NEOPIXEL: pwmctl clock base address 0x%lx - 0x%lx", (long unsigned int)pwmctl_cm_io_res->start, (long unsigned int)pwmctl_cm_io_res->end);
   }
 
-//  if  (!request_mem_region(pwm_io_res->start, resource_size(pwm_io_res), "neopixel-pwm")) {
-//    dev_err(&pdev->dev, "pwm -  request_mem_region");
-//    printk("NEOPIXEL: pwm request region failed. Region already in use?");
-//    return -EINVAL;
-//  }  
+  //if  (!request_mem_region(pwmctl_cm_io_res->start, resource_size(pwmctl_cm_io_res), "neopixel-pwm-cm")) {
+  //  dev_err(&pdev->dev, "pwm -  request_mem_region");
+  //  printk("NEOPIXEL: pwm request region failed. Region already in use?");
+  //  return -EINVAL;
+  //}  
+
   pwmctl_cm_base_addr = ioremap(pwmctl_cm_io_res->start, resource_size(pwmctl_cm_io_res));
 
   if(!pwmctl_cm_base_addr){
@@ -199,6 +233,7 @@ int neopixel_pwm_init( struct platform_device *pdev)
     printk("Failed to allocate pwm buffer\n");
     return -ENOMEM;
   }
+ memset(buffer,0,num_leds * BYTES_PER_LED + RESET_BYTES);
 
   dma_chan = dma_request_slave_channel(dev, "neopixel-pwm-dma");
   if(dma_chan == NULL)
@@ -223,7 +258,9 @@ int neopixel_pwm_unload( void )
 {
   iounmap(pwm_base_addr);
   iounmap(pwmctl_cm_base_addr);
-  //release_mem_region(pwm_io_res->start, resource_size(pwm_io_res));
+
+  release_mem_region(pwm_io_res->start, resource_size(pwm_io_res));
+  //release_mem_region(pwmctl_cm_io_res->start, resource_size(pwmctl_cm_io_res));
 
   dma_release_channel(dma_chan);
   kfree(buffer);

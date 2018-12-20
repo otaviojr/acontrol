@@ -71,5 +71,7 @@
 
 int neopixel_pwm_init(struct platform_device* pdev);
 int neopixel_pwm_unload( void );
+void neopixel_pwm_setpixel(unsigned int pixel, unsigned char  red, unsigned char green, unsigned char blue);
+int neopixel_pwm_show( void );
 
 #endif //__NEOPIXEL_PWM_H__
