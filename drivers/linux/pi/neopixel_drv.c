@@ -76,12 +76,6 @@ static dev_t dev;
 static struct cdev c_dev;
 static struct device *char_device_object;
 
-
-struct resource* dma_io_res;
-struct resource* pwm_io_res;
-void * __iomem dma_base_addr; /* DMA Base Address */
-void * __iomem pwm_base_addr; /* PWM Base Address */
-
 static int dev_open(struct inode* inodep, struct file* filep)
 {
   return 0;
@@ -125,76 +119,15 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
 static int bcm2835_neopixel_probe(struct platform_device *pdev)
 {
   int result = 0;
-  int num_leds = 0;
-  struct device_node *np = pdev->dev.of_node;
 
   printk("NEOPIXEL: probe entered");
 
-  dma_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "dma");
-  if(!dma_io_res){
-    printk("NEOPIXEL: dma base address not found");
-    return -ENODEV;
-  } else {
-    printk("NEOPIXEL: dma base address 0x%lx - 0x%lx", (long unsigned int)dma_io_res->start, (long unsigned int)dma_io_res->end);
+  device_class = class_create(THIS_MODULE, "neopixel");
+  if(IS_ERR(device_class))
+  {
+     printk(KERN_ALERT "NEOPIXEL: Failed to create device class");
+     return PTR_ERR(device_class);
   }
-
-//  if  (!request_mem_region(dma_io_res->start, resource_size(dma_io_res), "neopixel_dma")) {
-//    dev_err(&pdev->dev, "dma -  request_mem_region");
-//    printk("NEOPIXEL: dma request region failed. Region already in use?");
-//    return -EINVAL;
-//  }  
-
-  dma_base_addr = ioremap(dma_io_res->start, resource_size(dma_io_res));
-
-  if(!dma_base_addr){
-    printk("NWOPIXEL: Error remapping DMA io memory");
-    return -ENOMEM;
-  } else {
-    printk("NEOPIXEL: DMA address remapped");
-  }
-
-  pwm_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "pwm");
-  if(!pwm_io_res){
-    printk("NEOPIXEL: pwm base address not found");
-    return -ENODEV;
-  } else {
-    printk("NEOPIXEL: pwm base address 0x%lx - 0x%lx", (long unsigned int)pwm_io_res->start, (long unsigned int)pwm_io_res->end);
-  }
-
-//  if  (!request_mem_region(pwm_io_res->start, resource_size(pwm_io_res), "neopixel_pwm")) {
-//    dev_err(&pdev->dev, "pwm -  request_mem_region");
-//    printk("NEOPIXEL: pwm request region failed. Region already in use?");
-//    return -EINVAL;
-//  }  
-  pwm_base_addr = ioremap(pwm_io_res->start, resource_size(pwm_io_res));
-
-  if(!pwm_base_addr){
-    printk("NWOPIXEL: Error remapping pwm io memory");
-    return -ENOMEM;
-  } else {
-    printk("NEOPIXEL: PWM address remapped");
-  }
-
-  if(of_property_read_u32(np, "num-leds", &num_leds) ) {
-    dev_err(&pdev->dev, "of_property_read_u32\n");
-    return -EINVAL;
-  } else {
-    printk("NEOPIXEL: number of leds = %d", num_leds);
-  }
-
-  /* request the gpio connected to our neopixel strip data pin */
-  gpio_request(gpio_neopixel_data, "sysfs");
-  /* set as output and turn it off */
-  gpio_direction_output(gpio_neopixel_data, 0);
-  /* export and do not allow direction change */
-  gpio_export(gpio_neopixel_data, false);
-
-   device_class = class_create(THIS_MODULE, "neopixel");
-   if(IS_ERR(device_class))
-   {
-      printk(KERN_ALERT "NEOPIXEL: Failed to create device class");
-      return PTR_ERR(device_class);
-   }
 
   /* character device interface */
   result = alloc_chrdev_region(&dev, FIRST_MINOR, MINOR_CNT, "neopixel");
@@ -218,7 +151,7 @@ static int bcm2835_neopixel_probe(struct platform_device *pdev)
     return PTR_ERR(char_device_object);
   }
 
-  neopixel_pwm_init(dma_base_addr, pwm_base_addr);
+  neopixel_pwm_init(pdev);
 
   return 0;
 }
@@ -227,21 +160,12 @@ static int bcm2835_neopixel_remove(struct platform_device *pdev)
 {
   printk("NEOPIXEL: remove entered");
 
-  //neopixel_pwm_init();
-
   neopixel_pwm_unload();
-
-  gpio_set_value(gpio_neopixel_data, 0);
-  gpio_unexport(gpio_neopixel_data);
-  gpio_free(gpio_neopixel_data);
 
   device_destroy(device_class, dev);
   cdev_del(&c_dev);
   unregister_chrdev_region(dev,MINOR_CNT);
   class_destroy(device_class);
-
-  iounmap(dma_base_addr);
-  iounmap(pwm_base_addr);
 
   //release_mem_region(dma_io_res->start, resource_size(dma_io_res));
   //release_mem_region(pwm_io_res->start, resource_size(pwm_io_res));

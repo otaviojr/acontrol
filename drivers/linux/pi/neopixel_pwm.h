@@ -2,13 +2,6 @@
 #define __NEOPIXEL_PWM_H__
 
 /* registers base address */
-#define IO_BASE			0x3F000000
-#define IO_LEN			0xFFFFFF
-#define PWM_OFFSET		0x0020C000
-#define DMA_OFFSET		0x00007000
-#define CLK_OFFSET	        0x00101000
-#define GPIO_OFFSET		0x00200000
-
 #define	PWM_CTL  0x00	// Control Register
 #define PWM_STA  0x04	// Status Register
 #define PWM_DMAC 0x08	// DMA Control Register
@@ -18,21 +11,38 @@
 #define PWM_RNG2 0x20	// Channel 2 Range
 #define PWM_DAT2 0x24	// Channel 2 Data
 
-#define DMA_CHANNEL_0	0x000
-#define DMA_CHANNEL_1	0x100
-#define DMA_CHANNEL_2	0x200
-#define DMA_CHANNEL_3	0x300
-#define DMA_CHANNEL_4	0x400
-#define DMA_CHANNEL_5	0x500
-#define DMA_CHANNEL_6	0x600
-#define DMA_CHANNEL_7	0x700
-#define DMA_CHANNEL_8	0x800
-#define DMA_CHANNEL_9	0x900
-#define DMA_CHANNEL_10	0xa00
-#define DMA_CHANNEL_11	0xb00
-#define DMA_CHANNEL_12	0xc00
-#define DMA_CHANNEL_13	0xd00
-#define DMA_CHANNEL_14	0xe00
+#define PWM_CTL_MSEN2			(1 << 15)
+#define PWM_CTL_USEF2			(1 << 13)
+#define PWM_CTL_POLA2			(1 << 12)
+#define PWM_CTL_SBIT2			(1 << 11)
+#define PWM_CTL_RPTL2			(1 << 10)
+#define PWM_CTL_MODE2			(1 << 9)
+#define PWM_CTL_PWEN2			(1 << 8)
+#define PWM_CTL_MSEN1			(1 << 7)
+#define PWM_CTL_CLRF1			(1 << 6)
+#define PWM_CTL_USEF1			(1 << 5)
+#define PWM_CTL_POLA1			(1 << 4)
+#define PWM_CTL_SBIT1			(1 << 3)
+#define PWM_CTL_RPTL1			(1 << 2)
+#define PWM_CTL_MODE1			(1 << 1)
+#define PWM_CTL_PWEN1			(1 << 0)
+
+#define PWM_DMAC_ENAB			(1 << 31)
+#define PWM_DMAC_PANIC(v)		(v << 8)
+#define PWM_DMAC_DREQ(v)		(v << 0)
+
+#define PWM_CM_CTL	0x00
+#define PWM_CM_DIV	0x04
+
+#define PWM_CM_CTL_MASH(v)		(v << 9)
+#define PWM_CM_CTL_FLIP			(1 << 8)
+#define PWM_CM_CTL_BUSY			(1 << 7)
+#define PWM_CM_CTL_KILL			(1 << 5)
+#define PWM_CM_CTL_ENAB			(1 << 4)
+#define PWM_CM_CTL_SRC(v)		(v << 0)
+
+#define PWM_CM_DIV_DIVI(v)		(v << 12)
+#define PWM_CM_DIV_DIVF(v)		(v << 0)
 
 #define DMA_CS		0x00	// Control & Status register
 #define DMA_CONBLK_AD	0x04	// Address of Control Block (must be 256-BYTE ALIGNED!!!)
@@ -59,7 +69,7 @@
 #define DMA_CS_END			(1<<1)
 #define DMA_CS_ACTIVE			(1<<0)
 
-int neopixel_pwm_init( void* __iomem dma_base_addr, void* __iomem pwm_base_addr );
+int neopixel_pwm_init(struct platform_device* pdev);
 int neopixel_pwm_unload( void );
 
 #endif //__NEOPIXEL_PWM_H__

@@ -5,6 +5,13 @@
     compatible = "brcm,bcm2710","brcm,bcm2709";
 
     fragment@0 {
+      target = <&pwm>;
+      __overlay__ {
+        status = "disabled";
+      };
+    };
+
+    fragment@1 {
       target-path = "/";
       __overlay__ {
         #address-cells = <0x1>;
@@ -12,11 +19,19 @@
 
         neopixel@0x3F000000 {
           compatible = "bcm2835-neopixel";
+
           #address-cells = <0x1>;
           #size-cells = <0x1>;
-	  reg = <0x3F20C000 0x28 /*0: PWM BASE ADDRESS*/
-                 0x3F007000 0x100>; /*1: DMA (0) BASE ADDRESS*/
-          reg-names = "pwm","dma";
+	  reg = <0x3F20C000 0x100 /*0: PWM BASE ADDRESS*/
+                 0x3F1010a0 0x08>;  /*1: PWMCTL BASE ADDRESS*/
+          reg-names = "neopixel-pwm","neopixel-pwmctl-cm";
+
+          pinctrl-names = "neopixel-pwm-pin";
+          pinctrl-0 = <&pwm0_gpio40>;
+
+          dmas = <&dma 5>;
+          dma-names = "neopixel-pwm-dma";
+
           num-leds = <16>;
         };
       };
