@@ -80,6 +80,9 @@ static int pwm_init( void )
   reg |= PWM_CM_CTL_MASH(1) | PWM_CM_CTL_SRC(6);
   writel(reg, pwmctl_cm_base_addr + PWM_CM_CTL);
 
+  reg |= PWM_CM_CTL_ENAB;
+  writel(reg, pwmctl_cm_base_addr + PWM_CM_CTL);
+
   //2.5Mhz = 0,4us per bit
   reg = PWM_CM_DIV_DIVI(200) | PWM_CM_DIV_DIVF(0);
   writel(reg, pwmctl_cm_base_addr + PWM_CM_DIV);
@@ -134,15 +137,18 @@ void neopixel_pwm_setpixel(unsigned int pixel, unsigned char  red, unsigned char
 
   for(i = 0; i < 24; i++)
   {
-    if((color & 0x1000000) == 1){
-      for(j = 0; j < 3; j++){
+    if((color & 0x1000000) == 1)
+    {
+      for(j = 0; j < 3; j++)
+      {
         bits++;
         if(bits % 8 == 0) { buffer_ptr++; bits = 0; }
         *buffer_ptr <<=1;
         *buffer_ptr |= (j <= 1 ? 1 : 0);
       }
     } else {
-      for(j = 0; j < 3; j++){ 
+      for(j = 0; j < 3; j++)
+      {
         bits++;
         if(bits % 8 == 0) { buffer_ptr++; bits = 0; }
         *buffer_ptr <<=1;
