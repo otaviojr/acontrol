@@ -110,8 +110,7 @@ static int start_dma( void )
   }
 
   dma_addr = dma_map_single(dev, buffer, num_leds * BYTES_PER_LED + RESET_BYTES, DMA_TO_DEVICE);
-
-  if(dma_addr != 0)
+  if(dma_addr == 0)
   {
     printk("Error mapping DMA buffer");
     return -EFAULT;
@@ -274,7 +273,7 @@ int neopixel_pwm_unload( void )
 {
   if(hardware_test_task)
   {
-    //kthread_stop(hardware_test_task);
+    kthread_stop(hardware_test_task);
   }
 
   iounmap(pwm_base_addr);
@@ -284,7 +283,9 @@ int neopixel_pwm_unload( void )
   //release_mem_region(pwmctl_cm_io_res->start, resource_size(pwmctl_cm_io_res));
 
   dma_release_channel(dma_chan);
+
   kfree(buffer);
+
   return 0;
 }
 
@@ -299,19 +300,20 @@ static void color_wipe(uint8_t wait, uint8_t red, uint8_t green, uint8_t blue) {
 
 static int hardware_test(void* args)
 {
-   int stage = 0;
-   printk(KERN_INFO "NEOPIXEL: Hardware test started \n");
-   while(!kthread_should_stop())
-   {
-      set_current_state(TASK_RUNNING);
-      color_wipe(1, (stage == 0 ? 255 : 0), (stage == 1 ? 255 : 0), (stage == 2 ? 255 : 0));
-      set_current_state(TASK_INTERRUPTIBLE);
-      msleep(1000);
-      stage++;
-      if(stage == 3) break;
-   }
-   printk(KERN_INFO "NEOPIXEL: Hardware test ended \n");
-   return 0;
+  int stage = 0;
+  printk(KERN_INFO "NEOPIXEL: Hardware test started \n");
+  while(!kthread_should_stop())
+  {
+    set_current_state(TASK_RUNNING);
+    color_wipe(1, (stage == 0 ? 255 : 0), (stage == 1 ? 255 : 0), (stage == 2 ? 255 : 0));
+    set_current_state(TASK_INTERRUPTIBLE);
+    msleep(1000);
+    stage++;
+    if(stage == 3) do_exit(0);
+  }
+  printk(KERN_INFO "NEOPIXEL: Hardware test ended \n");
+  hardware_test_task = NULL;
+  return 0;
 }
 
 int neopixel_pwm_hardware_test( void ) 
