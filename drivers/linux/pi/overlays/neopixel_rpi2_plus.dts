@@ -27,7 +27,7 @@
           reg-names = "neopixel-pwm","neopixel-pwmctl-cm";
 
           pinctrl-names = "neopixel-pwm-pin";
-          pinctrl-0 = <&pwm0_gpio40>;
+          pinctrl-0 = <&pwm0_gpio12>;
 
           dmas = <&dma 5>;
           dma-names = "neopixel-pwm-dma";

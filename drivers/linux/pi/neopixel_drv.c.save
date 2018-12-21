@@ -50,11 +50,6 @@ MODULE_AUTHOR("Otavio Ribeiro");
 MODULE_DESCRIPTION("acontrol neopixel kernel driver");
 MODULE_VERSION("0.1");
 
-/** GPIO2_2 - (2 * 32) + 2 **/
-static unsigned int gpio_neopixel_data = 6;
-module_param(gpio_neopixel_data, uint, S_IRUGO);
-MODULE_PARM_DESC(gpio_neopixel_data, " GPIO NEOPIXEL DATA PIN (default=6)");
-
 /* platform driver */
 static int bcm2835_neopixel_probe(struct platform_device *pdev);
 static int bcm2835_neopixel_remove(struct platform_device *pdev);
@@ -126,14 +121,6 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
 
     case NEOPIXEL_IOCTL_SHOW:
       value = neopixel_pwm_show();
-      if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
-        return -EFAULT;
-      }
-      break;
-
-    case NEOPIXEL_IOCTL_HARDWARE_TEST:
-      neopixel_pwm_hardware_test();
-      value = 0;
       if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
         return -EFAULT;
       }

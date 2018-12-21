@@ -20,8 +20,10 @@ use nix::sys::ioctl;
 mod neopixel_ioctl {
   const NEOPIXEL_IOC_MAGIC: u8 = b'N';
   const NEOPIXEL_IOCTL_GET_VERSION: u8 = 1;
+  const NEOPIXEL_IOCTL_HARDWARE_TEST: u8 = 5;  
 
   ioctl_read_buf!(get_version, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_GET_VERSION, u8);
+  ioctl_read!(hardware_test, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_HARDWARE_TEST, libc::c_long);
 }
 
 pub struct NeoPixel {
@@ -61,6 +63,14 @@ impl Display for NeoPixel {
 
     println!("NeoPixel driver version {} found!", String::from_utf8(version.to_vec()).unwrap());
 
+    unsafe {
+      let mut ret: libc::c_long = 0;
+      if let Err(error) = neopixel_ioctl::hardware_test(self.driver_fd.unwrap(), &mut ret) {
+        println!("Error executing neopixel hardware test: {}", error);
+        return Err(format!("{}","Error executing hardware test!"));
+      }
+    }
+ 
     Ok(())
   }
 

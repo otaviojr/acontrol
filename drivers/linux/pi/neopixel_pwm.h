@@ -74,5 +74,6 @@ int neopixel_pwm_unload( void );
 void neopixel_pwm_set_pixel(unsigned int pixel, unsigned char  red, unsigned char green, unsigned char blue);
 int neopixel_pwm_show( void );
 int neopixel_pwm_get_num_leds( void );
+int neopixel_pwm_hardware_test( void );
 
 #endif //__NEOPIXEL_PWM_H__

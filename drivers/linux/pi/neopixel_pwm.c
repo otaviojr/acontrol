@@ -35,6 +35,8 @@
 #include <linux/io.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmaengine.h>
+#include <linux/delay.h>
+#include <linux/kthread.h>
 
 #include "neopixel_pwm.h"
 
@@ -49,6 +51,8 @@ static dma_addr_t dma_addr;
 
 static struct resource* pwm_io_res;
 static struct resource* pwmctl_cm_io_res;
+
+static struct task_struct * hardware_test_task = NULL;
 
 #define BYTES_PER_LED		9
 #define RESET_BYTES		15
@@ -94,6 +98,7 @@ static void neopixel_callback(void * param)
 {
   dma_unmap_single(dev, dma_addr, num_leds * BYTES_PER_LED + RESET_BYTES, DMA_TO_DEVICE);
   dma_addr = 0;
+  printk("NEOPIXEL: dma finished");
 }
 
 static int start_dma( void )
@@ -267,6 +272,11 @@ int neopixel_pwm_init( struct platform_device *pdev )
 
 int neopixel_pwm_unload( void )
 {
+  if(hardware_test_task)
+  {
+    //kthread_stop(hardware_test_task);
+  }
+
   iounmap(pwm_base_addr);
   iounmap(pwmctl_cm_base_addr);
 
@@ -276,4 +286,41 @@ int neopixel_pwm_unload( void )
   dma_release_channel(dma_chan);
   kfree(buffer);
   return 0;
+}
+
+static void color_wipe(uint8_t wait, uint8_t red, uint8_t green, uint8_t blue) {
+  uint16_t i;
+  for(i=0; i < num_leds; i++) {
+    neopixel_pwm_set_pixel(i, red, green, blue);
+    neopixel_pwm_show();
+    msleep(wait * 1000);
+  }
+}
+
+static int hardware_test(void* args)
+{
+   int stage = 0;
+   printk(KERN_INFO "NEOPIXEL: Hardware test started \n");
+   while(!kthread_should_stop())
+   {
+      set_current_state(TASK_RUNNING);
+      color_wipe(1, (stage == 0 ? 255 : 0), (stage == 1 ? 255 : 0), (stage == 2 ? 255 : 0));
+      set_current_state(TASK_INTERRUPTIBLE);
+      msleep(1000);
+      stage++;
+      if(stage == 3) break;
+   }
+   printk(KERN_INFO "NEOPIXEL: Hardware test ended \n");
+   return 0;
+}
+
+int neopixel_pwm_hardware_test( void ) 
+{
+   hardware_test_task = kthread_run(hardware_test, NULL, "neopixel_hardware_test");
+   if(IS_ERR(hardware_test_task))
+   {
+      printk(KERN_ALERT "NEOPIXEL: Failed to create hardware test task");
+      return PTR_ERR(hardware_test_task);
+   }
+   return 0;
 }
