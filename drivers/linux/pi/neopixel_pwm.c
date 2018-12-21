@@ -137,6 +137,8 @@ void neopixel_pwm_set_pixel(unsigned int pixel, unsigned char  red, unsigned cha
 
   if(pixel > num_leds) return;
 
+  printk("NEOPIXEL: Setting pixel");
+
   buffer_ptr = &buffer[(pixel * 24 * 3)/8];
 
   for(i = 0; i < 24; i++)
@@ -291,7 +293,7 @@ int neopixel_pwm_unload( void )
 
 static void color_wipe(uint8_t wait, uint8_t red, uint8_t green, uint8_t blue) {
   uint16_t i;
-  for(i=0; i < num_leds; i++) {
+  for(i=0; i < num_leds && !kthread_should_stop(); i++) {
     neopixel_pwm_set_pixel(i, red, green, blue);
     neopixel_pwm_show();
     msleep(wait * 1000);
@@ -309,7 +311,11 @@ static int hardware_test(void* args)
     set_current_state(TASK_INTERRUPTIBLE);
     msleep(1000);
     stage++;
-    if(stage == 3) do_exit(0);
+    if(stage == 3) 
+    {
+      do_exit(0);
+      break;
+    }
   }
   printk(KERN_INFO "NEOPIXEL: Hardware test ended \n");
   hardware_test_task = NULL;
