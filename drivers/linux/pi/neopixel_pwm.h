@@ -34,6 +34,7 @@
 #define PWM_CM_CTL	0x00
 #define PWM_CM_DIV	0x04
 
+#define PWM_CM_CTL_PASSWORD		0x5A000000
 #define PWM_CM_CTL_MASH(v)		(v << 9)
 #define PWM_CM_CTL_FLIP			(1 << 8)
 #define PWM_CM_CTL_BUSY			(1 << 7)
@@ -44,36 +45,12 @@
 #define PWM_CM_DIV_DIVI(v)		(v << 12)
 #define PWM_CM_DIV_DIVF(v)		(v << 0)
 
-#define DMA_CS		0x00	// Control & Status register
-#define DMA_CONBLK_AD	0x04	// Address of Control Block (must be 256-BYTE ALIGNED!!!)
-#define DMA_TI		0x08	// Transfer Information (populated from CB)
-#define DMA_SOURCE_AD	0x0C	// Source address, populated from CB. Physical address.
-#define DMA_DEST_AD	0x10	// Destination address, populated from CB. Bus address.
-#define DMA_TXFR_LEN	0x14	// Transfer length, populated from CB
-#define DMA_STRIDE	0x18	// Stride, populated from CB
-#define DMA_NEXTCONBK	0x1C	// Next control block address, populated from CB
-#define DMA_DEBUG	0x20	// Debug settings
-
-#define DMA_CS_RESET			(1<<31)
-#define DMA_CS_ABORT			(1<<30)
-#define DMA_CS_DISDEBUG			(1<<29)
-#define DMA_CS_WAIT			(1<<28)
-#define DMA_CS_PANIC_PRIORITY(v)	(v<<20)
-#define DMA_CS_PRIORITY(v)		(v<<16)
-#define DMA_CS_ERROR			(1<<8)
-#define DMA_CS_WAITING			(1<<6)
-#define DMA_CS_DREQ_STOPS		(1<<5)
-#define DMA_CS_PAUSED			(1<<4)
-#define DMA_CS_DREQ			(1<<3)
-#define DMA_CS_INT			(1<<2)
-#define DMA_CS_END			(1<<1)
-#define DMA_CS_ACTIVE			(1<<0)
-
 int neopixel_pwm_init(struct platform_device* pdev);
 int neopixel_pwm_unload( void );
-void neopixel_pwm_set_pixel(unsigned int pixel, unsigned char  red, unsigned char green, unsigned char blue);
+void neopixel_pwm_set_pixel(unsigned int pixel, uint8_t red, uint8_t green, uint8_t blue);
 int neopixel_pwm_show( void );
 int neopixel_pwm_get_num_leds( void );
 int neopixel_pwm_hardware_test( void );
+int neopixel_pwm_stop( void );
 
 #endif //__NEOPIXEL_PWM_H__

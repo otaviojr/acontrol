@@ -78,11 +78,13 @@ static struct device *char_device_object;
 
 static int dev_open(struct inode* inodep, struct file* filep)
 {
+  printk("NEOPIXEL: Device openned");
   return 0;
 }
 
 static int dev_release(struct inode* inodep, struct file* filep)
 {
+  printk("NEOPIXEL: Device released");
   return 0;
 }
 

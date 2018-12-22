@@ -2,16 +2,26 @@
 /plugin/;
 
 / {
-    compatible = "brcm,bcm2710","brcm,bcm2709";
+    compatible = "brcm,bcm2710","brcm,bcm2709","brcm,bcm2837","brcm,bcm2836";
 
     fragment@0 {
+        target = <&gpio>;
+        __overlay__ {
+            pwm_pins: pwm_pins {
+                brcm,pins = <12>;
+                brcm,function = <0>;
+            };
+        };
+    };
+
+    fragment@1 {
       target = <&pwm>;
       __overlay__ {
         status = "disabled";
       };
     };
 
-    fragment@1 {
+    fragment@2 {
       target-path = "/";
       __overlay__ {
         #address-cells = <0x1>;
@@ -26,7 +36,7 @@
                  0x3F1010a0 0x08>;  /*1: PWMCTL BASE ADDRESS*/
           reg-names = "neopixel-pwm","neopixel-pwmctl-cm";
 
-          pinctrl-names = "neopixel-pwm-pin";
+          pinctrl-names = "default";
           pinctrl-0 = <&pwm0_gpio12>;
 
           dmas = <&dma 5>;

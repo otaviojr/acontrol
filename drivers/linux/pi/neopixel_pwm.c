@@ -62,7 +62,7 @@ static struct task_struct * hardware_test_task = NULL;
 static int pwm_init( void )
 {
   uint32_t reg;
-  writel(32, pwm_base_addr + PWM_RNG1);
+  writel(1, pwm_base_addr + PWM_RNG1);
   writel(0, pwm_base_addr + PWM_DAT1);
 
   reg = PWM_CTL_PWEN1 |
@@ -79,17 +79,25 @@ static int pwm_init( void )
 
   writel(reg, pwm_base_addr + PWM_DMAC);
 
-  //PLLD - 500Mhz - MASH 1
-  reg = readl(pwmctl_cm_base_addr + PWM_CM_CTL);
-  reg |= PWM_CM_CTL_MASH(1) | PWM_CM_CTL_SRC(6);
+  reg = 0x00;
   writel(reg, pwmctl_cm_base_addr + PWM_CM_CTL);
+
+  //2.5Mhz = 0,45us per bit
+  reg = PWM_CM_CTL_PASSWORD | PWM_CM_DIV_DIVI(200) | PWM_CM_DIV_DIVF(0);
+  writel(reg, pwmctl_cm_base_addr + PWM_CM_DIV);
+
+  //PLLD - 500Mhz - MASH 1
+  reg = PWM_CM_CTL_PASSWORD | PWM_CM_CTL_MASH(1) | PWM_CM_CTL_SRC(6);
+  writel(reg, pwmctl_cm_base_addr + PWM_CM_CTL);
+  printk("writing PWM_CM_CTL=0x%X",reg);
 
   reg |= PWM_CM_CTL_ENAB;
   writel(reg, pwmctl_cm_base_addr + PWM_CM_CTL);
 
-  //2.5Mhz = 0,4us per bit
-  reg = PWM_CM_DIV_DIVI(200) | PWM_CM_DIV_DIVF(0);
-  writel(reg, pwmctl_cm_base_addr + PWM_CM_DIV);
+  msleep(100);
+
+  reg = readl(pwmctl_cm_base_addr + PWM_CM_CTL);
+  printk("reading PWM_CM_CTL=0x%X",reg);
 
   return 0;
 }
@@ -124,31 +132,35 @@ static int start_dma( void )
   }
 
   desc->callback = neopixel_callback;
+  desc->callback_param = NULL;
+  dmaengine_submit(desc);
   dma_async_issue_pending(dma_chan);
 
   return 0;
 }
 
-void neopixel_pwm_set_pixel(unsigned int pixel, unsigned char  red, unsigned char green, unsigned char blue)
+void neopixel_pwm_set_pixel(unsigned int pixel, uint8_t red, uint8_t green, uint8_t blue)
 {
-  uint32_t color = (green << 16) | (red << 8) | blue;
+  uint32_t color = ( ((uint32_t)green) << 16) | ( ((uint32_t)red) << 8) | blue;
   uint8_t* buffer_ptr;
   uint8_t i, j, bits=0;
 
   if(pixel > num_leds) return;
 
-  printk("NEOPIXEL: Setting pixel");
+  printk("NEOPIXEL: Setting pixel (0x%X)", color);
 
   buffer_ptr = &buffer[(pixel * 24 * 3)/8];
 
+  memset(buffer_ptr, 0, BYTES_PER_LED);
+
   for(i = 0; i < 24; i++)
   {
-    if((color & 0x1000000) == 1)
+    if( (color & 0x1000000) )
     {
       for(j = 0; j < 3; j++)
       {
         bits++;
-        if(bits % 8 == 0) { buffer_ptr++; bits = 0; }
+        if(bits == 8) { buffer_ptr++; bits = 0; }
         *buffer_ptr <<=1;
         *buffer_ptr |= (j <= 1 ? 1 : 0);
       }
@@ -156,7 +168,7 @@ void neopixel_pwm_set_pixel(unsigned int pixel, unsigned char  red, unsigned cha
       for(j = 0; j < 3; j++)
       {
         bits++;
-        if(bits % 8 == 0) { buffer_ptr++; bits = 0; }
+        if(bits == 8) { buffer_ptr++; bits = 0; }
         *buffer_ptr <<=1;
         *buffer_ptr |= (j == 0 ? 1 : 0);
       }
@@ -172,6 +184,12 @@ int neopixel_pwm_get_num_leds( void )
 
 int neopixel_pwm_show( void )
 {
+  int i;
+  printk("Buffer:");
+  for(i = 0; i < num_leds * BYTES_PER_LED + RESET_BYTES; i++)
+  {
+    printk("0x%X", buffer[i]);
+  }
   return start_dma();
 }
 
@@ -226,7 +244,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
   //  dev_err(&pdev->dev, "pwm -  request_mem_region");
   //  printk("NEOPIXEL: pwm request region failed. Region already in use?");
   //  return -EINVAL;
-  //}  
+  //}
 
   pwmctl_cm_base_addr = ioremap(pwmctl_cm_io_res->start, resource_size(pwmctl_cm_io_res));
 
@@ -250,7 +268,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     printk("Failed to allocate pwm buffer\n");
     return -ENOMEM;
   }
- memset(buffer,0,num_leds * BYTES_PER_LED + RESET_BYTES);
+  memset(buffer,0,num_leds * BYTES_PER_LED + RESET_BYTES);
 
   dma_chan = dma_request_slave_channel(dev, "neopixel-pwm-dma");
   if(dma_chan == NULL)
@@ -271,11 +289,22 @@ int neopixel_pwm_init( struct platform_device *pdev )
   return 0;
 }
 
+int neopixel_pwm_stop( void )
+{
+  if(hardware_test_task)
+  {
+    kthread_stop(hardware_test_task);
+    hardware_test_task = NULL;
+  }
+  return 0;
+}
+
 int neopixel_pwm_unload( void )
 {
   if(hardware_test_task)
   {
     kthread_stop(hardware_test_task);
+    hardware_test_task = NULL;
   }
 
   iounmap(pwm_base_addr);
@@ -293,10 +322,14 @@ int neopixel_pwm_unload( void )
 
 static void color_wipe(uint8_t wait, uint8_t red, uint8_t green, uint8_t blue) {
   uint16_t i;
-  for(i=0; i < num_leds && !kthread_should_stop(); i++) {
+  for(i=0; i < num_leds; i++) {
     neopixel_pwm_set_pixel(i, red, green, blue);
     neopixel_pwm_show();
     msleep(wait * 1000);
+    if(kthread_should_stop())
+    {
+      break;
+    }
   }
 }
 
@@ -313,22 +346,27 @@ static int hardware_test(void* args)
     stage++;
     if(stage == 3) 
     {
+      hardware_test_task = NULL;
+      printk(KERN_INFO "NEOPIXEL: Hardware test ended - completed\n");
       do_exit(0);
       break;
     }
   }
-  printk(KERN_INFO "NEOPIXEL: Hardware test ended \n");
+  printk(KERN_INFO "NEOPIXEL: Hardware test ended - aborted\n");
   hardware_test_task = NULL;
   return 0;
 }
 
 int neopixel_pwm_hardware_test( void ) 
 {
-   hardware_test_task = kthread_run(hardware_test, NULL, "neopixel_hardware_test");
-   if(IS_ERR(hardware_test_task))
-   {
-      printk(KERN_ALERT "NEOPIXEL: Failed to create hardware test task");
-      return PTR_ERR(hardware_test_task);
-   }
-   return 0;
+  if(hardware_test_task){
+    kthread_stop(hardware_test_task);
+  }
+  hardware_test_task = kthread_run(hardware_test, NULL, "neopixel_hardware_test");
+  if(IS_ERR(hardware_test_task))
+  {
+     printk(KERN_ALERT "NEOPIXEL: Failed to create hardware test task");
+     return PTR_ERR(hardware_test_task);
+  }
+  return 0;
 }
