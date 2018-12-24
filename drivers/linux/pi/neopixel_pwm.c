@@ -55,14 +55,22 @@ static struct resource* pwmctl_cm_io_res;
 static struct task_struct * hardware_test_task = NULL;
 
 #define BYTES_PER_LED		9
-#define RESET_BYTES		15
+#define RESET_BYTES		20
 
 #define PWM_DMA_DREQ 		5
 
-static int pwm_init( void )
+
+static void pwm_enable( void )
 {
   uint32_t reg;
-  writel(1, pwm_base_addr + PWM_RNG1);
+
+  reg = PWM_DMAC_ENAB |
+        PWM_DMAC_PANIC(8) |
+        PWM_DMAC_DREQ(8);
+
+  writel(reg, pwm_base_addr + PWM_DMAC);
+
+  writel(32, pwm_base_addr + PWM_RNG1);
   writel(0, pwm_base_addr + PWM_DAT1);
 
   reg = PWM_CTL_PWEN1 |
@@ -72,27 +80,50 @@ static int pwm_init( void )
         PWM_CTL_MSEN1;
 
   writel(reg, pwm_base_addr + PWM_CTL);
+  printk("NEOPIXEL: writing PWM CTL REGISTER =  0x%X", reg);
 
-  reg = PWM_DMAC_ENAB |
-        PWM_DMAC_PANIC(4) |
-        PWM_DMAC_DREQ(8);
+  reg = readl(pwm_base_addr + PWM_CTL);
+  printk("NEOPIXEL: reading PWM CTL REGISTER =  0x%X", reg);
 
-  writel(reg, pwm_base_addr + PWM_DMAC);
+  reg = readl(pwm_base_addr + PWM_STA);
+  printk("NEOPIXEL: PWM Status = 0x%X", reg);
 
-  reg = 0x00;
+  writel(0xFFFF, pwm_base_addr + PWM_STA);
+}
+
+static int pwm_init( void )
+{
+  uint32_t reg;
+
+  //disable pwm clock
+  reg = PWM_CM_CTL_PASSWORD | PWM_CM_CTL_KILL;
   writel(reg, pwmctl_cm_base_addr + PWM_CM_CTL);
+
+  msleep(100);
+
+  while( (reg = readl(pwmctl_cm_base_addr + PWM_CM_CTL)) & PWM_CM_CTL_BUSY )
+  {
+    msleep(100);
+    printk("Waiting busy bit");
+  }
+
+  pwm_enable();
 
   //2.5Mhz = 0,45us per bit
-  reg = PWM_CM_CTL_PASSWORD | PWM_CM_DIV_DIVI(200) | PWM_CM_DIV_DIVF(0);
+  reg = PWM_CM_CTL_PASSWORD | PWM_CM_DIV_DIVI(100) | PWM_CM_DIV_DIVF(0);
   writel(reg, pwmctl_cm_base_addr + PWM_CM_DIV);
 
-  //PLLD - 500Mhz - MASH 1
+  msleep(100);
+
+  //PLLD - PLLD 500Mhz - MASH 1
   reg = PWM_CM_CTL_PASSWORD | PWM_CM_CTL_MASH(1) | PWM_CM_CTL_SRC(6);
   writel(reg, pwmctl_cm_base_addr + PWM_CM_CTL);
-  printk("writing PWM_CM_CTL=0x%X",reg);
+
+  msleep(100);
 
   reg |= PWM_CM_CTL_ENAB;
   writel(reg, pwmctl_cm_base_addr + PWM_CM_CTL);
+  printk("writing PWM_CM_CTL=0x%X",reg);
 
   msleep(100);
 
@@ -117,8 +148,11 @@ static int start_dma( void )
     return -EFAULT;
   }
 
+  dmaengine_terminate_async(dma_chan);
+  dmaengine_synchronize(dma_chan);
+
   dma_addr = dma_map_single(dev, buffer, num_leds * BYTES_PER_LED + RESET_BYTES, DMA_TO_DEVICE);
-  if(dma_addr == 0)
+  if(dma_mapping_error(dev,dma_addr))
   {
     printk("Error mapping DMA buffer");
     return -EFAULT;
@@ -159,18 +193,18 @@ void neopixel_pwm_set_pixel(unsigned int pixel, uint8_t red, uint8_t green, uint
     {
       for(j = 0; j < 3; j++)
       {
-        bits++;
         if(bits == 8) { buffer_ptr++; bits = 0; }
         *buffer_ptr <<=1;
         *buffer_ptr |= (j <= 1 ? 1 : 0);
+        bits++;
       }
     } else {
       for(j = 0; j < 3; j++)
       {
-        bits++;
         if(bits == 8) { buffer_ptr++; bits = 0; }
         *buffer_ptr <<=1;
         *buffer_ptr |= (j == 0 ? 1 : 0);
+        bits++;
       }
     }
     color <<= 1;
@@ -218,7 +252,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
   }
 
   if  (!request_mem_region(pwm_io_res->start, resource_size(pwm_io_res), "neopixel-pwm")) {
-    dev_err(&pdev->dev, "pwm -  request_mem_region");
+    dev_err(dev, "pwm -  request_mem_region");
     printk("NEOPIXEL: pwm request region failed. Region already in use?");
     return -EINVAL;
   }
@@ -256,7 +290,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
   }
 
   if(of_property_read_u32(np, "num-leds", &num_leds) ) {
-    dev_err(&pdev->dev, "of_property_read_u32\n");
+    dev_err(dev, "of_property_read_u32\n");
     return -EINVAL;
   } else {
     printk("NEOPIXEL: number of leds = %d", num_leds);
@@ -277,7 +311,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     return -ENODEV;
   }
 
-  cfg.dst_addr = (phys_addr_t)pwm_base_addr + PWM_FIF1;
+  cfg.dst_addr = (dma_addr_t)0x7e20c000 + PWM_FIF1;
   if(dmaengine_slave_config(dma_chan, &cfg) < 0)
   {
     printk("Error allocating DMA channel\n");
@@ -306,6 +340,9 @@ int neopixel_pwm_unload( void )
     kthread_stop(hardware_test_task);
     hardware_test_task = NULL;
   }
+
+  dmaengine_terminate_async(dma_chan);
+  dmaengine_synchronize(dma_chan);
 
   iounmap(pwm_base_addr);
   iounmap(pwmctl_cm_base_addr);
@@ -344,7 +381,7 @@ static int hardware_test(void* args)
     set_current_state(TASK_INTERRUPTIBLE);
     msleep(1000);
     stage++;
-    if(stage == 3) 
+    if(stage == 3)
     {
       hardware_test_task = NULL;
       printk(KERN_INFO "NEOPIXEL: Hardware test ended - completed\n");
@@ -357,7 +394,7 @@ static int hardware_test(void* args)
   return 0;
 }
 
-int neopixel_pwm_hardware_test( void ) 
+int neopixel_pwm_hardware_test( void )
 {
   if(hardware_test_task){
     kthread_stop(hardware_test_task);
