@@ -60,7 +60,7 @@ static struct resource* pwmctl_cm_io_res;
 static struct task_struct * hardware_test_task = NULL;
 
 #define BYTES_PER_LED		9
-#define RESET_BYTES		20
+#define RESET_BYTES		52
 
 #define PWM_DMA_DREQ 		5
 
@@ -115,7 +115,7 @@ static int pwm_init( void )
   pwm_enable();
 
   //2.5Mhz = 0,45us per bit
-  reg = PWM_CM_CTL_PASSWORD | PWM_CM_DIV_DIVI(100) | PWM_CM_DIV_DIVF(0);
+  reg = PWM_CM_CTL_PASSWORD | PWM_CM_DIV_DIVI(100) | PWM_CM_DIV_DIVF(496);
   writel(reg, pwmctl_cm_base_addr + PWM_CM_DIV);
 
   msleep(100);
@@ -150,21 +150,25 @@ static void set_dma_buffer( void )
   int i;
   uint8_t* p_buffer = buffer;
   uint8_t* p_dma_buffer = dma_buffer;
+  uint32_t val;
+  uint32_t* p_tmp_dma = (uint32_t*)dma_buffer;
 
   for(i = 0; i < buffer_len/4; i++){
-    p_dma_buffer[0] = p_buffer[3];
-    p_dma_buffer[1] = p_buffer[2];
-    p_dma_buffer[2] = p_buffer[1];
     p_dma_buffer[3] = p_buffer[0];
+    p_dma_buffer[2] = p_buffer[1];
+    p_dma_buffer[1] = p_buffer[2];
+    p_dma_buffer[0] = p_buffer[3];
 
     p_buffer += 4;
     p_dma_buffer += 4;
   }
 
-  printk("DMA Buffer:");
-  for(i = 0; i < buffer_len; i++)
+  printk("Buffer:");
+  for(i = 0; i < buffer_len/4; i++)
   {
-    printk("0x%X", dma_buffer[i]);
+    printk("BUFFER: 0x%X%X%X%X", buffer[(i*4)], buffer[(i*4)+1], buffer[(i*4)+2], buffer[(i*4)+3]);
+    val = p_tmp_dma[i];
+    printk("DMA:  0x%x",val);
   }
 }
 
@@ -213,29 +217,22 @@ void neopixel_pwm_set_pixel(unsigned int pixel, uint8_t red, uint8_t green, uint
 
   printk("NEOPIXEL: Setting pixel (0x%X)", color);
 
+  //TODO: *9
   buffer_ptr = &buffer[(pixel * 24 * 3)/8];
 
   memset(buffer_ptr, 0, BYTES_PER_LED);
 
   for(i = 0; i < 24; i++)
   {
-    if( (color & 0x1000000) )
+    for(j = 0; j < 3; j++)
     {
-      for(j = 0; j < 3; j++)
-      {
-        if(bits == 8) { buffer_ptr++; bits = 0; }
-        *buffer_ptr <<=1;
+      if(bits == 8) { buffer_ptr++; bits = 0; }
+      *buffer_ptr <<=1;
+      if(color & 0x800000)
         *buffer_ptr |= (j <= 1 ? 1 : 0);
-        bits++;
-      }
-    } else {
-      for(j = 0; j < 3; j++)
-      {
-        if(bits == 8) { buffer_ptr++; bits = 0; }
-        *buffer_ptr <<=1;
+      else
         *buffer_ptr |= (j == 0 ? 1 : 0);
-        bits++;
-      }
+      bits++;
     }
     color <<= 1;
   }
@@ -328,11 +325,10 @@ int neopixel_pwm_init( struct platform_device *pdev )
     printk("NEOPIXEL: number of leds = %d", num_leds);
   }
 
-  buffer_len = num_leds * BYTES_PER_LED;
-  if(num_leds % 2){
-    buffer_len++;
+  buffer_len = num_leds * BYTES_PER_LED + RESET_BYTES;
+  if(num_leds % 4){
+    buffer_len+=BYTES_PER_LED;
   }
-  buffer_len += RESET_BYTES;
 
   buffer = kmalloc(buffer_len, GFP_KERNEL);
   if(buffer == NULL)
@@ -452,8 +448,6 @@ static int hardware_test(void* args)
   {
     set_current_state(TASK_RUNNING);
     color_wipe(1, (stage == 0 ? 255 : 0), (stage == 1 ? 255 : 0), (stage == 2 ? 255 : 0));
-    set_current_state(TASK_INTERRUPTIBLE);
-    msleep(1000);
     stage++;
     if(stage == 4)
     {
@@ -462,6 +456,8 @@ static int hardware_test(void* args)
       do_exit(0);
       break;
     }
+    set_current_state(TASK_INTERRUPTIBLE);
+    msleep(1000);
   }
   printk(KERN_INFO "NEOPIXEL: Hardware test ended - aborted\n");
   hardware_test_task = NULL;
