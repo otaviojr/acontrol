@@ -32,18 +32,20 @@
 #include <linux/slab.h>
 #include <linux/platform_device.h>
 #include <linux/of.h>
+#include <linux/of_address.h>
 #include <linux/io.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmaengine.h>
+#include <linux/slab.h>
 #include <linux/delay.h>
 #include <linux/kthread.h>
 
 #include "neopixel_pwm.h"
 
-static void* __iomem pwm_base_addr;
-static void* __iomem pwmctl_cm_base_addr;
+static volatile void* __iomem pwm_base_addr;
+static volatile void* __iomem pwmctl_cm_base_addr;
 
-static unsigned int num_leds;
+static unsigned int num_leds = 0;
 
 static uint8_t* buffer;
 static uint8_t* dma_buffer;
@@ -53,25 +55,28 @@ static unsigned long buffer_len;
 static struct device* dev;
 static struct dma_chan* dma_chan;
 static dma_addr_t dma_addr;
+static struct dma_async_tx_descriptor *dma_desc;
 
 static struct resource* pwm_io_res;
 static struct resource* pwmctl_cm_io_res;
 
-static struct task_struct * hardware_test_task = NULL;
+static struct task_struct * hardware_test_task;
+
+static dma_cookie_t dma_cookie;
 
 #define BYTES_PER_LED		9
-#define RESET_BYTES		42
+#define RESET_BYTES		44
 
 #define PWM_DMA_DREQ 		5
 
 
-static void pwm_enable( void )
+static void pwm_reset( void )
 {
   uint32_t reg;
 
   reg = PWM_DMAC_ENAB |
         PWM_DMAC_PANIC(4) |
-        PWM_DMAC_DREQ(4);
+        PWM_DMAC_DREQ(8);
 
   writel(reg, pwm_base_addr + PWM_DMAC);
 
@@ -112,16 +117,18 @@ static int pwm_init( void )
     printk("Waiting busy bit");
   }
 
-  pwm_enable();
+  pwm_reset();
+
+  msleep(100);
 
   //2.5Mhz = 0,45us per bit
-  reg = PWM_CM_CTL_PASSWORD | PWM_CM_DIV_DIVI(210) | PWM_CM_DIV_DIVF(192);
+  reg = PWM_CM_CTL_PASSWORD | PWM_CM_DIV_DIVI(200) | PWM_CM_DIV_DIVF(492);
   writel(reg, pwmctl_cm_base_addr + PWM_CM_DIV);
 
   msleep(100);
 
   //PLLD - PLLD 500Mhz - MASH 1
-  reg = PWM_CM_CTL_PASSWORD | PWM_CM_CTL_MASH(1) | PWM_CM_CTL_SRC(6);
+  reg = PWM_CM_CTL_PASSWORD | PWM_CM_CTL_MASH(2) | PWM_CM_CTL_SRC(6);
   writel(reg, pwmctl_cm_base_addr + PWM_CM_CTL);
 
   msleep(100);
@@ -140,16 +147,45 @@ static int pwm_init( void )
 
 static void neopixel_callback(void * param)
 {
-  dma_unmap_single(dev, dma_addr, buffer_len, DMA_TO_DEVICE);
-  dma_addr = 0;
+  struct dma_tx_state state;
+  enum dma_status status;
+  status = dmaengine_tx_status(dma_chan, dma_cookie, &state);
+
+  switch (status) {
+    case DMA_IN_PROGRESS:
+      printk("NEOPIXEL(%s): Received DMA_IN_PROGRESS\n", __func__);
+      break;
+
+    case DMA_PAUSED:
+      printk("NEOPIXEL(%s): Received DMA_PAUSED\n", __func__);
+      break;
+
+    case DMA_ERROR:
+      printk("NEOPIXEL(%s): Received DMA_ERROR\n", __func__);
+      break;
+
+    case DMA_COMPLETE:
+      printk("NEOPIXEL(%s): Received DMA_COMPLETE\n", __func__);
+      break;
+
+    default:
+      printk("NEOPIXEL(%s): Received unknown status\n", __func__);
+      break;
+  }
+
+  //dma_sync_single_for_cpu(dev, dma_addr, buffer_len, DMA_TO_DEVICE);
+  //dma_unmap_single(dev, dma_addr, buffer_len, DMA_TO_DEVICE);
+  //dma_addr = 0;
   printk("NEOPIXEL: dma finished");
 }
 
-static void set_dma_buffer( void )
+static void fill_dma_buffer( void )
 {
   int i;
   uint8_t* p_buffer = buffer;
   uint8_t* p_dma_buffer = dma_buffer;
+
+  dma_sync_single_for_cpu(dev, dma_addr, buffer_len, DMA_TO_DEVICE);
 
   for(i = 0; i < buffer_len/4; i++){
     p_dma_buffer[3] = p_buffer[0];
@@ -164,33 +200,49 @@ static void set_dma_buffer( void )
 
 static int start_dma( void )
 {
-  struct dma_async_tx_descriptor *desc;
-
-  if(dma_addr != 0) return -EFAULT;
-
-  set_dma_buffer();
-
   printk("NEOPIXEL: start_dma");
 
-  dma_addr = dma_map_single(dev, dma_buffer, buffer_len, DMA_TO_DEVICE);
-  if(dma_mapping_error(dev, dma_addr))
-  {
-    printk("Error mapping DMA buffer");
-    return -EFAULT;
-  }
+  //if(dma_addr  != 0) return -EFAULT;
+
+  //dmaengine_terminate_async(dma_chan);
+  //dmaengine_synchronize(dma_chan);
+
+  fill_dma_buffer();
+
+  dmaengine_synchronize(dma_chan);
+
+  mb();
+
+  //dma_addr = dma_map_single(dev, dma_buffer, buffer_len, DMA_TO_DEVICE);
+  //if (dma_mapping_error(dev, dma_addr)) {
+  //  printk("NEOPIXEL: Error mapping dma");
+  //  return -ENOMEM;
+  //}
+
+  //sg_init_table(&sg, 1);
+  //sg_dma_address(&sg) = dma_addr;
+  //sg_dma_len(&sg) = buffer_len;
 
   dma_sync_single_for_device(dev, dma_addr, buffer_len, DMA_TO_DEVICE);
 
-  desc = dmaengine_prep_slave_single(dma_chan, dma_addr, buffer_len, DMA_TO_DEVICE, DMA_PREP_INTERRUPT);
-  if(desc == NULL)
+  dma_desc = dmaengine_prep_slave_single(dma_chan, dma_addr, buffer_len, DMA_TO_DEVICE, DMA_PREP_INTERRUPT);
+  //dma_desc = dmaengine_prep_slave_sg(dma_chan, &sg, 1, DMA_TO_DEVICE, DMA_PREP_INTERRUPT);
+  //dma_desc = dmaengine_prep_dma_cyclic(dma_chan, dma_addr, buffer_len, 100, DMA_TO_DEVICE, DMA_PREP_INTERRUPT);
+  if(dma_desc == NULL)
   {
     printk("Error preparing DMA transfer");
     return -EFAULT;
   }
 
-  desc->callback = neopixel_callback;
-  desc->callback_param = NULL;
-  dmaengine_submit(desc);
+  dma_desc->callback = neopixel_callback;
+  dma_desc->callback_param = NULL;
+
+  dma_cookie = dmaengine_submit(dma_desc);
+  if (dma_submit_error(dma_cookie)) {
+    printk("NEOPIXEL(%s): DMA submission failed\n", __func__);
+    return -ENXIO;
+  }
+
   dma_async_issue_pending(dma_chan);
 
   return 0;
@@ -209,7 +261,7 @@ void neopixel_pwm_set_pixel(unsigned int pixel, uint8_t red, uint8_t green, uint
   //TODO: *9
   buffer_ptr = &buffer[(pixel * 24 * 3)/8];
 
-  memset(buffer_ptr, 0, BYTES_PER_LED);
+  memset((uint8_t*)buffer_ptr, 0, BYTES_PER_LED);
 
   for(i = 0; i < 24; i++)
   {
@@ -225,6 +277,9 @@ void neopixel_pwm_set_pixel(unsigned int pixel, uint8_t red, uint8_t green, uint
     }
     color <<= 1;
   }
+
+  mb();
+
 }
 
 void neopixel_pwm_clear_pixels( void )
@@ -257,11 +312,13 @@ int neopixel_pwm_init( struct platform_device *pdev )
     .slave_id = PWM_DMA_DREQ,
     .direction = DMA_MEM_TO_DEV,
     .src_addr = 0,
+    .dst_maxburst = 4,
   };
 
   dev = &pdev->dev;
 
   dma_addr = 0;
+  dma_buffer = NULL;
 
   pwm_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "neopixel-pwm");
   if(!pwm_io_res){
@@ -324,22 +381,26 @@ int neopixel_pwm_init( struct platform_device *pdev )
 
   buffer_len = num_leds * BYTES_PER_LED + RESET_BYTES;
 
-  buffer = kmalloc(buffer_len, GFP_KERNEL);
+  buffer = kzalloc(buffer_len, GFP_KERNEL);
   if(buffer == NULL)
   {
     printk("Failed to allocate pwm buffer");
     goto no_buffer;
   }
-  memset(buffer,0,buffer_len);
 
-  dma_buffer = kmalloc(buffer_len, GFP_KERNEL | GFP_DMA);
-  if(dma_buffer == NULL)
+  if (dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32)) < 0) {
+    printk("architecture does not support 32bit PCI busmaster DMA\n");
+    ret = -ENXIO;
+    goto no_dma_buffer;
+  }
+
+  //dma_buffer = kzalloc(buffer_len, GFP_ATOMIC | GFP_DMA);
+  dma_buffer = dma_zalloc_coherent(dev, buffer_len, &dma_addr, GFP_KERNEL | GFP_DMA);
+  if(!dma_buffer)
   {
     printk("Failed to allocate pwm dma buffer");
     goto no_dma_buffer;
   }
-
-  memset(dma_buffer,0,buffer_len);
 
   dma_chan = dma_request_slave_channel(dev, "neopixel-pwm-dma");
   if(dma_chan == NULL)
@@ -349,42 +410,45 @@ int neopixel_pwm_init( struct platform_device *pdev )
     goto no_dma_request_channel;
   }
 
-  cfg.dst_addr = (dma_addr_t)0x7e20c000 + PWM_FIF1;
+  //cfg.src_addr = dma_addr;
+  cfg.dst_addr =  0x7E20C000 + PWM_FIF1;
   if(dmaengine_slave_config(dma_chan, &cfg) < 0)
   {
-    printk("Error allocating DMA channel\n");
+    printk("Error configuring DMA\n");
     ret = -ENODEV;
     goto no_dma_config;
   }
 
-   neopixel_pwm_clear_pixels();
+  neopixel_pwm_clear_pixels();
 
   pwm_init();
 
   return 0;
 
 no_dma_config:
-no_dma_request_channel:
   dma_release_channel(dma_chan);
 
-no_dma_buffer:
-  kfree(dma_buffer);
+no_dma_request_channel:
+  dma_free_coherent(dev, buffer_len, dma_buffer, dma_addr);
+  //kfree(dma_buffer);
 
-no_buffer:
+no_dma_buffer:
   kfree(buffer);
 
 no_num_leds:
-no_remap_pwm_ctl:
+no_buffer:
   iounmap(pwmctl_cm_base_addr);
 
+no_remap_pwm_ctl:
 no_pwm_ctl_resource:
-no_remap_pwm:
   iounmap(pwm_base_addr);
 
-no_pwm_request_mem:
+no_remap_pwm:
   release_mem_region(pwm_io_res->start, resource_size(pwm_io_res));
 
+no_pwm_request_mem:
 no_neopixel_pwm:
+
   return ret;
 }
 
@@ -418,7 +482,7 @@ int neopixel_pwm_unload( void )
   dma_release_channel(dma_chan);
 
   kfree(buffer);
-  kfree(dma_buffer);
+  dma_free_coherent(dev, buffer_len, dma_buffer, dma_addr);
 
   return 0;
 }
@@ -428,7 +492,7 @@ static void color_wipe(uint8_t wait, uint8_t red, uint8_t green, uint8_t blue) {
   for(i=0; i < num_leds; i++) {
     neopixel_pwm_set_pixel(i, red, green, blue);
     neopixel_pwm_show();
-    msleep(wait * 1000);
+    msleep(wait * 100);
     if(kthread_should_stop())
     {
       break;
@@ -443,7 +507,7 @@ static int hardware_test(void* args)
   while(!kthread_should_stop())
   {
     set_current_state(TASK_RUNNING);
-    color_wipe(5, (stage == 0 ? 255 : 0), (stage == 1 ? 255 : 0), (stage == 2 ? 255 : 0));
+    color_wipe(10, (stage == 0 ? 255 : 0), (stage == 1 ? 255 : 0), (stage == 2 ? 255 : 0));
     stage++;
     if(stage == 4)
     {

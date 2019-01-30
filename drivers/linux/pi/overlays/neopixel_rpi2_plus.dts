@@ -32,8 +32,13 @@
 
           #address-cells = <0x1>;
           #size-cells = <0x1>;
+
 	  reg = <0x3F20C000 0x100 /*0: PWM BASE ADDRESS*/
                  0x3F1010a0 0x08>;  /*1: PWMCTL BASE ADDRESS*/
+
+//          reg = <0x7E20C000 0x100 /*0: PWM BASE ADDRESS*/
+//                 0x7E1010a0 0x08>;  /*1: PWMCTL BASE ADDRESS*/
+
           reg-names = "neopixel-pwm","neopixel-pwmctl-cm";
 
           pinctrl-names = "default";
