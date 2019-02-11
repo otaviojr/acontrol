@@ -103,15 +103,15 @@ impl Display for NeoPixel {
 
     println!("NeoPixel driver version {} found!", String::from_utf8(version.to_vec()).unwrap());
 
-    //unsafe {
-    //  let mut ret: libc::c_long = 0;
-    //  if let Err(error) = neopixel_ioctl::hardware_test(self.driver_fd.unwrap(), &mut ret) {
-    //    println!("Error executing neopixel hardware test: {}", error);
-    //    return Err(format!("{}","Error executing hardware test!"));
-    //  }
-    //}
+    unsafe {
+      let mut ret: libc::c_long = 0;
+      if let Err(error) = neopixel_ioctl::hardware_test(self.driver_fd.unwrap(), &mut ret) {
+        println!("Error executing neopixel hardware test: {}", error);
+        return Err(format!("{}","Error executing hardware test!"));
+      }
+    }
 
-    self.test_hardware();
+    //self.test_hardware();
  
     Ok(())
   }
