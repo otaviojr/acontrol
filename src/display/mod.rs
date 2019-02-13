@@ -10,8 +10,19 @@ pub enum DisplayState {
   Error,
 }
 
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+pub enum ErrorType {
+  Authorization,
+  Network,
+  Hardware,
+}
+
 pub trait Display {
   fn init(&mut self) -> Result<(), String>;
+  fn show_success(&mut self, message: &str, dismiss: i32) -> Result<(), String>;
+  fn show_error(&mut self, message: &str, error_type: ErrorType, dismiss: i32) -> Result<(), String>;
+  fn show_waiting(&mut self, message: &str, dismiss: i32) -> Result<(), String>;
   fn unload(&mut self) -> Result<(), String>;
   fn signature(&self) -> String;
 }

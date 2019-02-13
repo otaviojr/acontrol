@@ -215,8 +215,6 @@ static void neopixel_callback(void * param)
 
   if(end)
   {
-    //dma_unmap_single(dev, dma_addr, buffer_len, DMA_TO_DEVICE);
-    //kfree(dma_buffer);
     dma_pool_free(neo_dma_pool, dma_buffer, dma_addr);
     pwm_clear_fifo();
   }
@@ -411,7 +409,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
 
   printk("NEOOPIXEL(%s): buffer_virt = 0x%x; buffer_length = %lu", __func__, (unsigned int)buffer, buffer_len);
 
-  neo_dma_pool =  dma_pool_create("neopixel_dma", dev, 1024, 8, 0);
+  neo_dma_pool =  dma_pool_create("neopixel_dma", dev, buffer_len, 32, 4096);
   if(!neo_dma_pool){
     printk("NEOPIXEL(%s): Error creating dma memory pool.", __func__);
     goto no_dma_pool;

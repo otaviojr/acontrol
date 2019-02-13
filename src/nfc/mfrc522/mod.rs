@@ -525,7 +525,6 @@ impl MiFare for Mfrc522ThreadSafe {
       return Err(format!("NFC MiFare crc calc error  at address {}", addr));
     }
 
-
     match self.transceive(&tx_buf, 0) {
       Ok(val) => {
         let mut buf: Vec<u8> = data[..16].to_vec();
@@ -668,12 +667,22 @@ impl NfcReader for Mfrc522 {
 
     mfrc522.lock().unwrap().ss = Some(pin);
 
-    if let Ok(version) = mfrc522.lock().unwrap().version() {
-      println!("NFC hardware version: 0x{:X}",version);
-      if version != 0x91 && version != 0x92 {
-        return Err(format!("{}(=>0x{:X})", "NFC Hardware with an invalid version",version));
+    let mut mfrc522_init = false;
+
+    for i in 0..10 {
+      thread::sleep(Duration::from_millis(50));
+      if let Ok(version) = mfrc522.lock().unwrap().version() {
+        println!("NFC hardware version: 0x{:X}", version);
+        if version == 0x91 || version == 0x92 {
+          mfrc522_init = true;
+          break;          
+        } else {
+          println!("{}(=>0x{:X})", "NFC Hardware with an invalid version", version);
+        }
       }
-    } else {
+    }
+
+    if !mfrc522_init{
       return Err(format!("{}", "NFC error. Could not retrieve hardware version"));
     }
 
