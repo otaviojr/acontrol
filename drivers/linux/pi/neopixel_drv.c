@@ -123,12 +123,12 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
       if(copy_from_user((struct neopixel_pixel*)&pixel, (struct neopixel_pixel*)arg, sizeof(struct neopixel_pixel))){
         return -EFAULT;
       }
-      printk("NEOPIXEL: set_pixel: %lu,%d,%d,%d", pixel.pixel, pixel.red, pixel.green, pixel.blue);
+      //printk("NEOPIXEL: set_pixel: %lu,%d,%d,%d", pixel.pixel, pixel.red, pixel.green, pixel.blue);
       neopixel_pwm_set_pixel(pixel.pixel, pixel.red, pixel.green, pixel.blue);
       break;
 
     case NEOPIXEL_IOCTL_SHOW:
-      printk("NEOPIXEL: show");
+      //printk("NEOPIXEL: show");
       value = neopixel_pwm_show();
       if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
         return -EFAULT;

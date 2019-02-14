@@ -59,6 +59,49 @@ pub struct NeoPixel {
   interface: Arc<Mutex<NeoPixelInterface>>,
 }
 
+pub enum NeoPixelAnimationDirection {
+  Normal,
+  Backwards,
+}
+
+pub struct NeoPixelWipeAnimation {
+  direction: NeoPixelAnimationDirection,
+  current_pixel: i32,
+  repeat: i32,
+  infinite: bool,
+  red: u8,
+  green: u8,
+  blue: u8,
+  custom: Option<Box<std::any::Any + Send + Sync>>,
+}
+
+pub struct NeoPixelSpinnerAnimation {
+  current_pixel: i32,
+  interaction: i32,
+  size: i32,
+  size_direction: i32,
+  red: u8,
+  green: u8,
+  blue: u8,
+  custom: Option<Box<std::any::Any + Send + Sync>>,
+}
+
+impl NeoPixelWipeAnimation {
+  fn simple(red: u8, green: u8, blue: u8) -> Self {
+    return NeoPixelWipeAnimation {direction: NeoPixelAnimationDirection::Normal, repeat: 0, infinite: false, current_pixel: 0, red: red, green: green, blue: blue, custom: None};
+  }
+
+  fn repeat(red: u8, green: u8, blue: u8, repeat: i32) -> Self {
+    return NeoPixelWipeAnimation {direction: NeoPixelAnimationDirection::Normal, repeat: repeat, infinite: false, current_pixel: 0, red: red, green: green, blue: blue, custom: None};
+  }
+}
+
+impl NeoPixelSpinnerAnimation {
+  fn new(red: u8, green: u8, blue: u8) -> Self {
+    return NeoPixelSpinnerAnimation {current_pixel: 0, interaction: 0, size_direction: 0, size: 2, red: red, green: green, blue: blue, custom: None};
+  }
+}
+
 impl NeoPixelInterface {
 
   fn get_num_leds(&mut self) -> Result<i32, String> {
@@ -100,19 +143,6 @@ impl NeoPixelInterface {
     }
     Ok(ret)
   }
-
-//  fn color_wipe(&mut self, red: u8, green: u8, blue: u8) -> Result<(), String> {
-//    let mut ret: i32 = 0;
-//    for i in 0..16 {
-//      unsafe {
-//        let pixel: *mut libc::c_long = mem::transmute(&mut neopixel_ioctl::Pixel { pixel: i, red: red, green: green, blue: blue});
-//        neopixel_ioctl::set_pixel(self.driver_fd.unwrap(), pixel);
-//        neopixel_ioctl::show(self.driver_fd.unwrap(), &mut ret);
-//        thread::sleep(Duration::from_millis(50));
-//      }
-//    }
-//    Ok(())
-//  }
 }
 
 impl NeoPixel {
@@ -150,7 +180,7 @@ impl NeoPixel {
 
   fn run_animation<F, P, F1>(&mut self, f: F, params: Box<P>, finish: F1) -> Result<(), String> where
                      F: Fn(&mut P) -> Result<(bool), String> + Send + Sync + 'static,
-                     F1: Fn(bool) -> Result<(),String> + Send + Sync + 'static,
+                     F1: Fn(bool, &mut P) -> Result<(u64),String> + Send + Sync + Copy + 'static,
                      P: Sync + Send + 'static {
 
     self.stop_animation();
@@ -169,10 +199,11 @@ impl NeoPixel {
       unsafe {
         let mut next = true;
         let mut p = Box::from_raw(Box::into_raw(params));
+        let mut wait: u64 = 0;
 
         loop {
           if Ok(false) == f(&mut *p) {
-            break;
+            next = false;
           }
 
           if let Some(ref rx) = interface.lock().unwrap().animation_rx {
@@ -181,14 +212,18 @@ impl NeoPixel {
                 NeoPixelThreadCommand::Stop => {
                   println!("Neopixel Animation Thread forced to exit");
                   next = false;
-                  break;
                 }
               }
             }
           }
-        }
-        if let Err(err) = finish(next) {
-          return Err(err);
+
+          match finish(next, &mut *p) {
+            Ok(timing) => wait = timing,
+            Err(err) => return Err(err),
+          }
+
+          if next == false  { break; }
+	  thread::sleep(Duration::from_millis(wait));
         }
       }
       Ok(())
@@ -199,30 +234,126 @@ impl NeoPixel {
     Ok(())
   }
 
-  fn animation_color_wipe<F>(&mut self, red: u8, green: u8, blue: u8, finish: F) -> Result<(), String> 
-				where F: Fn(bool) -> Result<(), String> + Send + Sync + 'static {
+  fn animation_spinner<F>(&mut self, info: NeoPixelSpinnerAnimation, finish: F) -> Result<(), String>
+                                        where F: Fn(bool, &mut NeoPixelSpinnerAnimation) -> Result<(u64), String> + Send + Sync + Copy + 'static {
+
     let interface = self.interface.clone();
 
-    let animation_fn = move |pixel: &mut i32| {
-      let pixel_info = neopixel_ioctl::Pixel { pixel: *pixel, red: red, green: green, blue: blue};
+    let animation_fn = move |animation_info: &mut NeoPixelSpinnerAnimation| {
+
+      let mut interface_locked = interface.lock().unwrap();
+
+      if let Ok(num_leds) = interface_locked.get_num_leds() {
+
+        if animation_info.interaction % 3 == 0 {
+          animation_info.current_pixel += 1;
+        }
+
+        if animation_info.size < num_leds-4 && animation_info.size_direction == 0 {
+          animation_info.size += 1;
+        } else if animation_info.size >= num_leds-4 && animation_info.size_direction == 0 {
+          animation_info.size_direction = 1;
+        } else if animation_info.size > 2 && animation_info.size_direction == 1 {
+          animation_info.size -= 1;
+          animation_info.current_pixel += 1;
+        } else {
+          animation_info.size_direction = 0;
+        }
+
+        if animation_info.current_pixel >= num_leds { animation_info.current_pixel -= num_leds }
+        animation_info.interaction += 1;
+
+        for i in animation_info.current_pixel..(animation_info.current_pixel + animation_info.size) {
+          let mut pixel = i;
+          if pixel >= num_leds { pixel -= num_leds}
+          let pixel_info = neopixel_ioctl::Pixel { pixel: pixel, red: animation_info.red, green: animation_info.green, blue: animation_info.blue};
+          interface_locked.set_pixel(pixel_info);
+        }
+
+        let mut pixel:i32 = animation_info.current_pixel + animation_info.size;
+        while pixel != animation_info.current_pixel {
+          let pixel_info = neopixel_ioctl::Pixel { pixel: pixel, red: 0, green: 0, blue: 0};
+          interface_locked.set_pixel(pixel_info);
+          pixel += 1;
+          if pixel >= num_leds { pixel -= num_leds} 
+        }
+
+        interface_locked.show();
+      }
+      return Ok(true);
+    };
+
+    self.run_animation(animation_fn, Box::new(info), finish);
+
+    Ok(())
+  }
+
+  fn animation_color_wipe<F>(&mut self, info: NeoPixelWipeAnimation, finish: F) -> Result<(), String>
+					where F: Fn(bool, &mut NeoPixelWipeAnimation) -> Result<(u64), String> + Send + Sync + Copy + 'static {
+
+    let interface = self.interface.clone();
+
+    let animation_fn = move |animation_info: &mut NeoPixelWipeAnimation| {
+      let pixel_info = neopixel_ioctl::Pixel { pixel: animation_info.current_pixel, red: animation_info.red, green: animation_info.green, blue: animation_info.blue};
       let mut interface_locked = interface.lock().unwrap();
 
       interface_locked.set_pixel(pixel_info);
       interface_locked.show();
-      *pixel += 1;
-      Ok( if *pixel >= interface_locked.get_num_leds().unwrap() { false } else { true } )
-    };
+      animation_info.current_pixel += 1;
 
-    let mut pixel: i32 = 0;
-    self.run_animation(animation_fn, Box::new(pixel), finish);
+      if animation_info.current_pixel >= interface_locked.get_num_leds().unwrap() {
+        if animation_info.repeat > 0 {
+          animation_info.repeat -= 1;
+          animation_info.current_pixel = 0;
+        } else {
+          return Ok(false);
+        }
+      }
+      return Ok(true);
+    };
+    
+    self.run_animation(animation_fn, Box::new(info), finish);
 
     Ok(())
   }
 
   fn test_hardware(&mut self) -> Result<(), String> {
-      self.animation_color_wipe(255, 0, 0, move |next: bool| {
-        Ok(())
-      });
+    //let mut animation_info = NeoPixelWipeAnimation::repeat(255,0,0,3);
+    let mut animation_info = NeoPixelSpinnerAnimation::new(255,0,0);
+
+    self.animation_spinner(animation_info, |next: bool, params: &mut NeoPixelSpinnerAnimation| {
+      Ok(100)
+    });
+
+    //self.animation_color_wipe(animation_info, |next: bool, params:&mut NeoPixelWipeAnimation| {
+    //  if next == true {
+    //    match params.repeat {
+    //      3 => {
+    //        params.red = 255;
+    //        params.green = 0;
+    //        params.blue = 0;
+    //      },
+    //      2 => {
+    //        params.red = 0;
+    //        params.green = 255;
+    //        params.blue = 0;
+    //      },
+    //      1 => {
+    //        params.red = 0;
+    //        params.green = 0;
+    //        params.blue = 255;
+    //      },
+    //      _ => {
+    //        params.red = 0;
+    //        params.green = 0;
+    //        params.blue = 0;
+    //      }
+    //    }
+    //  }
+
+    //  Ok(150)
+    //});
+
     Ok(())
   }
 }

@@ -241,7 +241,7 @@ static void fill_dma_buffer( void )
 
 static int start_dma( void )
 {
-  printk("NEOPIXEL(%s): DMA Started", __func__);
+  //printk("NEOPIXEL(%s): DMA Started", __func__);
 
   dma_buffer = dma_pool_alloc(neo_dma_pool, GFP_KERNEL, &dma_addr);
   if(!dma_buffer)
@@ -250,7 +250,7 @@ static int start_dma( void )
     return -ENOMEM;
   }
 
-  printk("NEOOPIXEL(%s): dma_buffer_virt = 0x%x; dma_buffer_phys = 0x%x; dma_buffer_length = %lu", __func__, (unsigned int)dma_buffer, (unsigned int)dma_addr, buffer_len);
+  //printk("NEOOPIXEL(%s): dma_buffer_virt = 0x%x; dma_buffer_phys = 0x%x; dma_buffer_length = %lu", __func__, (unsigned int)dma_buffer, (unsigned int)dma_addr, buffer_len);
 
   fill_dma_buffer();
 
@@ -283,8 +283,6 @@ void neopixel_pwm_set_pixel(unsigned int pixel, uint8_t red, uint8_t green, uint
   uint8_t i, j, bits=0;
 
   if(pixel > num_leds) return;
-
-  printk("NEOPIXEL: Setting pixel (0x%X)", color);
 
   buffer_ptr = &buffer[pixel * BYTES_PER_LED];
 
