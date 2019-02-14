@@ -190,25 +190,25 @@ static void neopixel_callback(void * param)
 
   switch (status) {
     case DMA_IN_PROGRESS:
-      printk("NEOPIXEL(%s): Received DMA_IN_PROGRESS\n", __func__);
+      //printk("NEOPIXEL(%s): Received DMA_IN_PROGRESS\n", __func__);
       break;
 
     case DMA_PAUSED:
-      printk("NEOPIXEL(%s): Received DMA_PAUSED\n", __func__);
+      //printk("NEOPIXEL(%s): Received DMA_PAUSED\n", __func__);
       break;
 
     case DMA_ERROR:
-      printk("NEOPIXEL(%s): Received DMA_ERROR\n", __func__);
+      //printk("NEOPIXEL(%s): Received DMA_ERROR\n", __func__);
       end = 1;
       break;
 
     case DMA_COMPLETE:
-      printk("NEOPIXEL(%s): Received DMA_COMPLETE\n", __func__);
+      //printk("NEOPIXEL(%s): Received DMA_COMPLETE\n", __func__);
       end = 1;
       break;
 
     default:
-      printk("NEOPIXEL(%s): Received unknown status\n", __func__);
+      //printk("NEOPIXEL(%s): Received unknown status\n", __func__);
       end = 1;
       break;
   }
@@ -216,10 +216,10 @@ static void neopixel_callback(void * param)
   if(end)
   {
     dma_pool_free(neo_dma_pool, dma_buffer, dma_addr);
-    pwm_clear_fifo();
+    //pwm_clear_fifo();
   }
 
-  printk("NEOPIXEL: dma callback finished");
+  //printk("NEOPIXEL: dma callback finished");
 }
 
 static void fill_dma_buffer( void )
