@@ -6,6 +6,7 @@ use std::sync::Mutex;
 
 use std::thread;
 use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration,Instant};
 
 use std::io::prelude::*;
@@ -42,21 +43,24 @@ mod neopixel_ioctl {
   ioctl_read!(hardware_test, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_HARDWARE_TEST, libc::c_long);
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum NeoPixelThreadCommand {
   Stop,
 }
 
+unsafe impl Send for NeoPixelThreadCommand {}
+
 pub struct NeoPixelInterface {
-  animation: Option<std::thread::JoinHandle<Result<(), String>>>,
-  animation_tx: Option<mpsc::Sender<NeoPixelThreadCommand>>,
-  animation_rx: Option<mpsc::Receiver<NeoPixelThreadCommand>>,
-  driver_fd: Option<RawFd>,
-  num_leds: Option<i32>
+  animation: Mutex<Option<std::thread::JoinHandle<Result<(), String>>>>,
+  animation_tx: Mutex<mpsc::Sender<NeoPixelThreadCommand>>,
+  animation_rx: Mutex<mpsc::Receiver<NeoPixelThreadCommand>>,
+  driver_fd: Mutex<Option<RawFd>>,
+  num_leds: Mutex<Option<i32>>,
 }
 
 pub struct NeoPixel {
   devfile: Option<std::fs::File>,
-  interface: Arc<Mutex<NeoPixelInterface>>,
+  interface: Arc<NeoPixelInterface>,
 }
 
 pub enum NeoPixelAnimationDirection {
@@ -86,6 +90,15 @@ pub struct NeoPixelSpinnerAnimation {
   custom: Option<Box<std::any::Any + Send + Sync>>,
 }
 
+pub struct NeoPixelBlinkAnimation {
+  repeat: i32,
+  infinity: bool,
+  red: u8,
+  green: u8,
+  blue: u8,
+  custom: Option<Box<std::any::Any + Send + Sync>>,
+}
+
 impl NeoPixelWipeAnimation {
   fn simple(red: u8, green: u8, blue: u8) -> Self {
     return NeoPixelWipeAnimation {direction: NeoPixelAnimationDirection::Normal, repeat: 0, infinite: false, current_pixel: 0, red: red, green: green, blue: blue, custom: None};
@@ -102,21 +115,35 @@ impl NeoPixelSpinnerAnimation {
   }
 }
 
+impl NeoPixelBlinkAnimation {
+  fn new(red: u8, green: u8, blue: u8, repeat: i32) -> Self {
+    return NeoPixelBlinkAnimation {repeat: repeat*2, red: red, green: green, blue: blue, custom: None, infinity: false };
+  }
+
+  fn new_loop(red: u8, green: u8, blue: u8) -> Self  {
+    return NeoPixelBlinkAnimation {repeat: 0, red: red, green: green, blue: blue, custom: None, infinity: true  };
+  }
+}
+
 impl NeoPixelInterface {
 
-  fn get_num_leds(&mut self) -> Result<i32, String> {
+  fn get_num_leds(&self) -> Result<i32, String> {
 
-    if let Some(num_leds) = self.num_leds {
-      return Ok(num_leds);
+    let mut num_leds_locked = self.num_leds.lock().unwrap();
+
+    if let Some(ref num_leds) = *num_leds_locked {
+      return Ok(*num_leds);
     }
 
     let mut ret: i32 = 0;
     
     unsafe {
-      if let Err(err) = neopixel_ioctl::get_num_leds(self.driver_fd.unwrap(), &mut ret){
-        return Err(format!("Error getting num of leds: {}", err));
-      } else {
-        self.num_leds = Some(ret);
+      if let Some(ref driver_fd) = self.get_driver_fd(){
+        if let Err(err) = neopixel_ioctl::get_num_leds(*driver_fd, &mut ret){
+          return Err(format!("Error getting num of leds: {}", err));
+        } else {
+          *num_leds_locked = Some(ret);
+        }
       }
       println!("get_num_leds {}", ret);
     }
@@ -124,21 +151,40 @@ impl NeoPixelInterface {
     Ok(ret)
   }
 
-  fn set_pixel(&mut self, pixel_info: neopixel_ioctl::Pixel) -> Result<(), String> {
+  fn set_driver_fd(&self, devfile: Option<RawFd>) {
+    let mut driver_fd_locked = self.driver_fd.lock().unwrap();
+    *driver_fd_locked = devfile;
+  }
+
+  fn get_driver_fd(&self) -> Option<RawFd> {
+    let mut driver_fd_locked = self.driver_fd.lock().unwrap();
+    return *driver_fd_locked;
+  }
+
+  fn set_animation(&self, animation: Option<std::thread::JoinHandle<Result<(), String>>>) {
+    let mut animation_locked = self.animation.lock().unwrap();
+    (*animation_locked) = animation;
+  }
+
+  fn set_pixel(&self, pixel_info: neopixel_ioctl::Pixel) -> Result<(), String> {
     unsafe {
       let pixel: *mut libc::c_long = mem::transmute(&pixel_info);
-      if let Err(err) = neopixel_ioctl::set_pixel(self.driver_fd.unwrap(), pixel) {
-        return Err(format!("Error getting num of leds: {}", err));
+      if let Some(ref driver_fd) = self.get_driver_fd() {
+        if let Err(err) = neopixel_ioctl::set_pixel(*driver_fd, pixel) {
+          return Err(format!("Error getting num of leds: {}", err));
+        }
       }
     }
     Ok(())
   }
 
-  fn show(&mut self) -> Result<i32, String> {
+  fn show(&self) -> Result<i32, String> {
     let mut ret: i32 = 0;
     unsafe {
-      if let Err(err) = neopixel_ioctl::show(self.driver_fd.unwrap(), &mut ret){
-        return Err(format!("Error getting num of leds: {}", err));
+      if let Some(ref driver_fd) = self.get_driver_fd() {
+        if let Err(err) = neopixel_ioctl::show(*driver_fd, &mut ret){
+          return Err(format!("Error getting num of leds: {}", err));
+        }
       }
     }
     Ok(ret)
@@ -148,31 +194,24 @@ impl NeoPixelInterface {
 impl NeoPixel {
 
   pub fn new() -> Self {
-    return NeoPixel { devfile:  None, interface: Arc::new( Mutex::new( NeoPixelInterface { animation: None, driver_fd: None, animation_tx: None, animation_rx: None, num_leds: None } ) )  };
-  }
-
-  fn set_driver_fd(&mut self, devfile: Option<RawFd>) {
-    let interface = self.interface.clone();
-    interface.lock().unwrap().driver_fd = devfile;
-  }
-
-  fn get_driver_fd(&mut self) -> Option<RawFd> {
-    let interface = self.interface.clone();
-    return interface.lock().unwrap().driver_fd;
+    let (tx,rx):(mpsc::Sender<NeoPixelThreadCommand>, mpsc::Receiver<NeoPixelThreadCommand>) = mpsc::channel::<NeoPixelThreadCommand>();
+    return NeoPixel { devfile:  None, interface: Arc::new( NeoPixelInterface { animation: Mutex::new(None), driver_fd: Mutex::new(None), animation_tx: Mutex::new(tx), animation_rx: Mutex::new(rx), num_leds: Mutex::new(None) } ) };
   }
 
   fn stop_animation(&mut self) -> Result<(), String> {
-    let interface = self.interface.clone();
-    let mut interface_locked = interface.lock().unwrap();
 
-    if let Some(tx) = interface_locked.animation_tx.take() {
-      tx.send(NeoPixelThreadCommand::Stop);
-      drop(tx);
-    }
+    let mut interface = self.interface.clone();
 
-    if let Some(animation) = interface_locked.animation.take() {
-      println!("Waiting current animation ends");
-      animation.join();
+    if let Some(animation) = (*interface.animation.lock().unwrap()).take() {
+      let mut wait = false;
+      match interface.animation_tx.lock().unwrap().send(NeoPixelThreadCommand::Stop) {
+        Ok(ret) => { wait = true; },
+        Err(ret) => println!("Error sending message: {:?}", ret)
+      }
+      
+      if wait == true {
+        animation.join();
+      }
     }
 
     Ok(())
@@ -180,22 +219,14 @@ impl NeoPixel {
 
   fn run_animation<F, P, F1>(&mut self, f: F, params: Box<P>, finish: F1) -> Result<(), String> where
                      F: Fn(&mut P) -> Result<(bool), String> + Send + Sync + 'static,
-                     F1: Fn(bool, &mut P) -> Result<(u64),String> + Send + Sync + Copy + 'static,
+                     F1: Fn(bool, &mut P) -> Result<(i64),String> + Send + Sync + Copy + 'static,
                      P: Sync + Send + 'static {
 
     self.stop_animation();
 
-    let interface = self.interface.clone();
-    let mut interface_locked = interface.lock().unwrap();
+    let mut interface = self.interface.clone();
 
-    let (tx,rx) = mpsc::channel::<NeoPixelThreadCommand>();
-
-    interface_locked.animation_tx = Some(tx);
-    interface_locked.animation_rx = Some(rx);
-
-    let interface = self.interface.clone();
-
-    let animation = Some(thread::spawn( move || {
+    let animation = thread::spawn( move || {
       unsafe {
         let mut next = true;
         let mut p = Box::from_raw(Box::into_raw(params));
@@ -206,44 +237,80 @@ impl NeoPixel {
             next = false;
           }
 
-          if let Some(ref rx) = interface.lock().unwrap().animation_rx {
-            if let Ok(msg) = rx.try_recv() {
+          match interface.animation_rx.lock().unwrap().try_recv() {
+            Ok(msg) => {
               match msg {
                 NeoPixelThreadCommand::Stop => {
-                  println!("Neopixel Animation Thread forced to exit");
                   next = false;
-                }
+                },
               }
-            }
+            },
+            Err(_) => {},
           }
 
           match finish(next, &mut *p) {
-            Ok(timing) => wait = timing,
+            Ok(timing) => if timing >= 0 { wait = timing as u64 } else { return Ok(()) },
             Err(err) => return Err(err),
           }
 
-          if next == false  { break; }
+          if next == false  {
+            break; 
+          }
 	  thread::sleep(Duration::from_millis(wait));
         }
       }
       Ok(())
-    }));
+    });
 
-    interface_locked.animation = animation;
+    let mut interface = self.interface.clone();
+    interface.set_animation(Some(animation));
+
+    Ok(())
+  }
+
+  fn animation_blink<F>(&mut self, info: NeoPixelBlinkAnimation, finish: F) -> Result<(), String>
+                                        where F: Fn(bool, &mut NeoPixelBlinkAnimation) -> Result<(i64), String> + Send + Sync + Copy + 'static {
+
+    let interface = self.interface.clone();
+
+    let animation_fn = move |animation_info: &mut NeoPixelBlinkAnimation| {
+
+      if let Ok(num_leds) = interface.get_num_leds() {
+        for pixel in 0..num_leds {
+          let mut pixel_info: neopixel_ioctl::Pixel;
+
+          if animation_info.repeat%2 != 0 {
+            pixel_info = neopixel_ioctl::Pixel { pixel: pixel, red: animation_info.red, green: animation_info.green, blue: animation_info.blue};
+          } else {
+            pixel_info = neopixel_ioctl::Pixel { pixel: pixel, red: 0, green: 0, blue: 0};
+          }
+          interface.set_pixel(pixel_info);
+        }
+      
+        interface.show();
+      
+        animation_info.repeat -= 1;
+      }
+      if animation_info.repeat >= 0 || animation_info.infinity == true {
+        return Ok(true);
+      } else {
+        return Ok(false);
+      }
+    };
+
+    self.run_animation(animation_fn, Box::new(info), finish);
 
     Ok(())
   }
 
   fn animation_spinner<F>(&mut self, info: NeoPixelSpinnerAnimation, finish: F) -> Result<(), String>
-                                        where F: Fn(bool, &mut NeoPixelSpinnerAnimation) -> Result<(u64), String> + Send + Sync + Copy + 'static {
+                                        where F: Fn(bool, &mut NeoPixelSpinnerAnimation) -> Result<(i64), String> + Send + Sync + Copy + 'static {
 
-    let interface = self.interface.clone();
+    let mut interface = self.interface.clone();
 
     let animation_fn = move |animation_info: &mut NeoPixelSpinnerAnimation| {
 
-      let mut interface_locked = interface.lock().unwrap();
-
-      if let Ok(num_leds) = interface_locked.get_num_leds() {
+      if let Ok(num_leds) = interface.get_num_leds() {
 
         if animation_info.interaction % 3 == 0 {
           animation_info.current_pixel += 1;
@@ -267,18 +334,18 @@ impl NeoPixel {
           let mut pixel = i;
           if pixel >= num_leds { pixel -= num_leds}
           let pixel_info = neopixel_ioctl::Pixel { pixel: pixel, red: animation_info.red, green: animation_info.green, blue: animation_info.blue};
-          interface_locked.set_pixel(pixel_info);
+          interface.set_pixel(pixel_info);
         }
 
         let mut pixel:i32 = animation_info.current_pixel + animation_info.size;
         while pixel != animation_info.current_pixel {
           let pixel_info = neopixel_ioctl::Pixel { pixel: pixel, red: 0, green: 0, blue: 0};
-          interface_locked.set_pixel(pixel_info);
+          interface.set_pixel(pixel_info);
           pixel += 1;
           if pixel >= num_leds { pixel -= num_leds} 
         }
 
-        interface_locked.show();
+        interface.show();
       }
       return Ok(true);
     };
@@ -289,19 +356,18 @@ impl NeoPixel {
   }
 
   fn animation_color_wipe<F>(&mut self, info: NeoPixelWipeAnimation, finish: F) -> Result<(), String>
-					where F: Fn(bool, &mut NeoPixelWipeAnimation) -> Result<(u64), String> + Send + Sync + Copy + 'static {
+					where F: Fn(bool, &mut NeoPixelWipeAnimation) -> Result<(i64), String> + Send + Sync + Copy + 'static {
 
-    let interface = self.interface.clone();
+    let mut interface = self.interface.clone();
 
     let animation_fn = move |animation_info: &mut NeoPixelWipeAnimation| {
       let pixel_info = neopixel_ioctl::Pixel { pixel: animation_info.current_pixel, red: animation_info.red, green: animation_info.green, blue: animation_info.blue};
-      let mut interface_locked = interface.lock().unwrap();
 
-      interface_locked.set_pixel(pixel_info);
-      interface_locked.show();
+      interface.set_pixel(pixel_info);
+      interface.show();
       animation_info.current_pixel += 1;
 
-      if animation_info.current_pixel >= interface_locked.get_num_leds().unwrap() {
+      if animation_info.current_pixel >= interface.get_num_leds().unwrap() {
         if animation_info.repeat > 0 {
           animation_info.repeat -= 1;
           animation_info.current_pixel = 0;
@@ -318,13 +384,22 @@ impl NeoPixel {
   }
 
   fn test_hardware(&mut self) -> Result<(), String> {
+
+    self.show_success("Success Test", 20);
+    thread::sleep(Duration::from_millis(10000));
+    self.show_error("Error Test", ErrorType::Authorization, 20);
+
+    //let mut animation_info = NeoPixelBlinkAnimation::new(255,0,0,3);
+    //self.animation_blink(animation_info, |next: bool, params: &mut NeoPixelBlinkAnimation| {
+    //  Ok(500)
+    //});
+
+    //let mut animation_info = NeoPixelSpinnerAnimation::new(255,0,0);
+    //self.animation_spinner(animation_info, |next: bool, params: &mut NeoPixelSpinnerAnimation| {
+    //  Ok(100)
+    //});
+
     //let mut animation_info = NeoPixelWipeAnimation::repeat(255,0,0,3);
-    let mut animation_info = NeoPixelSpinnerAnimation::new(255,0,0);
-
-    self.animation_spinner(animation_info, |next: bool, params: &mut NeoPixelSpinnerAnimation| {
-      Ok(100)
-    });
-
     //self.animation_color_wipe(animation_info, |next: bool, params:&mut NeoPixelWipeAnimation| {
     //  if next == true {
     //    match params.repeat {
@@ -367,7 +442,7 @@ impl Display for NeoPixel {
                            .create(false)
                            .open("/dev/neopixel") {
       Ok(file) => {
-        self.set_driver_fd(Some(file.as_raw_fd()));
+        self.interface.set_driver_fd(Some(file.as_raw_fd()));
         Some(file)
       },
       Err(err) => return Err(format!("Error opening neopixel kernel driver: {}", err))
@@ -375,9 +450,11 @@ impl Display for NeoPixel {
 
     let mut version:[u8;6] = [0;6];
     unsafe {
-      if let Err(error) = neopixel_ioctl::get_version(self.get_driver_fd().unwrap(), &mut version) {
-        println!("Error get neopixel driver version {}", error);
-        return Err(format!("{}","NeoPixel device driver not found!"));
+      if let Some(ref driver_fd) = self.interface.get_driver_fd() {
+        if let Err(error) = neopixel_ioctl::get_version(*driver_fd, &mut version) {
+          println!("Error get neopixel driver version {}", error);
+          return Err(format!("{}","NeoPixel device driver not found!"));
+        }
       }
     }
 
@@ -388,15 +465,35 @@ impl Display for NeoPixel {
     Ok(())
   }
 
-  fn show_success(&mut self, message: &str, dismiss: i32) -> Result<(), String>{
+  fn show_success(&mut self, message: &str, dismiss: u64) -> Result<(), String> {
+    let mut animation_info = NeoPixelBlinkAnimation::new_loop(10,188,67);
+    let now = Instant::now();
+
+    self.animation_blink(animation_info, move |next: bool, params: &mut NeoPixelBlinkAnimation| {
+      
+      if now.elapsed().as_secs() > dismiss && params.repeat%2 != 0 { return Ok(-1) }
+
+      Ok(500)
+    });
+
     Ok(())
   }
 
-  fn show_error(&mut self, message: &str, error_type: ErrorType, dismiss: i32) -> Result<(), String> {
+  fn show_error(&mut self, message: &str, error_type: ErrorType, dismiss: u64) -> Result<(), String> {
+    let mut animation_info = NeoPixelBlinkAnimation::new_loop(249,79,51);
+    let now = Instant::now();
+
+    self.animation_blink(animation_info, move |next: bool, params: &mut NeoPixelBlinkAnimation| {
+
+      if now.elapsed().as_secs() > dismiss && params.repeat%2 != 0 { return Ok(-1) }
+
+      Ok(500)
+    });  
+
     Ok(())
   }
 
-  fn show_waiting(&mut self, message: &str, dismiss: i32) -> Result<(), String> {
+  fn show_waiting(&mut self, message: &str, dismiss: u64) -> Result<(), String> {
     Ok(())
   }
 

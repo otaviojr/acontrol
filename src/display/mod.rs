@@ -18,11 +18,11 @@ pub enum ErrorType {
   Hardware,
 }
 
-pub trait Display {
+pub trait Display : Sync + Send {
   fn init(&mut self) -> Result<(), String>;
-  fn show_success(&mut self, message: &str, dismiss: i32) -> Result<(), String>;
-  fn show_error(&mut self, message: &str, error_type: ErrorType, dismiss: i32) -> Result<(), String>;
-  fn show_waiting(&mut self, message: &str, dismiss: i32) -> Result<(), String>;
+  fn show_success(&mut self, message: &str, dismiss: u64) -> Result<(), String>;
+  fn show_error(&mut self, message: &str, error_type: ErrorType, dismiss: u64) -> Result<(), String>;
+  fn show_waiting(&mut self, message: &str, dismiss: u64) -> Result<(), String>;
   fn unload(&mut self) -> Result<(), String>;
   fn signature(&self) -> String;
 }

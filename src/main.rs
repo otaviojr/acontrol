@@ -18,6 +18,8 @@ extern crate serde;
 #[macro_use]
 extern crate serde_json;
 
+extern crate futures;
+
 pub mod fingerprint;
 pub mod nfc;
 pub mod audio;

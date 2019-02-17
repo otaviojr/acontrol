@@ -91,13 +91,13 @@ static void pwm_disable( void )
   writel(reg, pwm_base_addr + PWM_CTL);
 }
 
-static void pwm_clear_fifo( void )
-{
-  uint32_t reg;
-  reg = readl(pwm_base_addr + PWM_CTL);
-  reg |= PWM_CTL_CLRF1;
-  writel(reg, pwm_base_addr + PWM_CTL);
-}
+//static void pwm_clear_fifo( void )
+//{
+//  uint32_t reg;
+//  reg = readl(pwm_base_addr + PWM_CTL);
+//  reg |= PWM_CTL_CLRF1;
+//  writel(reg, pwm_base_addr + PWM_CTL);
+//}
 
 static void pwm_reset( void )
 {
@@ -216,7 +216,6 @@ static void neopixel_callback(void * param)
   if(end)
   {
     dma_pool_free(neo_dma_pool, dma_buffer, dma_addr);
-    //pwm_clear_fifo();
   }
 
   //printk("NEOPIXEL: dma callback finished");
@@ -308,7 +307,7 @@ void neopixel_clear_pixels( void )
 {
   uint32_t i;
   for(i = 0; i < num_leds; i++){
-    neopixel_pwm_set_pixel(i,5,5,5);
+    neopixel_pwm_set_pixel(i,0,0,0);
   }
   neopixel_pwm_show();
 }
