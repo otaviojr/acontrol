@@ -18,8 +18,6 @@ extern crate serde;
 #[macro_use]
 extern crate serde_json;
 
-extern crate futures;
-
 pub mod fingerprint;
 pub mod nfc;
 pub mod audio;
@@ -162,7 +160,6 @@ fn main(){
   } else {
     display_drv = display_drv_b.unwrap();
   }
-
 
   println!("Fingerprint driver: {}",fingerprint_drv.signature());
   println!("Nfc driver: {}",nfcreader_drv.signature());

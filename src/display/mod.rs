@@ -23,6 +23,8 @@ pub trait Display : Sync + Send {
   fn show_success(&mut self, message: &str, dismiss: u64) -> Result<(), String>;
   fn show_error(&mut self, message: &str, error_type: ErrorType, dismiss: u64) -> Result<(), String>;
   fn show_waiting(&mut self, message: &str, dismiss: u64) -> Result<(), String>;
+  fn wait_animation_ends(&mut self) -> Result<(), String>;
+  fn clear_and_stop_animations(&mut self) -> Result<(), String>;
   fn unload(&mut self) -> Result<(), String>;
   fn signature(&self) -> String;
 }

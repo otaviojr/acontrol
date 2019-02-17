@@ -131,20 +131,6 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
     }
   }
 
-  //initializing audio device
-  match *asystem.audio_drv.lock().unwrap()  {
-    Some(ref drv) => {
-      if let Err(err) = drv.lock().unwrap().init() {
-        eprintln!("Error initializing audio device (=> {})", err);
-        return false;
-      }
-    },
-    None => {
-      eprintln!("Audio device not found");
-      return false;
-    }
-  }
-
   //initializing display device
   match *asystem.display_drv.lock().unwrap()  {
     Some(ref drv) => {
@@ -155,6 +141,20 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
     },
     None => {
       eprintln!("Display device not found");
+      return false;
+    }
+  }
+
+  //initializing audio device
+  match *asystem.audio_drv.lock().unwrap()  {
+    Some(ref drv) => {
+      if let Err(err) = drv.lock().unwrap().init() {
+        eprintln!("Error initializing audio device (=> {})", err);
+        return false;
+      }
+    },
+    None => {
+      eprintln!("Audio device not found");
       return false;
     }
   }
