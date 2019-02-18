@@ -57,20 +57,54 @@ impl Audio for Buzzer {
     if let Err(err) = pin.export() {
       return Err(format!("{}: {}","Error initializing audio drive",err));
     }
+
     //for non root users, exporting a pin could have a delay to show up at sysfs
     thread::sleep(Duration::from_millis(100));
     pin.set_direction(Direction::Out).unwrap();
 
     buzzer.lock().unwrap().pin = Some(pin);
 
-    let _handler = thread::spawn(move || {
-        buzzer.lock().unwrap().set_buzz(true);
-        thread::sleep(Duration::from_millis(500));
-        buzzer.lock().unwrap().set_buzz(false);
-    });
+    self.play_alert();
     
     Ok( () )
   }
+
+  fn play_success(&mut self) -> Result<(), String> {
+    let buzzer = self.buzzer.clone();
+    let _handler = thread::spawn(move || {
+      buzzer.lock().unwrap().set_buzz(true);
+      thread::sleep(Duration::from_millis(1000));
+      buzzer.lock().unwrap().set_buzz(false);
+    });
+
+    Ok(())
+  }
+
+  fn play_error(&mut self) -> Result<(), String> {
+    let buzzer = self.buzzer.clone();
+    let _handler = thread::spawn(move || {
+      for i in 0..3 {
+        buzzer.lock().unwrap().set_buzz(true);
+        thread::sleep(Duration::from_millis(500));
+        buzzer.lock().unwrap().set_buzz(false);
+        thread::sleep(Duration::from_millis(500));
+      }
+    });
+
+    Ok(())
+  }
+
+  fn play_alert(&mut self) -> Result<(), String> {
+    let buzzer = self.buzzer.clone();
+    let _handler = thread::spawn(move || {
+      buzzer.lock().unwrap().set_buzz(true);
+      thread::sleep(Duration::from_millis(300));
+      buzzer.lock().unwrap().set_buzz(false);
+    });
+
+    Ok(())
+  }
+
 
   fn unload(&mut self) -> Result<(), String>{
     println!("Audio driver unloading");

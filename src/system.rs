@@ -170,8 +170,11 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
       }
 
       drv_inner.find_tag(|uuid, sak|{
+
         match *ACONTROL_SYSTEM.nfc_drv.lock().unwrap() {
+
           Some(ref mut drv) => {
+
             let mut next_nfc_system_state: Option<NFCSystemState> = None;
             let mut drv_inner = drv.lock().unwrap();
 
