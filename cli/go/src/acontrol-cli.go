@@ -4,19 +4,22 @@ import "os"
 //import "flag"
 import "fmt"
 
-type Context struct {
-  context string
-  action CommandAction
+type HelpCommandAction struct {
+  BaseCommandAction
 }
 
-var contexts []Context = []Context {
-  Context {
-    context: "nfc",
-    action: NfcCommandAction{},
+var contexts []Option = []Option {
+  Option {
+    option: "help",
+    action: HelpCommandAction{BaseCommandAction {name: "Help", description: "Show usage options",},},
   },
-  Context {
-    context: "finger",
-    action: FingerCommandAction{},
+  Option {
+    option: "nfc",
+    action: NfcCommandAction{BaseCommandAction {name: "NFC", description: "Handle NFC device"},},
+  },
+  Option {
+    option: "finger",
+    action: FingerCommandAction{BaseCommandAction {name: "FingerPrint", description: "Handle FingerPrint device"},},
   },
 }
 
@@ -24,6 +27,21 @@ func init() {
 }
 
 func usage() {
+}
+
+func (action HelpCommandAction) usage() {
+  fmt.Println("\tUsage: acontrol-cli help\r\n")
+}
+
+func (action HelpCommandAction) run() bool {
+  fmt.Println("Usage: acontrol-cli <context> <command> <options>\r\n")
+  fmt.Println("Listing all contexts: \r\n")
+  for _, context := range contexts {
+    fmt.Printf("Context %s (%s)\r\n\r\n", context.action.getName(), context.action.getDescription())
+    context.action.usage()
+  }
+
+  return false;
 }
 
 func main() {
@@ -39,14 +57,14 @@ func main() {
   contextPtr := &os.Args[1]
 
   if *contextPtr == "" {
-    fmt.Println("Context not informed. Use -help to show help.")
+    fmt.Println("Context not informed. Type acontrol-cli help to show usage options.")
     os.Exit(1)
   }
 
-  var current_context *Context = nil
+  var current_context *Option = nil
 
   for _, context := range contexts {
-    if context.context == *contextPtr {
+    if context.option == *contextPtr {
       current_context = &context
       break
     }
@@ -58,7 +76,7 @@ func main() {
   }
   //cmdPtr := flag.String("command", "", "Command to be executed")
 
-  current_context.action.run();
+  current_context.action.run()
 
   //flag.Parse()
 }
