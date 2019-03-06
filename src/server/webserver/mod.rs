@@ -49,7 +49,7 @@ impl WebServer {
           resp = Some(Response::with((iron::status::BadRequest,
              serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("No body. Or body is not a valid json")} ).unwrap())
           ));
-         }
+        }
     }
 
     if params.contains_key(&String::from("name")) == false && resp.is_none() {

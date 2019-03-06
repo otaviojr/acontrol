@@ -2,7 +2,6 @@ package main
 
 import "os"
 import "fmt"
-import "flag"
 
 /*
  * NFC main context action
@@ -99,15 +98,18 @@ func (action NfcAuthorizeCommandAction) usage() {
 
 func (action NfcAuthorizeCommandAction) run() bool {
 
-  name := flag.String("name", "", "Name to be registered within the card")
-  flag.Parse()
+  cmdLine := createCommandLineParser()
 
-  if *name == "" {
+  name :=  cmdLine.getStringParameter("name")
+
+  if name == "" {
     fmt.Println("nfc authorize missing arguments. Type acontrol-cli help to usage options.")
     return false
   }
 
-  fmt.Printf("Authorizing %s...\r\n\r\n", *name)
+  fmt.Printf("Authorizing %s...\r\n\r\n", name)
+
+  //TODO: Start authorization process via rest service
 
   return true
 }
