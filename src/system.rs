@@ -159,6 +159,20 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
     }
   }
 
+  match *asystem.fingerprint_drv.lock().unwrap() {
+    Some(ref drv) => {
+      let mut drv_inner = drv.lock().unwrap();
+      if let Err(err) = drv_inner.init() {
+        eprintln!("Error initializing nfc (=> {})", err);
+        return false;
+      }
+    },
+    None => {
+      eprintln!("Fingerprint device not found");
+      return false;
+    }
+  }
+
   //initializing nfc device
   match *asystem.nfc_drv.lock().unwrap() {
     Some(ref drv) => {

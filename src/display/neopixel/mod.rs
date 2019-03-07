@@ -18,8 +18,6 @@ use std::os::unix::io::{RawFd,AsRawFd};
 use std::ptr;
 use std::mem;
 
-use nix::sys::ioctl;
-
 mod neopixel_ioctl {
   const NEOPIXEL_IOC_MAGIC: u8 = b'N';
   const NEOPIXEL_IOCTL_GET_VERSION: u8 = 1;
@@ -36,11 +34,11 @@ mod neopixel_ioctl {
       pub blue: u8
   }
 
-  ioctl_read_buf!(get_version, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_GET_VERSION, u8);
-  ioctl_read!(get_num_leds, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_GET_NUM_LEDS, libc::c_long);
-  ioctl_write_ptr!(set_pixel, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_SET_PIXEL, libc::c_long);
-  ioctl_read!(show, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_SHOW, libc::c_long);
-  ioctl_read!(hardware_test, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_HARDWARE_TEST, libc::c_long);
+  nix::ioctl_read_buf!(get_version, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_GET_VERSION, u8);
+  nix::ioctl_read!(get_num_leds, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_GET_NUM_LEDS, libc::c_long);
+  nix::ioctl_write_ptr!(set_pixel, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_SET_PIXEL, libc::c_long);
+  nix::ioctl_read!(show, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_SHOW, libc::c_long);
+  nix::ioctl_read!(hardware_test, NEOPIXEL_IOC_MAGIC, NEOPIXEL_IOCTL_HARDWARE_TEST, libc::c_long);
 }
 
 #[derive(Clone, Copy, Debug)]

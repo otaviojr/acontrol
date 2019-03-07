@@ -1,6 +1,10 @@
 extern crate libc;
+
+extern crate serial;
+
 #[macro_use]
 extern crate nix;
+
 extern crate iron;
 extern crate router;
 extern crate bodyparser;

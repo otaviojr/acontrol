@@ -1,6 +1,8 @@
 pub mod gt521fx;
 
 pub trait Fingerprint {
+  fn init(&mut self) -> Result<(), String>;
+  fn unload(&mut self) -> Result<(), String>;
   fn signature(&self) -> String;
   fn start_enroll(&self) -> bool;
 }
