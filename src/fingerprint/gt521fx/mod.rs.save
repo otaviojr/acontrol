@@ -68,47 +68,9 @@ enum Error {
     NackFingerIsNotPresent = 0x1012
 }
 
-trait Parser {
-  fn parser(&mut self, data: Vec<u8>) -> Result<(), Error>;
-}
-
-/* Response Parser */
-
-struct Response {
-  parameter: u32,
+struct ResponsePacket {
   response: u16,
-}
-
-impl Response {
-  fn new() -> Self {
-    Response {parameter: 0, response: 0}
-  }
-}
-
-impl Parser for Response {
-  fn parser(&mut self, data: Vec<u8>) -> Result <(), Error> {
-    Ok(())
-  }
-}
-
-/* Data Packet Parsers */
-
-struct OpenDataPacket {
-  firmware_version: u32,
-  iso_area_max_size: u16,
-  device_serial_num: String,
-}
-
-impl OpenDataPacket {
-  fn new() -> Self {
-    OpenDataPacket {firmware_version: 0, iso_area_max_size: 0, device_serial_num: String::new()}
-  }
-}
-
-impl Parser for OpenDataPacket {
-  fn parser(&mut self, data: Vec<u8>) -> Result<(),Error> {
-    Ok(())
-  }
+  parameter: u32
 }
 
 pub struct Gt521fxThreadSafe {
@@ -147,7 +109,7 @@ impl Gt521fxThreadSafe {
     return ret;
   }
 
-  fn send_command(&mut self, command: Command, parameter: u32, parser: Option<&mut Parser>) -> Result<(), serial::Error> {
+  fn send_command(&mut self, command: Command, parameter: u32) -> Result<(), serial::Error> {
     let mut data: Vec<u8>= Vec::new();
 
     data.push(0x55);
@@ -170,7 +132,6 @@ impl Gt521fxThreadSafe {
     data.push( (crc & 0xFF) as u8 );
     data.push( ((crc >> 8) & 0xFF) as u8 );
 
-
     if let Some(ref mut port) = self.port {
       (**port).set_timeout(Duration::from_millis(1000));
 
@@ -182,10 +143,6 @@ impl Gt521fxThreadSafe {
 
       println!("Send: {:X?}", data);    
       println!("Received: {:X?}", buf);    
-
-      if let Some(parser) = parser {
-        parser.parser(buf);
-      }
     }
 
     Ok(())
@@ -219,8 +176,7 @@ impl Fingerprint for Gt521fx {
     if let Err(err) = gt521fx_locked.open("/dev/serial0") {
       return Err(format!("Error openning serial port at {}","/dev/serial0"));
     } else {
-      let mut open_data = OpenDataPacket::new();
-      gt521fx_locked.send_command(Command::Open, 0x1, Some(&mut open_data));
+      gt521fx_locked.send_command(Command::Open, 0x1);
       println!("Fingerprint device initialized successfully");
     }
 
