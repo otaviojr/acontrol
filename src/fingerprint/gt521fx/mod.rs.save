@@ -68,9 +68,48 @@ enum Error {
     NackFingerIsNotPresent = 0x1012
 }
 
-struct ResponsePacket {
+trait Parser {
+  fn parser(&mut self, data: &mut Vec<u8>) -> Result<(), Error>;
+}
+
+/* Response Parser */
+
+struct Response {
+  parameter: u32,
   response: u16,
-  parameter: u32
+}
+
+impl Response {
+  fn new() -> Self {
+    Response {parameter: 0, response: 0}
+  }
+}
+
+impl Parser for Response {
+  fn parser(&mut self, data: &mut Vec<u8>) -> Result <(), Error> {
+    
+    Ok(())
+  }
+}
+
+/* Data Packet Parsers */
+
+struct OpenDataPacket {
+  firmware_version: u32,
+  iso_area_max_size: u16,
+  device_serial_num: String,
+}
+
+impl OpenDataPacket {
+  fn new() -> Self {
+    OpenDataPacket {firmware_version: 0, iso_area_max_size: 0, device_serial_num: String::new()}
+  }
+}
+
+impl Parser for OpenDataPacket {
+  fn parser(&mut self, data: &mut Vec<u8>) -> Result<(),Error> {
+    Ok(())
+  }
 }
 
 pub struct Gt521fxThreadSafe {
@@ -109,7 +148,7 @@ impl Gt521fxThreadSafe {
     return ret;
   }
 
-  fn send_command(&mut self, command: Command, parameter: u32) -> Result<(), serial::Error> {
+  fn send_command(&mut self, command: Command, parameter: u32, parser: Option<&mut Parser>) -> Result<Response, serial::Error> {
     let mut data: Vec<u8>= Vec::new();
 
     data.push(0x55);
@@ -132,6 +171,8 @@ impl Gt521fxThreadSafe {
     data.push( (crc & 0xFF) as u8 );
     data.push( ((crc >> 8) & 0xFF) as u8 );
 
+    let mut response = Response::new();
+
     if let Some(ref mut port) = self.port {
       (**port).set_timeout(Duration::from_millis(1000));
 
@@ -143,9 +184,15 @@ impl Gt521fxThreadSafe {
 
       println!("Send: {:X?}", data);    
       println!("Received: {:X?}", buf);    
+
+      response.parser(&mut buf);
+
+      if let Some(parser) = parser {
+        parser.parser(&mut buf);
+      }
     }
 
-    Ok(())
+    Ok(response)
   }
 
   pub fn led(&mut self, state: bool)-> Result<(), serial::Error> {
@@ -155,7 +202,6 @@ impl Gt521fxThreadSafe {
 
 unsafe impl Send for Gt521fxThreadSafe {}
 unsafe impl Sync for Gt521fxThreadSafe {}
-
 
 pub struct Gt521fx {
   gt521fx: Arc<Mutex<Gt521fxThreadSafe>>,
@@ -176,7 +222,8 @@ impl Fingerprint for Gt521fx {
     if let Err(err) = gt521fx_locked.open("/dev/serial0") {
       return Err(format!("Error openning serial port at {}","/dev/serial0"));
     } else {
-      gt521fx_locked.send_command(Command::Open, 0x1);
+      let mut open_data = OpenDataPacket::new();
+      gt521fx_locked.send_command(Command::Open, 0x1, Some(&mut open_data));
       println!("Fingerprint device initialized successfully");
     }
 

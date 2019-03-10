@@ -1,6 +1,6 @@
 extern crate libc;
 
-extern crate serial;
+extern crate serialport;
 
 #[macro_use]
 extern crate nix;
