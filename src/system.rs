@@ -182,7 +182,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
         return false;
       }
 
-      drv_inner.wait_for_finger( || {
+      drv_inner.wait_for_finger( |state, value| {
         println!("We do have a finger here!");
         return true;
       });
