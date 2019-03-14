@@ -1,11 +1,25 @@
 pub mod gt521fx;
 
+#[derive(Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 pub enum FingerprintState {
   WAITING,
   READING,
   AUTHENTICATING,
   ERROR,
   SUCCESS,
+}
+
+impl FingerprintState {
+  pub fn name(&self) -> &'static str {
+    match *self {
+      FingerprintState::WAITING => "WAITING",
+      FingerprintState::READING => "READING",
+      FingerprintState::AUTHENTICATING => "AUTHENTICATING",
+      FingerprintState::ERROR => "ERROR",
+      FingerprintState::SUCCESS => "SUCCESS"
+    }
+  }
 }
 
 pub trait Fingerprint {

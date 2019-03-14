@@ -25,12 +25,12 @@ impl FingerprintDriverState {
 
   fn name(&self) -> &'static str {
     match *self {
-      READ => "READ",
-      ENROLL1 => "ENROLL1",
-      ENROLL2 => "ENROLL2",
-      ENROLL3 => "ENROLL3",
-      ENROLL1_WAIT => "ENROLL1_WAIT",
-      ENROLL2_WAIT => "ENROLL2_WAIT",
+      FingerprintDriverState::READ => "READ",
+      FingerprintDriverState::ENROLL1 => "ENROLL1",
+      FingerprintDriverState::ENROLL2 => "ENROLL2",
+      FingerprintDriverState::ENROLL3 => "ENROLL3",
+      FingerprintDriverState::ENROLL1_WAIT => "ENROLL1_WAIT",
+      FingerprintDriverState::ENROLL2_WAIT => "ENROLL2_WAIT",
     }
   }
 
@@ -465,8 +465,8 @@ impl Fingerprint for Gt521fx {
           _ => None
         };
 
-        if let Some(state) = fingerprint_state {
-          func(state, None);
+        if let Some(fstate) = fingerprint_state {
+          func(fstate, None);
         }
 
         if let Some(ref mut state) = current_state {
