@@ -24,7 +24,7 @@ impl FingerprintState {
 
 pub trait Fingerprint {
   fn init(&mut self) -> Result<(), String>;
-  fn wait_for_finger(&mut self, func: fn(state: FingerprintState, value: Option<&str>) -> bool) -> Result<(),String>;
+  fn wait_for_finger(&mut self, func: fn(state: &FingerprintState, value: Option<&str>) -> bool) -> Result<(),String>;
   fn unload(&mut self) -> Result<(), String>;
   fn signature(&self) -> String;
   fn start_enroll(&mut self, pos: u16) -> bool;

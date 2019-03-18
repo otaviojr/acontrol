@@ -127,6 +127,74 @@ impl WebServer {
 
     Ok(resp_final)
   }
+
+  fn fingerprint_start_enroll(req: &mut Request) -> IronResult<Response> {
+
+    let mut params: HashMap<String,String> = HashMap::new();
+    let mut resp: Option<Response> = None;
+    let json_body = req.get::<bodyparser::Json>();
+
+    println!("Server Start Enroll");
+
+    match json_body {
+        Ok(Some(json_body)) => {
+
+          if json_body.get("name").is_some() {
+            params.insert(String::from("name"), String::from(json_body["name"].as_str().unwrap()));
+          }
+
+          if json_body.get("pos").is_some() {
+            params.insert(String::from("pos"), String::from(json_body["pos"].as_str().unwrap()));
+          }
+        },
+        Ok(None) => {
+          resp = Some(Response::with((iron::status::BadRequest,
+             serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("No body. Or body is not a valid json")} ).unwrap())
+          ));
+        }
+        Err(err) => {
+          resp = Some(Response::with((iron::status::BadRequest,
+             serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("No body. Or body is not a valid json")} ).unwrap())
+          ));
+        }
+    }
+
+    if params.contains_key(&String::from("name")) == false && resp.is_none() {
+      resp = Some(Response::with((iron::status::BadRequest,
+         serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("Name field is required")} ).unwrap())
+      ));
+    }
+
+    if params.contains_key(&String::from("pos")) == false && resp.is_none() {
+      resp = Some(Response::with((iron::status::BadRequest,
+         serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("Pos field is required")} ).unwrap())
+      ));
+    }
+
+    if resp.is_none() {
+      println!("Calling system start enroll");
+      match system::acontrol_system_fingerprint_start_enroll(params) {
+        Ok(()) => {
+          resp = Some(Response::with((iron::status::Ok,
+             serde_json::to_string(&WebServerDefaultResponse {ret: true, msg: String::from("Ok")} ).unwrap())
+          ));
+        },
+        Err(err) => {
+          resp = Some(Response::with((iron::status::Ok,
+             serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: err} ).unwrap())
+          ));
+        }
+      }
+    }
+
+    let mut final_resp = resp.unwrap();
+
+    final_resp.headers.set(iron::headers::ContentType(
+      iron::mime::Mime(iron::mime::TopLevel::Application, iron::mime::SubLevel::Json, vec![])
+    ));
+    
+    Ok(final_resp)
+  }
 }
 
 impl Server for WebServer {
@@ -151,6 +219,9 @@ impl Server for WebServer {
     router.get("/nfc/card", WebServer::nfc_list, "nfc_list");
     router.post("/nfc/card/authorize", WebServer::nfc_authorize,"nfc_authorize");
     router.get("/nfc/card/restore", WebServer::nfc_restore, "nfc_restore");
+
+    router.post("/fingerprint/enroll",WebServer::fingerprint_start_enroll, "fingerprint_start_enroll");
+
     let mut chain = Chain::new(router);
 
     if let Err(err) = Iron::new(chain).http(format!("{}:{}",self.host,self.port.to_string())) {

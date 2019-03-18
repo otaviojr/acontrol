@@ -23,6 +23,7 @@ struct AControlSystem {
   display_drv: Mutex<Option<Mutex<Box<Display + Send + Sync>>>>,
   nfc_state: Mutex<NFCSystemState>,
   nfc_state_params: Mutex<HashMap<String,String>>,
+  fingerprint_state_params: Mutex<HashMap<String,String>>,
 }
 
 impl AControlSystem {
@@ -36,7 +37,8 @@ lazy_static!{
     persist_drv:  Mutex::new(None),
     display_drv: Mutex::new(None),
     nfc_state: Mutex::new(NFCSystemState::READ),
-    nfc_state_params: Mutex::new(HashMap::new())
+    nfc_state_params: Mutex::new(HashMap::new()),
+    fingerprint_state_params: Mutex::new(HashMap::new())
   };
 
   static ref NFC_CARD_SIGNATURE: &'static str = &"ACONTROL_CARD\0\0\0";
@@ -311,6 +313,28 @@ pub fn acontrol_system_set_nfc_state(state: NFCSystemState, params: Option<HashM
     *ACONTROL_SYSTEM.nfc_state_params.lock().unwrap() = p;
   }
   *ACONTROL_SYSTEM.nfc_state.lock().unwrap() = state;
+}
+
+pub fn acontrol_system_fingerprint_start_enroll(params: HashMap<String,String>) -> Result<(), String>{
+  println!("System Start Enroll");
+  match *ACONTROL_SYSTEM.fingerprint_drv.lock().unwrap() {
+    Some(ref drv) => {
+      let mut drv_inner = drv.lock().unwrap();
+
+      let pos = (&params[&String::from("pos")]).parse::<u16>().unwrap();
+      println!("Adding a fingerprint at pos {} to {}", pos, &params[&String::from("name")]);
+      *ACONTROL_SYSTEM.fingerprint_state_params.lock().unwrap() = params;
+
+      if !drv_inner.start_enroll(pos) {
+        return Err(String::from("Error starting enrollment"));
+      }
+     return Ok(())
+    },
+    None => {
+      return Err(String::from("Fingerprint device unloaded"));
+    }
+  }
+  return Err(String::from("Driver not ready to start enrollment"));
 }
 
 pub fn acontrol_system_get_persist_drv<F, T>(f: F) -> T

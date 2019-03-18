@@ -11,13 +11,26 @@ pub struct Card  {
   pub name: Vec<u8>
 }
 
+pub struct Fingerprint {
+  pub id: i32,
+  pub pos: i32,
+  pub name: Vec<u8>,
+  pub template: Vec<u8>
+}
+
 pub trait Persist {
   fn init(&mut self, params: &HashMap<String,String>) -> Result<(), String>;
   fn unload(&mut self) -> Result<(), String>;
+
   fn nfc_add(&mut self, uuid: &Vec<u8>, name: &Vec<u8>) -> Result<(), String>;
   fn nfc_find(&mut self, uuid: &Vec<u8>) -> Result<(Card), String>;
   fn nfc_list(&mut self) -> Result<Vec<Card>, String>;
   fn nfc_delete(&mut self, uuid: &Vec<u8>) -> Result<(), String>;
+
+  fn fingerprint_add(&mut self, pos: i32, name: &Vec<u8>, template: &Vec<u8>) -> Result<(), String>;
+  fn fingerprint_find(&mut self, pos: i32) -> Result<Fingerprint, String>;
+  fn fingerprint_list(&mut self) -> Result<Vec<Fingerprint>, String>;
+  fn fingerprint_delete(&mut self, pos: i32) -> Result<(), String>;
 }
 
 pub fn persist_by_name(name: &str) -> Option<Box<Persist+Sync+Send>> {
