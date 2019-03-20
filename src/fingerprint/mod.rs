@@ -6,6 +6,7 @@ pub enum FingerprintState {
   WAITING,
   READING,
   AUTHENTICATING,
+  ENROLL,
   ERROR,
   SUCCESS,
 }
@@ -16,6 +17,7 @@ impl FingerprintState {
       FingerprintState::WAITING => "WAITING",
       FingerprintState::READING => "READING",
       FingerprintState::AUTHENTICATING => "AUTHENTICATING",
+      FingerprintState::ENROLL => "ENROLL",
       FingerprintState::ERROR => "ERROR",
       FingerprintState::SUCCESS => "SUCCESS"
     }

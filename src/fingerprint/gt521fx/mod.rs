@@ -228,6 +228,43 @@ impl Parser for Response {
 
 /* Data Packet Parsers */
 
+struct FingerprintTemplatePacket {
+  template: Option<Vec<u8>>
+}
+
+impl FingerprintTemplatePacket {
+  fn new() -> Self {
+    FingerprintTemplatePacket {template: None }
+  }
+}
+
+impl Parser for FingerprintTemplatePacket {
+  fn size(&self) -> u32 {
+    return 498+6;
+  }
+
+  fn parser(&mut self, data: &mut Vec<u8>) -> Result<bool,std::io::Error> {
+
+    let response_data: Vec<u8> = data.drain(0..self.size() as usize).collect();
+
+    if response_data[0] != 0x5A && response_data[1] != 0xA5 {
+      return Err(std::io::Error::new(ErrorKind::InvalidData, "Invalid response signature"));
+    }
+
+    let calc_checksum = Gt521fxThreadSafe::calc_crc(&response_data[0..502]);
+    let mut checksum: u16 = (response_data[503] as u16) << 8;
+    checksum |= response_data[502] as u16;
+
+    if checksum != calc_checksum {
+      return Err(std::io::Error::new(ErrorKind::InvalidData, format!("Invalid checksum 0x{:X} - 0x{:X}", checksum, calc_checksum)));
+    }
+
+    self.template = Some(response_data[4..498].to_vec());
+
+    Ok(true)
+  }
+}
+
 struct OpenDataPacket {
   firmware_version: u32,
   iso_area_max_size: u32,
@@ -242,7 +279,7 @@ impl OpenDataPacket {
 
 impl Parser for OpenDataPacket {
   fn size(&self) -> u32 {
-    return 30;
+    return 24+6;
   }
 
   fn parser(&mut self, data: &mut Vec<u8>) -> Result<bool,std::io::Error> {
@@ -370,7 +407,7 @@ impl Gt521fxThreadSafe {
         return Err(err);
       }
 
-      let mut buf: Vec<u8> = vec!(0;255);
+      let mut buf: Vec<u8> = vec!(0;1024);
       if let Err(err) = (*port).read(&mut buf[..]) {
         println!("Error reading from serial: {}", err);
       }
@@ -434,7 +471,11 @@ impl Fingerprint for Gt521fx {
       }
     }
 
-    gt521fx_locked.send_command(Command::CmosLed, 0x1, None);
+    if let Err(err) = gt521fx_locked.send_command(Command::CmosLed, 0x1, None) {
+      println!("Error initializing fingerprint device: {}",err);
+    } else {
+      println!("Fingerprint LED on");
+    }
 
     Ok(())
   }
@@ -453,7 +494,7 @@ impl Fingerprint for Gt521fx {
               let fingerprint_state = match(**state_locked) {
                 FingerprintDriverState::READ => Some(FingerprintState::READING),
                 FingerprintDriverState::ENROLL1 | FingerprintDriverState::ENROLL2 | FingerprintDriverState::ENROLL3 => Some(FingerprintState::WAITING),
-                FingerprintDriverState::ENROLL1_WAIT | FingerprintDriverState::ENROLL2_WAIT => Some(FingerprintState::SUCCESS),
+                FingerprintDriverState::ENROLL1_WAIT | FingerprintDriverState::ENROLL2_WAIT => Some(FingerprintState::WAITING),
                 _ => None
               };
 
@@ -479,7 +520,7 @@ impl Fingerprint for Gt521fx {
 
                   if let Ok(ref mut gt521fx_locked) = gt521fx.lock() {
                     println!("Checking finger");
-                    result = Some(gt521fx_locked.send_command(Command::CaptureFinger, 0x00, None));
+                    result = Some(gt521fx_locked.send_command(Command::CaptureFinger, 0x01, None));
                   }
               
                   match result {
@@ -490,14 +531,22 @@ impl Fingerprint for Gt521fx {
                     Some(Ok(ref response)) => {
                       if response.response == Command::Ack.value() {
                         let mut result = None;
+			//let mut template:FingerprintTemplatePacket = FingerprintTemplatePacket::new();
+
                         if let Ok(ref mut gt521fx_locked) = gt521fx.lock() {
                           println!("Checking finger");
-                          result = Some(gt521fx_locked.send_command(Command::Enroll1, 0x00, None));
+                          if **state_locked == FingerprintDriverState::ENROLL1 {
+                            result = Some(gt521fx_locked.send_command(Command::Enroll1, 0x00, None));
+                          } else if **state_locked == FingerprintDriverState::ENROLL2 {
+                            result = Some(gt521fx_locked.send_command(Command::Enroll2, 0x00, None));
+                          } else {
+                            result = Some(gt521fx_locked.send_command(Command::Enroll3, 0x00, None));
+                          }
                         }
 
                         match result {
                           Some(Err(err)) => {
-                            println!("Enroll1 error");
+                            println!("Enroll error: {}",err);
                             state_locked.set(FingerprintDriverState::READ);
                             (**expires_locked) = None;
                           },
@@ -510,10 +559,15 @@ impl Fingerprint for Gt521fx {
                                 state_locked.set(FingerprintDriverState::ENROLL2_WAIT);
                                 (**expires_locked) = Some(Instant::now());
                               } else {
+                                func(&FingerprintState::ENROLL, None);
                                 //TODO: ENROLL proccess endded. We need to send some feedback
                               }
                             } else {
-                              println!("Enroll1 error: {}", (Error::from(response.parameter)).name());
+                              if response.parameter <= 2999 {
+                                println!("Enrollment error: ID duplicated - {}", response.parameter);
+                              } else {
+                                println!("Enroll error: {}", (Error::from(response.parameter)).name());
+                              }
                               state_locked.set(FingerprintDriverState::READ);
                               (**expires_locked) = None;
                             }
@@ -540,13 +594,17 @@ impl Fingerprint for Gt521fx {
                       state_locked.set(FingerprintDriverState::READ);
                     },
                     Some(Ok(ref response)) => {
-                      if response.response != Command::Ack.value(){
-                        if **state_locked == FingerprintDriverState::ENROLL1_WAIT {
-                          state_locked.set(FingerprintDriverState::ENROLL2);
-                          (**expires_locked) = Some(Instant::now());
-                        } else if **state_locked == FingerprintDriverState::ENROLL2_WAIT {
-                          state_locked.set(FingerprintDriverState::ENROLL3);
-                          (**expires_locked) = Some(Instant::now());
+                      if response.response == Command::Ack.value(){
+                        if response.parameter == 0x00 {
+                          if **state_locked == FingerprintDriverState::ENROLL1_WAIT {
+                            state_locked.set(FingerprintDriverState::ENROLL2);
+                            (**expires_locked) = Some(Instant::now());
+                          } else if **state_locked == FingerprintDriverState::ENROLL2_WAIT {
+                            state_locked.set(FingerprintDriverState::ENROLL3);
+                            (**expires_locked) = Some(Instant::now());
+                          }
+                        } else {
+                          println!("========== RELEASE FINGER ==============");
                         }
                       }
                     },
