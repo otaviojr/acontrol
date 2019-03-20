@@ -1,4 +1,4 @@
-use fingerprint::{Fingerprint};
+use fingerprint::{Fingerprint, FingerprintState, FingerprintData};
 use nfc::{NfcReader};
 use audio::{Audio};
 use persist::{Persist, Card};
@@ -23,7 +23,8 @@ struct AControlSystem {
   display_drv: Mutex<Option<Mutex<Box<Display + Send + Sync>>>>,
   nfc_state: Mutex<NFCSystemState>,
   nfc_state_params: Mutex<HashMap<String,String>>,
-  fingerprint_state_params: Mutex<HashMap<String,String>>,
+  fingerprint_data: Mutex<FingerprintData>,
+  fingerprint_last_state: Mutex<Option<FingerprintState>>,
 }
 
 impl AControlSystem {
@@ -38,7 +39,8 @@ lazy_static!{
     display_drv: Mutex::new(None),
     nfc_state: Mutex::new(NFCSystemState::READ),
     nfc_state_params: Mutex::new(HashMap::new()),
-    fingerprint_state_params: Mutex::new(HashMap::new())
+    fingerprint_data: Mutex::new(FingerprintData::empty()),
+    fingerprint_last_state: Mutex::new(None),
   };
 
   static ref NFC_CARD_SIGNATURE: &'static str = &"ACONTROL_CARD\0\0\0";
@@ -178,14 +180,40 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
   match *asystem.fingerprint_drv.lock().unwrap() {
     Some(ref drv) => {
       let mut drv_inner = drv.lock().unwrap();
-
+      
       if let Err(err) = drv_inner.init() {
         eprintln!("Error initializing fingerprint device (=> {})", err);
         return false;
       }
 
       drv_inner.wait_for_finger( |state, value| {
-        println!("Fingerprint Current State: {}", state.name());
+        if let Ok(ref mut last_state_locked) = (*ACONTROL_SYSTEM).fingerprint_last_state.lock() {
+          if last_state_locked.is_none() || last_state_locked.unwrap() != *state {
+
+            last_state_locked.replace(*state);
+
+            println!("Fingerprint Current State Changed To: {}", state.name());
+
+            match state {
+              FingerprintState::READING => {
+              },
+              FingerprintState::WAITING => {
+              },
+              FingerprintState::SUCCESS => {
+              },
+              FingerprintState::ERROR => {
+              },
+              FingerprintState::ENROLL => {
+                let data_locked = (*ACONTROL_SYSTEM).fingerprint_data.lock().unwrap();
+                if let (&Some(ref name), &Some(ref pos)) = (&data_locked.name, &data_locked.pos){
+                  println!("User {} added at position {}", name, pos);
+                }
+              },
+              FingerprintState::AUTHORIZED => {
+              }
+            }
+          }
+        }
         return true;
       });
     },
@@ -323,11 +351,19 @@ pub fn acontrol_system_fingerprint_start_enroll(params: HashMap<String,String>) 
 
       let pos = (&params[&String::from("pos")]).parse::<u16>().unwrap();
       println!("Adding a fingerprint at pos {} to {}", pos, &params[&String::from("name")]);
-      *ACONTROL_SYSTEM.fingerprint_state_params.lock().unwrap() = params;
+     
+      if let Ok(ref mut data_locked) = (*ACONTROL_SYSTEM).fingerprint_data.lock() {
 
-      if !drv_inner.start_enroll(pos) {
-        return Err(String::from("Error starting enrollment"));
-      }
+        //*ACONTROL_SYSTEM.fingerprint_data.lock().unwrap() = FingerprintData::new(pos, &params[&String::from("name")]);
+        data_locked.pos = Some(pos);
+        data_locked.name = Some(params[&String::from("name")].clone());
+
+        //let mut data = *ACONTROL_SYSTEM.fingerprint_data.lock().unwrap();
+
+        if !drv_inner.start_enroll(&*data_locked) {
+          return Err(String::from("Error starting enrollment"));
+        }
+     }
      return Ok(())
     },
     None => {

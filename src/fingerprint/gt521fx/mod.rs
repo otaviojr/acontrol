@@ -1,4 +1,4 @@
-use fingerprint::{Fingerprint,FingerprintState};
+use fingerprint::{Fingerprint,FingerprintState, FingerprintData};
 
 use std::time::{Duration,Instant};
 use std::thread;
@@ -526,6 +526,7 @@ impl Fingerprint for Gt521fx {
                   match result {
                     Some(Err(err)) => {
                       println!("Erro checking fingerprint");
+                      func(&FingerprintState::ERROR, None);
                       state_locked.set(FingerprintDriverState::READ);
                     },
                     Some(Ok(ref response)) => {
@@ -547,6 +548,7 @@ impl Fingerprint for Gt521fx {
                         match result {
                           Some(Err(err)) => {
                             println!("Enroll error: {}",err);
+                            func(&FingerprintState::ERROR, None);
                             state_locked.set(FingerprintDriverState::READ);
                             (**expires_locked) = None;
                           },
@@ -560,7 +562,6 @@ impl Fingerprint for Gt521fx {
                                 (**expires_locked) = Some(Instant::now());
                               } else {
                                 func(&FingerprintState::ENROLL, None);
-                                //TODO: ENROLL proccess endded. We need to send some feedback
                               }
                             } else {
                               if response.parameter <= 2999 {
@@ -591,6 +592,7 @@ impl Fingerprint for Gt521fx {
                   match result {
                     Some(Err(err)) => {
                       println!("Erro checking fingerprint");
+                      func(&FingerprintState::ERROR, None);
                       state_locked.set(FingerprintDriverState::READ);
                     },
                     Some(Ok(ref response)) => {
@@ -622,6 +624,7 @@ impl Fingerprint for Gt521fx {
                   match result {
                     Some(Err(err)) => {
                       println!("Erro checking fingerprint");
+                      func(&FingerprintState::ERROR, None);
                     },
                     Some(Ok(ref response)) => {
                       if response.response == Command::Ack.value() {
@@ -685,30 +688,35 @@ impl Fingerprint for Gt521fx {
     return String::from("gt521fx Fingerprint Module");
   }
 
-  fn start_enroll(&mut self, pos: u16) -> bool {
+  fn start_enroll(&mut self, data: &FingerprintData) -> bool {
     println!("start enroll");
     let gt521fx = self.gt521fx.clone();
     let state_cloned = self.state.clone();
     let expires_cloned = self.expires.clone();
 
     if let Ok(mut gt521fx_locked) = gt521fx.lock() {
-      match gt521fx_locked.send_command(Command::EnrollStart, pos as u32, None){
-        Ok(response) => {
-          if response.response == Command::Ack.value() {
-            if let Ok(mut state_locked) = state_cloned.lock() {
-              (*state_locked).set(FingerprintDriverState::ENROLL1);
-            }
 
-            if let Ok(mut expires_locked) = expires_cloned.lock(){
-               (*expires_locked) = Some(Instant::now());
-            }
+      if let Some(pos)  = data.pos {
+        match gt521fx_locked.send_command(Command::EnrollStart, u32::from(pos), None){
+          Ok(response) => {
+            if response.response == Command::Ack.value() {
+              if let Ok(mut state_locked) = state_cloned.lock() {
+               (*state_locked).set(FingerprintDriverState::ENROLL1);
+              }
 
-          } else {
-            println!("EnrollStart error: {}", response.parameter);
+              if let Ok(mut expires_locked) = expires_cloned.lock(){
+                 (*expires_locked) = Some(Instant::now());
+              }
+
+            } else {
+              println!("EnrollStart error: {}", response.parameter);
+            }
+          },
+          Err(err) => {
           }
-        },
-        Err(err) => {
         }
+      } else {
+        return false;
       }
     }
 

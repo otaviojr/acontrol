@@ -39,8 +39,7 @@ impl Persist for SQLitePersist {
           "create table if not exists fingerprint (
                id integer primary key,
                pos integer not null,
-               name varchar(255) not null,
-               template varchar(1000) not null
+               name varchar(255) not null
            )",
           NO_PARAMS,
       ) {
@@ -123,10 +122,10 @@ impl Persist for SQLitePersist {
     Ok(())
   }
 
-  fn fingerprint_add(&mut self, pos: i32, name: &Vec<u8>, template: &Vec<u8>) -> Result<(), String> {
+  fn fingerprint_add(&mut self, pos: i32, name: &Vec<u8>) -> Result<(), String> {
     if let Some(ref conn) = self.conn {
-      if let Err(err) = conn.execute("INSERT INTO fingerprint (pos, name, template) VALUES (?1,?2,?3)",
-          &[&pos, name as &ToSql, template as &ToSql],
+      if let Err(err) = conn.execute("INSERT INTO fingerprint (pos, name) VALUES (?1,?2)",
+          &[&pos, name as &ToSql],
       ) {
         return Err(format!("Error inserting fingerprint to the database: {}", err));
       }
@@ -139,7 +138,7 @@ impl Persist for SQLitePersist {
 
     if let Some(ref conn) = self.conn {
       let mut stmt = conn
-        .prepare("SELECT id,pos,name,template FROM fingerprint where pos=?1")
+        .prepare("SELECT id,pos,name FROM fingerprint where pos=?1")
         .unwrap();
 
       let fingerprint_iter = stmt
@@ -147,7 +146,6 @@ impl Persist for SQLitePersist {
             id: row.get(0),
             pos: row.get(1),
             name: row.get(2),
-            template: row.get(3)
         }).unwrap();
 
       for fingerprint in fingerprint_iter {
@@ -166,15 +164,14 @@ impl Persist for SQLitePersist {
 
     if let Some(ref conn) = self.conn {
       let mut stmt = conn
-        .prepare("SELECT id,pos,name,template FROM fingerprint")
+        .prepare("SELECT id,pos,name FROM fingerprint")
         .unwrap();
 
       let fingerprint_iter = stmt
         .query_map(NO_PARAMS, |row| Fingerprint {
             id: row.get(0),
             pos: row.get(1),
-            name: row.get(2),
-            template: row.get(3)
+            name: row.get(2)
         }).unwrap();
 
       for fingerprint in fingerprint_iter {

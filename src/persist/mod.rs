@@ -14,8 +14,7 @@ pub struct Card  {
 pub struct Fingerprint {
   pub id: i32,
   pub pos: i32,
-  pub name: Vec<u8>,
-  pub template: Vec<u8>
+  pub name: Vec<u8>
 }
 
 pub trait Persist {
@@ -27,7 +26,7 @@ pub trait Persist {
   fn nfc_list(&mut self) -> Result<Vec<Card>, String>;
   fn nfc_delete(&mut self, uuid: &Vec<u8>) -> Result<(), String>;
 
-  fn fingerprint_add(&mut self, pos: i32, name: &Vec<u8>, template: &Vec<u8>) -> Result<(), String>;
+  fn fingerprint_add(&mut self, pos: i32, name: &Vec<u8>) -> Result<(), String>;
   fn fingerprint_find(&mut self, pos: i32) -> Result<Fingerprint, String>;
   fn fingerprint_list(&mut self) -> Result<Vec<Fingerprint>, String>;
   fn fingerprint_delete(&mut self, pos: i32) -> Result<(), String>;
