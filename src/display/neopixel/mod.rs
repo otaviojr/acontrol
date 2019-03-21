@@ -1,4 +1,4 @@
-use display::{Display, DisplayState, ErrorType};
+use display::{Display, DisplayState, ErrorType, WaitingAnimation, AnimationColor};
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -499,13 +499,26 @@ impl Display for NeoPixel {
 
     self.animation_blink(animation_info, move |next: bool, params: &mut NeoPixelBlinkAnimation| {
 
-      if now.elapsed().as_secs() > dismiss && params.repeat%2 != 0 { return Ok(-1) }
+      if now.elapsed().as_secs() > dismiss  && params.repeat%2 != 0 { return Ok(-1) }
 
       Ok(500)
     })
   }
 
-  fn show_waiting(&mut self, message: &str, dismiss: u64) -> Result<(), String> {
+  fn show_waiting(&mut self, animation: WaitingAnimation, color: AnimationColor, message: &str, dismiss: u64) -> Result<(), String> {
+    let now = Instant::now();
+
+    match animation {
+      WaitingAnimation::Material => {
+        let mut animation_info = NeoPixelSpinnerAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8);
+        self.animation_spinner(animation_info, move |next: bool, params: &mut NeoPixelSpinnerAnimation| {
+
+          if now.elapsed().as_secs() > dismiss && dismiss > 0 { return Ok(-1) }
+
+          Ok(100)
+        });
+      }
+    }
     Ok(())
   }
 

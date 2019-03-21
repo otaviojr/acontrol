@@ -2,7 +2,7 @@ use fingerprint::{Fingerprint, FingerprintState, FingerprintData};
 use nfc::{NfcReader};
 use audio::{Audio};
 use persist::{Persist, Card};
-use display::{Display, DisplayState};
+use display::{Display, DisplayState, WaitingAnimation, AnimationColor};
 
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -198,8 +198,15 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               FingerprintState::READING => {
               },
               FingerprintState::WAITING => {
+                acontrol_system_get_display_drv(|display|{
+                  display.show_waiting(WaitingAnimation::Material, AnimationColor::Orange, "Waiting",0);
+                });
               },
               FingerprintState::SUCCESS => {
+                acontrol_system_get_display_drv(|display|{
+                  display.show_success("Done",1);
+                  display.wait_animation_ends();
+                });
               },
               FingerprintState::ERROR => {
               },
@@ -377,4 +384,19 @@ pub fn acontrol_system_get_persist_drv<F, T>(f: F) -> T
   where F: FnOnce(&Option<Mutex<Box<Persist + Send + Sync>>>) -> T, {
   let mut persist_drv = &*ACONTROL_SYSTEM.persist_drv.lock().unwrap();
   f(persist_drv)
+}
+
+pub fn acontrol_system_get_display_drv<F, T>(f:F) -> Result<(),String>
+  where F: FnOnce(&mut Display) -> T {
+
+  match *ACONTROL_SYSTEM.display_drv.lock().unwrap()  {
+    Some(ref drv) => {
+      let display = &mut *(*drv.lock().unwrap());
+      f(display);
+      Ok(())
+    },
+    None => {
+      Err(String::from("Display device not found"))
+    }
+  }
 }

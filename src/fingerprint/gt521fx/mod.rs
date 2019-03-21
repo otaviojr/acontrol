@@ -494,7 +494,7 @@ impl Fingerprint for Gt521fx {
               let fingerprint_state = match(**state_locked) {
                 FingerprintDriverState::READ => Some(FingerprintState::READING),
                 FingerprintDriverState::ENROLL1 | FingerprintDriverState::ENROLL2 | FingerprintDriverState::ENROLL3 => Some(FingerprintState::WAITING),
-                FingerprintDriverState::ENROLL1_WAIT | FingerprintDriverState::ENROLL2_WAIT => Some(FingerprintState::WAITING),
+                FingerprintDriverState::ENROLL1_WAIT | FingerprintDriverState::ENROLL2_WAIT => Some(FingerprintState::SUCCESS),
                 _ => None
               };
 
@@ -597,7 +597,7 @@ impl Fingerprint for Gt521fx {
                     },
                     Some(Ok(ref response)) => {
                       if response.response == Command::Ack.value(){
-                        if response.parameter == 0x00 {
+                        if response.parameter != 0x00 {
                           if **state_locked == FingerprintDriverState::ENROLL1_WAIT {
                             state_locked.set(FingerprintDriverState::ENROLL2);
                             (**expires_locked) = Some(Instant::now());
