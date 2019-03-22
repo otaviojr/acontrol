@@ -2,7 +2,7 @@ use fingerprint::{Fingerprint, FingerprintState, FingerprintData};
 use nfc::{NfcReader};
 use audio::{Audio};
 use persist::{Persist, Card};
-use display::{Display, DisplayState, WaitingAnimation, AnimationColor};
+use display::{Display, DisplayState, WaitingAnimation, SuccessAnimation, AnimationColor};
 
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -204,8 +204,8 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               },
               FingerprintState::SUCCESS => {
                 acontrol_system_get_display_drv(|display|{
-                  display.show_success("Done",1);
-                  display.wait_animation_ends();
+                  display.show_success(SuccessAnimation::BlinkLoop,AnimationColor::Green,"Done",0);
+                  //display.wait_animation_ends();
                 });
               },
               FingerprintState::ERROR => {

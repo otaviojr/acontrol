@@ -1,4 +1,4 @@
-use display::{Display, DisplayState, ErrorType, WaitingAnimation, AnimationColor};
+use display::{Display, DisplayState, ErrorType, WaitingAnimation, SuccessAnimation, AnimationColor};
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -484,13 +484,35 @@ impl Display for NeoPixel {
     Ok(())
   }
 
-  fn show_success(&mut self, message: &str, dismiss: u64) -> Result<(), String> {
+  fn show_success(&mut self, animation: SuccessAnimation, color: AnimationColor, message: &str, dismiss: u64) -> Result<(), String> {
 
-    let mut animation_info = NeoPixelWipeAnimation::new(10,188,67,dismiss);
+    let now = Instant::now();
 
-    self.animation_color_wipe(animation_info, |next: bool, params:&mut NeoPixelWipeAnimation| {
-      Ok(100)
-    })
+    match animation {
+      SuccessAnimation::Wipe => {
+        let mut animation_info = NeoPixelWipeAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8, dismiss);
+
+        self.animation_color_wipe(animation_info, |next: bool, params:&mut NeoPixelWipeAnimation| {
+          Ok(100)
+        })
+      },
+      SuccessAnimation::Blink  => {
+        let mut animation_info = NeoPixelBlinkAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8, dismiss as i32);
+
+        self.animation_blink(animation_info, move |next: bool, params: &mut NeoPixelBlinkAnimation| {
+          Ok(500)
+        })
+      },
+      SuccessAnimation::BlinkLoop  => {
+        let mut animation_info = NeoPixelBlinkAnimation::new_loop(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8);
+
+        self.animation_blink(animation_info, move |next: bool, params: &mut NeoPixelBlinkAnimation| {
+          if dismiss > 0 && now.elapsed().as_secs() > dismiss  && params.repeat%2 != 0 { return Ok(-1) }
+          Ok(500)
+        })
+      },
+      _ => Err(String::from("Invalid animation"))
+    }
   }
 
   fn show_error(&mut self, message: &str, error_type: ErrorType, dismiss: u64) -> Result<(), String> {

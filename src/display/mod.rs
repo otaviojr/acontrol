@@ -26,8 +26,20 @@ pub enum WaitingAnimation {
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
+pub enum SuccessAnimation {
+  NoAnimation,
+  BlinkLoop,
+  Blink,
+  Wipe  
+}
+
+
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum AnimationColor {
   Orange = 0xFF0000,
+  Green = 0x00FF00,
+  Blue = 0x0000FF
 }
 
 impl AnimationColor {
@@ -38,7 +50,7 @@ impl AnimationColor {
 
 pub trait Display : Sync + Send {
   fn init(&mut self) -> Result<(), String>;
-  fn show_success(&mut self, message: &str, dismiss: u64) -> Result<(), String>;
+  fn show_success(&mut self, animation: SuccessAnimation, color: AnimationColor, message: &str, dismiss: u64) -> Result<(), String>;
   fn show_error(&mut self, message: &str, error_type: ErrorType, dismiss: u64) -> Result<(), String>;
   fn show_waiting(&mut self, animation: WaitingAnimation, color: AnimationColor, message: &str, dismiss: u64) -> Result<(), String>;
   fn wait_animation_ends(&mut self) -> Result<(), String>;
