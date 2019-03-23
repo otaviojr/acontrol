@@ -2,7 +2,7 @@ use fingerprint::{Fingerprint, FingerprintState, FingerprintData};
 use nfc::{NfcReader};
 use audio::{Audio};
 use persist::{Persist, Card};
-use display::{Display, DisplayState, WaitingAnimation, SuccessAnimation, AnimationColor};
+use display::{Display, DisplayState, Animation, AnimationType, AnimationColor};
 
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -186,7 +186,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
         return false;
       }
 
-      drv_inner.wait_for_finger( |state, value| {
+      let _ret = drv_inner.wait_for_finger( |state, _value| {
         if let Ok(ref mut last_state_locked) = (*ACONTROL_SYSTEM).fingerprint_last_state.lock() {
           if last_state_locked.is_none() || last_state_locked.unwrap() != *state {
 
@@ -198,25 +198,41 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               FingerprintState::READING => {
               },
               FingerprintState::WAITING => {
-                acontrol_system_get_display_drv(|display|{
-                  display.show_waiting(WaitingAnimation::Material, AnimationColor::Orange, "Waiting",0);
+                let _ret = acontrol_system_get_display_drv(|display|{
+                  let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
                 });
               },
               FingerprintState::SUCCESS => {
-                acontrol_system_get_display_drv(|display|{
-                  display.show_success(SuccessAnimation::BlinkLoop,AnimationColor::Green,"Done",0);
-                  //display.wait_animation_ends();
+                let _ret = acontrol_system_get_display_drv(|display|{
+                  let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",0);
                 });
               },
               FingerprintState::ERROR => {
+                let _ret = acontrol_system_get_display_drv(|display|{
+                  let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
+                  let _ret = display.wait_animation_ends();
+                });
               },
               FingerprintState::ENROLL => {
                 let data_locked = (*ACONTROL_SYSTEM).fingerprint_data.lock().unwrap();
                 if let (&Some(ref name), &Some(ref pos)) = (&data_locked.name, &data_locked.pos){
+                  let _ret = acontrol_system_get_display_drv(|display|{
+                    let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",3);
+                    let _ret = display.wait_animation_ends();
+                  });
                   println!("User {} added at position {}", name, pos);
                 }
               },
               FingerprintState::AUTHORIZED => {
+                let _ret = acontrol_system_get_display_drv(|display|{
+                  let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",0);
+                });
+              }
+              FingerprintState::NOT_AUTHORIZED => {
+                let _ret = acontrol_system_get_display_drv(|display|{
+                  let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
+                  let _ret = display.wait_animation_ends();
+                });
               }
             }
           }

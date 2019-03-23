@@ -333,7 +333,7 @@ impl Gt521fxThreadSafe {
     };
 
     match serialport::open_with_settings("/dev/serial0", &s) {
-      Ok(mut port) => {
+      Ok(port) => {
         self.port = Some(port);
         Ok(())
       },
@@ -486,6 +486,7 @@ impl Fingerprint for Gt521fx {
     let expires = self.expires.clone();
 
     let _handler = thread::spawn( move || {
+      let mut fingerpress_counter = 0;
       loop {
         {
           if let Ok(ref mut state_locked) = state.lock() {
@@ -495,7 +496,6 @@ impl Fingerprint for Gt521fx {
                 FingerprintDriverState::READ => Some(FingerprintState::READING),
                 FingerprintDriverState::ENROLL1 | FingerprintDriverState::ENROLL2 | FingerprintDriverState::ENROLL3 => Some(FingerprintState::WAITING),
                 FingerprintDriverState::ENROLL1_WAIT | FingerprintDriverState::ENROLL2_WAIT => Some(FingerprintState::SUCCESS),
-                _ => None
               };
 
               if let Some(ref state) = fingerprint_state {
@@ -562,6 +562,8 @@ impl Fingerprint for Gt521fx {
                                 (**expires_locked) = Some(Instant::now());
                               } else {
                                 func(&FingerprintState::ENROLL, None);
+                                state_locked.set(FingerprintDriverState::READ);
+                                (**expires_locked) = None;
                               }
                             } else {
                               if response.parameter <= 2999 {
@@ -569,6 +571,7 @@ impl Fingerprint for Gt521fx {
                               } else {
                                 println!("Enroll error: {}", (Error::from(response.parameter)).name());
                               }
+                              func(&FingerprintState::ERROR, None);
                               state_locked.set(FingerprintDriverState::READ);
                               (**expires_locked) = None;
                             }
@@ -598,14 +601,21 @@ impl Fingerprint for Gt521fx {
                     Some(Ok(ref response)) => {
                       if response.response == Command::Ack.value(){
                         if response.parameter != 0x00 {
-                          if **state_locked == FingerprintDriverState::ENROLL1_WAIT {
-                            state_locked.set(FingerprintDriverState::ENROLL2);
-                            (**expires_locked) = Some(Instant::now());
-                          } else if **state_locked == FingerprintDriverState::ENROLL2_WAIT {
-                            state_locked.set(FingerprintDriverState::ENROLL3);
-                            (**expires_locked) = Some(Instant::now());
+                          fingerpress_counter += 1;
+                          //Sometimes the finger press sensor may fail.
+                          //So, we need 3 consecutives finger leave reading to continue
+                          if fingerpress_counter > 3 {
+                            fingerpress_counter = 0;
+                            if **state_locked == FingerprintDriverState::ENROLL1_WAIT {
+                              state_locked.set(FingerprintDriverState::ENROLL2);
+                              (**expires_locked) = Some(Instant::now());
+                            } else if **state_locked == FingerprintDriverState::ENROLL2_WAIT {
+                              state_locked.set(FingerprintDriverState::ENROLL3);
+                              (**expires_locked) = Some(Instant::now());
+                            }
                           }
                         } else {
+                          fingerpress_counter = 0;
                           println!("========== RELEASE FINGER ==============");
                         }
                       }
@@ -614,44 +624,56 @@ impl Fingerprint for Gt521fx {
                   }
                 },
                 FingerprintDriverState::READ => {
-                  let mut result = None;
-
                   if let Ok(ref mut gt521fx_locked) = gt521fx.lock() {
                     println!("Checking finger");
-                    result = Some(gt521fx_locked.send_command(Command::CaptureFinger, 0x00, None));
-                  }
+                    let result = gt521fx_locked.send_command(Command::IsPressFinger, 0x00, None);
 
-                  match result {
-                    Some(Err(err)) => {
-                      println!("Erro checking fingerprint");
-                      func(&FingerprintState::ERROR, None);
-                    },
-                    Some(Ok(ref response)) => {
-                      if response.response == Command::Ack.value() {
-                        println!("=========>Ok, I can see your finger<==========");
-                        let mut result = None;
-                        if let Ok(ref mut gt521fx_locked) = gt521fx.lock() {
-                          println!("Identifying finger");
-                          result = Some(gt521fx_locked.send_command(Command::Identify, 0x00, None));
-                        }
-                        match result {
-                          Some(Err(err)) => {
-                            println!("Error identifying fingerprint!");
-                          },
-                          Some(Ok(ref response)) => {
-                            if response.response == Command::Ack.value() {
-                              println!("============>Fingerprint IS Registered<=============");
-                            } else {
-                              println!("============>Fingerprint is NOT Registered<=============");
+                    match result {
+                      Err(err) => {
+                        println!("Erro checking fingerprint");
+                        func(&FingerprintState::ERROR, None);
+                      },
+                      Ok(ref response) => {
+                        if response.response == Command::Ack.value(){
+                          if response.parameter == 0x00 {
+
+                            let result = gt521fx_locked.send_command(Command::CaptureFinger, 0x00, None);
+
+                            match result {
+                              Err(err) => {
+                                println!("Erro checking fingerprint");
+                                func(&FingerprintState::ERROR, None);
+                              },
+                              Ok(ref response) => {
+                                if response.response == Command::Ack.value() {
+                                  println!("=========>Ok, I can see your finger<==========");
+                                  let result = gt521fx_locked.send_command(Command::Identify, 0x00, None);
+
+                                  match result {
+                                    Err(err) => {
+                                      println!("Error identifying fingerprint!");
+                                    },
+                                    Ok(ref response) => {
+                                      if response.response == Command::Ack.value() {
+                                        println!("============>Fingerprint IS Registered<=============");
+                                        func(&FingerprintState::AUTHORIZED, None);
+                                      } else {
+                                        func(&FingerprintState::NOT_AUTHORIZED, None);
+                                        println!("============>Fingerprint is NOT Registered<=============");
+                                      }
+                                    },
+                                  }
+                                } else {
+                                  println!("No finger!");
+                                }
+                              },
                             }
-                          },
-                          None => {}
+                          } else {
+                            println!("No finger!");
+                          }
                         }
-                      } else {
-                        println!("No finger!");
-                      }
-                    },
-                    None => {}
+                      },
+                    }
                   }
                 },
               }

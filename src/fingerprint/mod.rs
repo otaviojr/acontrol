@@ -5,6 +5,7 @@ pub mod gt521fx;
 pub enum FingerprintState {
   WAITING,
   READING,
+  NOT_AUTHORIZED,
   AUTHORIZED,
   ENROLL,
   ERROR,
@@ -16,6 +17,7 @@ impl FingerprintState {
     match *self {
       FingerprintState::WAITING => "WAITING",
       FingerprintState::READING => "READING",
+      FingerprintState::NOT_AUTHORIZED => "NOT_AUTHORIZED",
       FingerprintState::AUTHORIZED => "AUTHORIZED",
       FingerprintState::ENROLL => "ENROLL",
       FingerprintState::ERROR => "ERROR",

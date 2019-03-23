@@ -64,9 +64,7 @@ impl Audio for Buzzer {
 
     buzzer.lock().unwrap().pin = Some(pin);
 
-    self.play_alert();
-    
-    Ok( () )
+    self.play_alert()
   }
 
   fn play_success(&mut self) -> Result<(), String> {

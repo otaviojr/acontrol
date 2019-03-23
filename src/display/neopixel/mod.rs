@@ -1,4 +1,4 @@
-use display::{Display, DisplayState, ErrorType, WaitingAnimation, SuccessAnimation, AnimationColor};
+use display::{Display, DisplayState, ErrorType, Animation, AnimationType, AnimationColor};
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -6,18 +6,15 @@ use std::sync::Mutex;
 
 use std::thread;
 use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration,Instant};
-
-use std::io::prelude::*;
 
 use std::io;
 use std::fs::OpenOptions;
-use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::{RawFd,AsRawFd};
 use std::ptr;
 use std::mem;
 
+#[allow(dead_code)]
 mod neopixel_ioctl {
   const NEOPIXEL_IOC_MAGIC: u8 = b'N';
   const NEOPIXEL_IOCTL_GET_VERSION: u8 = 1;
@@ -75,7 +72,7 @@ pub struct NeoPixelWipeAnimation {
   red: u8,
   green: u8,
   blue: u8,
-  custom: Option<Box<std::any::Any + Send + Sync>>,
+//  custom: Option<Box<std::any::Any + Send + Sync>>,
 }
 
 pub struct NeoPixelSpinnerAnimation {
@@ -86,7 +83,7 @@ pub struct NeoPixelSpinnerAnimation {
   red: u8,
   green: u8,
   blue: u8,
-  custom: Option<Box<std::any::Any + Send + Sync>>,
+//  custom: Option<Box<std::any::Any + Send + Sync>>,
 }
 
 pub struct NeoPixelBlinkAnimation {
@@ -95,28 +92,28 @@ pub struct NeoPixelBlinkAnimation {
   red: u8,
   green: u8,
   blue: u8,
-  custom: Option<Box<std::any::Any + Send + Sync>>,
+//  custom: Option<Box<std::any::Any + Send + Sync>>,
 }
 
 impl NeoPixelWipeAnimation {
   fn new(red: u8, green: u8, blue: u8, dismiss: u64) -> Self {
-    return NeoPixelWipeAnimation {direction: NeoPixelAnimationDirection::Normal, start: Instant::now(), dismiss: dismiss, current_pixel: 0, red: red, green: green, blue: blue, custom: None};
+    return NeoPixelWipeAnimation {direction: NeoPixelAnimationDirection::Normal, start: Instant::now(), dismiss: dismiss, current_pixel: 0, red: red, green: green, blue: blue, /*custom: None*/};
   }
 }
 
 impl NeoPixelSpinnerAnimation {
   fn new(red: u8, green: u8, blue: u8) -> Self {
-    return NeoPixelSpinnerAnimation {current_pixel: 0, interaction: 0, size_direction: 0, size: 2, red: red, green: green, blue: blue, custom: None};
+    return NeoPixelSpinnerAnimation {current_pixel: 0, interaction: 0, size_direction: 0, size: 2, red: red, green: green, blue: blue, /*custom: None*/};
   }
 }
 
 impl NeoPixelBlinkAnimation {
   fn new(red: u8, green: u8, blue: u8, repeat: i32) -> Self {
-    return NeoPixelBlinkAnimation {repeat: repeat*2, red: red, green: green, blue: blue, custom: None, infinity: false };
+    return NeoPixelBlinkAnimation {repeat: repeat*2, red: red, green: green, blue: blue, /*custom: None,*/ infinity: false };
   }
 
   fn new_loop(red: u8, green: u8, blue: u8) -> Self  {
-    return NeoPixelBlinkAnimation {repeat: 0, red: red, green: green, blue: blue, custom: None, infinity: true  };
+    return NeoPixelBlinkAnimation {repeat: 0, red: red, green: green, blue: blue, /*custom: None,*/ infinity: true  };
   }
 }
 
@@ -184,6 +181,20 @@ impl NeoPixelInterface {
     }
     Ok(ret)
   }
+
+  fn clear(&self) -> Result<(), String> {
+
+    for i in 0..self.get_num_leds().unwrap() {
+      let pixel_info = neopixel_ioctl::Pixel { pixel: i, red: 0, green: 0, blue: 0};
+      let _ret = self.set_pixel(pixel_info);
+    }
+
+    if let Err(err) = self.show(){
+      return Err(err);
+    }
+    Ok(())
+  }
+
 }
 
 impl NeoPixel {
@@ -195,13 +206,14 @@ impl NeoPixel {
 
   fn stop_animation(&mut self) -> Result<(), String> {
 
-    let mut interface = self.interface.clone();
+    let interface = self.interface.clone();
 
     if let Some(animation) = (*interface.animation.lock().unwrap()).take() {
       let mut wait = false;
+
       match interface.animation_tx.lock().unwrap().send(NeoPixelThreadCommand::Stop) {
-        Ok(ret) => { wait = true; },
-        Err(ret) => return Err(format!("Error sending message: {:?}", ret))
+        Ok(_ret) => { wait = true; },
+        Err(err) => return Err(format!("Error sending message: {:?}", err))
       }
       
       if wait == true {
@@ -219,7 +231,7 @@ impl NeoPixel {
 
     let _ret = self.stop_animation();
 
-    let mut interface = self.interface.clone();
+    let interface = self.interface.clone();
 
     let animation = thread::spawn( move || {
       unsafe {
@@ -244,20 +256,25 @@ impl NeoPixel {
           }
 
           match finish(next, &mut *p) {
-            Ok(timing) => if timing >= 0 { wait = timing as u64 } else { return Ok(()) },
-            Err(err) => return Err(err),
+            Ok(timing) => if timing >= 0 { wait = timing as u64 } else { next = false },
+            Err(err) => {
+              let _ret = interface.clear();
+              return Err(err)
+            },
           }
 
           if next == false  {
+            let _ret = interface.clear();
             break; 
           }
+
 	  thread::sleep(Duration::from_millis(wait));
         }
       }
       Ok(())
     });
 
-    let mut interface = self.interface.clone();
+    let interface = self.interface.clone();
     interface.set_animation(Some(animation));
 
     Ok(())
@@ -279,10 +296,10 @@ impl NeoPixel {
           } else {
             pixel_info = neopixel_ioctl::Pixel { pixel: pixel, red: 0, green: 0, blue: 0};
           }
-          interface.set_pixel(pixel_info);
+          let _ret = interface.set_pixel(pixel_info);
         }
       
-        interface.show();
+        let _ret = interface.show();
       
         animation_info.repeat -= 1;
       }
@@ -299,7 +316,7 @@ impl NeoPixel {
   fn animation_spinner<F>(&mut self, info: NeoPixelSpinnerAnimation, finish: F) -> Result<(), String>
                                         where F: Fn(bool, &mut NeoPixelSpinnerAnimation) -> Result<(i64), String> + Send + Sync + Copy + 'static {
 
-    let mut interface = self.interface.clone();
+    let interface = self.interface.clone();
 
     let animation_fn = move |animation_info: &mut NeoPixelSpinnerAnimation| {
 
@@ -327,18 +344,18 @@ impl NeoPixel {
           let mut pixel = i;
           if pixel >= num_leds { pixel -= num_leds}
           let pixel_info = neopixel_ioctl::Pixel { pixel: pixel, red: animation_info.red, green: animation_info.green, blue: animation_info.blue};
-          interface.set_pixel(pixel_info);
+          let _ret = interface.set_pixel(pixel_info);
         }
 
         let mut pixel:i32 = animation_info.current_pixel + animation_info.size;
         while pixel != animation_info.current_pixel {
           let pixel_info = neopixel_ioctl::Pixel { pixel: pixel, red: 0, green: 0, blue: 0};
-          interface.set_pixel(pixel_info);
+          let _ret = interface.set_pixel(pixel_info);
           pixel += 1;
           if pixel >= num_leds { pixel -= num_leds} 
         }
 
-        interface.show();
+        let _ret = interface.show();
       }
       return Ok(true);
     };
@@ -349,14 +366,14 @@ impl NeoPixel {
   fn animation_color_wipe<F>(&mut self, info: NeoPixelWipeAnimation, finish: F) -> Result<(), String>
 					where F: Fn(bool, &mut NeoPixelWipeAnimation) -> Result<(i64), String> + Send + Sync + Copy + 'static {
 
-    let mut interface = self.interface.clone();
+    let interface = self.interface.clone();
 
     let animation_fn = move |animation_info: &mut NeoPixelWipeAnimation| {
       if animation_info.current_pixel >= 0 && animation_info.current_pixel < interface.get_num_leds().unwrap(){
         let pixel_info = neopixel_ioctl::Pixel { pixel: animation_info.current_pixel, red: animation_info.red, green: animation_info.green, blue: animation_info.blue};
 
-        interface.set_pixel(pixel_info);
-        interface.show();
+        let _ret = interface.set_pixel(pixel_info);
+        let _ret = interface.show();
 
         if animation_info.direction == NeoPixelAnimationDirection::Normal {
           animation_info.current_pixel += 1;
@@ -388,26 +405,27 @@ impl NeoPixel {
   }
 
   fn clear(&mut self) -> Result<(), String> {
-
     let interface = self.interface.clone();
-
-    for i in 0..interface.get_num_leds().unwrap() {
-      let pixel_info = neopixel_ioctl::Pixel { pixel: i, red: 0, green: 0, blue: 0};
-      interface.set_pixel(pixel_info);
-    }
-
-    if let Err(err) = interface.show(){
-      return Err(err);
-    }
-    Ok(())
+    interface.clear()
   }
 
   fn test_hardware(&mut self) -> Result<(), String> {
+    
+    let now = Instant::now();
+    let dismiss = 5;
 
     let mut animation_info = NeoPixelSpinnerAnimation::new(0,0,255);
-    self.animation_spinner(animation_info, |next: bool, params: &mut NeoPixelSpinnerAnimation| {
+      self.animation_spinner(animation_info, move |_next: bool, _params: &mut NeoPixelSpinnerAnimation| {
+
+      if now.elapsed().as_secs() > dismiss && dismiss > 0 { return Ok(-1) }
+
       Ok(100)
     })
+
+    //let mut animation_info = NeoPixelSpinnerAnimation::new(0,0,255);
+    //self.animation_spinner(animation_info, |next: bool, params: &mut NeoPixelSpinnerAnimation| {
+    //  Ok(100)
+    //})
 
     //let _ret = self.show_success("Success Test", 5);
     //let _ret = self.wait_animation_ends();
@@ -479,69 +497,49 @@ impl Display for NeoPixel {
 
     println!("NeoPixel driver version {} found!", String::from_utf8(version.to_vec()).unwrap());
 
-    self.test_hardware();
+    let _ret = self.test_hardware();
  
     Ok(())
   }
 
-  fn show_success(&mut self, animation: SuccessAnimation, color: AnimationColor, message: &str, dismiss: u64) -> Result<(), String> {
+  fn show_animation(&mut self, animation: Animation, color: AnimationColor, animation_type: AnimationType, message: &str, dismiss: u64) -> Result<(), String> {
 
     let now = Instant::now();
 
     match animation {
-      SuccessAnimation::Wipe => {
-        let mut animation_info = NeoPixelWipeAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8, dismiss);
+      Animation::MaterialSpinner => {
+        let mut animation_info = NeoPixelSpinnerAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8);
+        self.animation_spinner(animation_info, move |_next: bool, _params: &mut NeoPixelSpinnerAnimation| {
 
-        self.animation_color_wipe(animation_info, |next: bool, params:&mut NeoPixelWipeAnimation| {
+          if now.elapsed().as_secs() > dismiss && dismiss > 0 { return Ok(-1) }
+
           Ok(100)
         })
       },
-      SuccessAnimation::Blink  => {
+      Animation::Wipe => {
+        let mut animation_info = NeoPixelWipeAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8, dismiss);
+
+        self.animation_color_wipe(animation_info, |_next: bool, _params:&mut NeoPixelWipeAnimation| {
+          Ok(100)
+        })
+      },
+      Animation::Blink  => {
         let mut animation_info = NeoPixelBlinkAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8, dismiss as i32);
 
-        self.animation_blink(animation_info, move |next: bool, params: &mut NeoPixelBlinkAnimation| {
+        self.animation_blink(animation_info, move |_next: bool, _params: &mut NeoPixelBlinkAnimation| {
           Ok(500)
         })
       },
-      SuccessAnimation::BlinkLoop  => {
+      Animation::BlinkLoop  => {
         let mut animation_info = NeoPixelBlinkAnimation::new_loop(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8);
 
-        self.animation_blink(animation_info, move |next: bool, params: &mut NeoPixelBlinkAnimation| {
+        self.animation_blink(animation_info, move |_next: bool, params: &mut NeoPixelBlinkAnimation| {
           if dismiss > 0 && now.elapsed().as_secs() > dismiss  && params.repeat%2 != 0 { return Ok(-1) }
           Ok(500)
         })
       },
       _ => Err(String::from("Invalid animation"))
     }
-  }
-
-  fn show_error(&mut self, message: &str, error_type: ErrorType, dismiss: u64) -> Result<(), String> {
-    let mut animation_info = NeoPixelBlinkAnimation::new_loop(249,79,51);
-    let now = Instant::now();
-
-    self.animation_blink(animation_info, move |next: bool, params: &mut NeoPixelBlinkAnimation| {
-
-      if now.elapsed().as_secs() > dismiss  && params.repeat%2 != 0 { return Ok(-1) }
-
-      Ok(500)
-    })
-  }
-
-  fn show_waiting(&mut self, animation: WaitingAnimation, color: AnimationColor, message: &str, dismiss: u64) -> Result<(), String> {
-    let now = Instant::now();
-
-    match animation {
-      WaitingAnimation::Material => {
-        let mut animation_info = NeoPixelSpinnerAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8);
-        self.animation_spinner(animation_info, move |next: bool, params: &mut NeoPixelSpinnerAnimation| {
-
-          if now.elapsed().as_secs() > dismiss && dismiss > 0 { return Ok(-1) }
-
-          Ok(100)
-        });
-      }
-    }
-    Ok(())
   }
 
   fn wait_animation_ends(&mut self) -> Result<(), String> {
