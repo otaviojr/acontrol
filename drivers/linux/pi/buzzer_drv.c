@@ -1,10 +1,10 @@
 /**
- * @file   neopixel_drv.c
+ * @file   buzzer_drv.c
  * @author Otavio Ribeiro
- * @date   24 Dec 2017
- * @brief  A kernel module for controlling a neopixel led strip
+ * @date   23 Mar 2019
+ * @brief  A kernel module to use PCM to drive a piezo buzzer
  *
- * Copyright (c) 2018 Otávio Ribeiro <otavio.ribeiro@gmail.com>
+ * Copyright (c) 2019 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -38,26 +38,21 @@
 
 #include <linux/delay.h>		// sleep functions
 
-#include "neopixel_ioctl.h"
-#include "neopixel_drv.h"
-#include "neopixel_pwm.h"
+#include "buzzer_ioctl.h"
+#include "buzzer_drv.h"
+#include "buzzer_pcm.h"
 
 static char* module_version = "0.0.1";
 
-MODULE_ALIAS("platform:bcm2835-neopixel");
+MODULE_ALIAS("platform:bcm2835-buzzer");
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Otavio Ribeiro");
-MODULE_DESCRIPTION("acontrol neopixel kernel driver");
+MODULE_DESCRIPTION("acontrol buzzer kernel driver");
 MODULE_VERSION("0.1");
 
-/** GPIO2_2 - (2 * 32) + 2 **/
-static unsigned int gpio_neopixel_data = 6;
-module_param(gpio_neopixel_data, uint, S_IRUGO);
-MODULE_PARM_DESC(gpio_neopixel_data, " GPIO NEOPIXEL DATA PIN (default=6)");
-
 /* platform driver */
-static int bcm2835_neopixel_probe(struct platform_device *pdev);
-static int bcm2835_neopixel_remove(struct platform_device *pdev);
+static int bcm2835_buzzer_probe(struct platform_device *pdev);
+static int bcm2835_buzzer_remove(struct platform_device *pdev);
 
 /* char device interface */
 static int dev_open(struct inode* inodep, struct file* filep);
@@ -78,24 +73,24 @@ static struct device *char_device_object;
 
 static int dev_open(struct inode* inodep, struct file* filep)
 {
-  printk("NEOPIXEL: Device openned");
+  printk("BUZZER: Device openned");
   return 0;
 }
 
 static int dev_release(struct inode* inodep, struct file* filep)
 {
-  printk("NEOPIXEL: Device released");
+  printk("BUZZER: Device released");
   return 0;
 }
 
 static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
 {
   long ret = 0;
-  long value = 0;
-  struct neopixel_pixel pixel;
+  //long value = 0;
+  //struct neopixel_pixel pixel;
 
-  if (_IOC_TYPE(cmd) != NEOPIXEL_IOC_MAGIC) return -EINVAL;
-  if (_IOC_NR(cmd) > NEOPIXEL_IOCTL_MAX_CMD) return -EINVAL;
+  if (_IOC_TYPE(cmd) != BUZZER_IOC_MAGIC) return -EINVAL;
+  if (_IOC_NR(cmd) > BUZZER_IOCTL_MAX_CMD) return -EINVAL;
 
   if (_IOC_DIR(cmd) & _IOC_READ) {
     ret = !access_ok(VERIFY_WRITE, (void *)arg, _IOC_SIZE(cmd));
@@ -103,99 +98,101 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
     ret = !access_ok(VERIFY_READ, (void *)arg, _IOC_SIZE(cmd));
   }
 
-  if (ret) return -EACCES;
+  return -EACCES;
 
-  switch(cmd){
-    case NEOPIXEL_IOCTL_GET_VERSION:
-      if(copy_to_user((char*)arg, module_version, strlen(module_version) )){
-        return -EACCES;
-      }
-      break;
+  //if (ret) return -EACCES;
 
-    case  NEOPIXEL_IOCTL_GET_NUM_LEDS:
-      value = neopixel_pwm_get_num_leds();
-      if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
-        return -EFAULT;
-      }
-      break;
+  //switch(cmd){
+  //  case NEOPIXEL_IOCTL_GET_VERSION:
+  //    if(copy_to_user((char*)arg, module_version, strlen(module_version) )){
+  //      return -EACCES;
+  //    }
+  //    break;
 
-    case NEOPIXEL_IOCTL_SET_PIXEL:
-      if(copy_from_user((struct neopixel_pixel*)&pixel, (struct neopixel_pixel*)arg, sizeof(struct neopixel_pixel))){
-        return -EFAULT;
-      }
+  //  case  NEOPIXEL_IOCTL_GET_NUM_LEDS:
+  //    value = neopixel_pwm_get_num_leds();
+  //    if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
+  //      return -EFAULT;
+  //    }
+  //    break;
+
+  //  case NEOPIXEL_IOCTL_SET_PIXEL:
+  //    if(copy_from_user((struct neopixel_pixel*)&pixel, (struct neopixel_pixel*)arg, sizeof(struct neopixel_pixel))){
+  //      return -EFAULT;
+  //    }
       //printk("NEOPIXEL: set_pixel: %lu,%d,%d,%d", pixel.pixel, pixel.red, pixel.green, pixel.blue);
-      neopixel_pwm_set_pixel(pixel.pixel, pixel.red, pixel.green, pixel.blue);
-      break;
+  //    neopixel_pwm_set_pixel(pixel.pixel, pixel.red, pixel.green, pixel.blue);
+  //    break;
 
-    case NEOPIXEL_IOCTL_SHOW:
+  //  case NEOPIXEL_IOCTL_SHOW:
       //printk("NEOPIXEL: show");
-      value = neopixel_pwm_show();
-      if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
-        return -EFAULT;
-      }
-      break;
+  //    value = neopixel_pwm_show();
+  //    if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
+  //      return -EFAULT;
+  //    }
+  //    break;
 
-    case NEOPIXEL_IOCTL_HARDWARE_TEST:
-      neopixel_pwm_hardware_test();
-      value = 0;
-      if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
-        return -EFAULT;
-      }
-      break;
+  //  case NEOPIXEL_IOCTL_HARDWARE_TEST:
+  //    neopixel_pwm_hardware_test();
+  //    value = 0;
+  //    if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
+  //      return -EFAULT;
+  //    }
+  //    break;
 
-    default:
-      printk("NEOPIXEL: Unknow ioctl command");
-      return -EINVAL;
-  }
+  //  default:
+  //    printk("NEOPIXEL: Unknow ioctl command");
+  //    return -EINVAL;
+  //}
 
-  return ret;
+  //return ret;
 }
 
-static int bcm2835_neopixel_probe(struct platform_device *pdev)
+static int bcm2835_buzzer_probe(struct platform_device *pdev)
 {
   int result = 0;
 
-  printk("NEOPIXEL: probe entered");
+  printk("BUZZER: probe entered");
 
-  device_class = class_create(THIS_MODULE, "neopixel");
+  device_class = class_create(THIS_MODULE, "buzzer");
   if(IS_ERR(device_class))
   {
-     printk(KERN_ALERT "NEOPIXEL: Failed to create device class");
+     printk(KERN_ALERT "BUZZER: Failed to create device class");
      return PTR_ERR(device_class);
   }
 
   /* character device interface */
-  result = alloc_chrdev_region(&dev, FIRST_MINOR, MINOR_CNT, "neopixel");
+  result = alloc_chrdev_region(&dev, FIRST_MINOR, MINOR_CNT, "buzzer");
   if(result < 0)
   {
-    printk(KERN_ALERT "NEOPIXEL: Failed registering region");
+    printk(KERN_ALERT "BUZZER: Failed registering region");
     return result;
   }
   cdev_init(&c_dev, &dev_file_operations);
   result = cdev_add(&c_dev, dev, MINOR_CNT);
   if(result < 0)
   {
-    printk(KERN_ALERT "NEOPIXEL: Error adding char device to region");
+    printk(KERN_ALERT "BUZZER: Error adding char device to region");
     return result;
   }
 
-  char_device_object = device_create(device_class, NULL, dev, NULL,  "neopixel");
+  char_device_object = device_create(device_class, NULL, dev, NULL,  "buzzer");
   if(IS_ERR(char_device_object))
   {
-    printk(KERN_ALERT "NEOPIXEL: Failed to create char device");
+    printk(KERN_ALERT "BUZZER: Failed to create char device");
     return PTR_ERR(char_device_object);
   }
 
-  neopixel_pwm_init(pdev);
+  buzzer_pcm_init(pdev);
 
   return 0;
 }
 
-static int bcm2835_neopixel_remove(struct platform_device *pdev)
+static int bcm2835_buzzer_remove(struct platform_device *pdev)
 {
-  printk("NEOPIXEL: remove entered");
+  printk("BUZZER: remove entered");
 
-  neopixel_pwm_unload();
+  buzzer_pcm_unload();
 
   device_destroy(device_class, dev);
   cdev_del(&c_dev);
@@ -205,20 +202,20 @@ static int bcm2835_neopixel_remove(struct platform_device *pdev)
   return 0;
 }
 
-static const struct of_device_id bcm2835_neopixel_match[] = {
-    { .compatible = "bcm2835-neopixel" },
+static const struct of_device_id bcm2835_buzzer_match[] = {
+    { .compatible = "bcm2835-buzzer" },
     { }
 };
-MODULE_DEVICE_TABLE(of, bcm2835_neopixel_match);
+MODULE_DEVICE_TABLE(of, bcm2835_buzzer_match);
 
-static struct platform_driver bcm2835_neopixel_driver = {
-	.probe	= bcm2835_neopixel_probe,
-	.remove	= bcm2835_neopixel_remove,
+static struct platform_driver bcm2835_buzzer_driver = {
+	.probe	= bcm2835_buzzer_probe,
+	.remove	= bcm2835_buzzer_remove,
 	.driver = {
-		.name = "bcm2835-neopixel",
+		.name = "bcm2835-buzzer",
                 .owner = THIS_MODULE,
-		.of_match_table = of_match_ptr(bcm2835_neopixel_match),
+		.of_match_table = of_match_ptr(bcm2835_buzzer_match),
 	},
 };
 
-module_platform_driver(bcm2835_neopixel_driver);
+module_platform_driver(bcm2835_buzzer_driver);
