@@ -63,6 +63,8 @@ static struct dma_async_tx_descriptor * dma_desc;
 
 static struct resource* pwm_io_res;
 static struct resource* pwmctl_cm_io_res;
+static struct resource* phys_base_addr;
+static struct resource* bus_base_addr;
 
 static struct task_struct * hardware_test_task;
 
@@ -337,23 +339,41 @@ int neopixel_pwm_init( struct platform_device *pdev )
 
   dev = &pdev->dev;
 
+  phys_base_addr = platform_get_resource_byname(pdev, IORESOURCE_MEM, "neopixel-phys-base");
+  if(!phys_base_addr){
+    printk("NEOPIXEL(%s): phys base address not found",__func__);
+    ret = -ENODEV;
+    goto no_neopixel_resource;
+  } else {
+    printk("NEOPIXEL: phys base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start, (long unsigned int)phys_base_addr->end);
+  }
+
+  bus_base_addr = platform_get_resource_byname(pdev, IORESOURCE_MEM, "neopixel-bus-base");
+  if(!phys_base_addr){
+    printk("NEOPIXEL(%s): bus base address not found",__func__);
+    ret = -ENODEV;
+    goto no_neopixel_resource;
+  } else {
+    printk("NEOPIXEL: bus base address 0x%lx - 0x%lx", (long unsigned int)bus_base_addr->start, (long unsigned int)bus_base_addr->end);
+  }
+
   pwm_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "neopixel-pwm");
   if(!pwm_io_res){
-    printk("NEOPIXEL: pwm base address not found");
+    printk("NEOPIXEL(%s): pwm base address not found",__func__);
     ret = -ENODEV;
     goto no_neopixel_pwm;
   } else {
-    printk("NEOPIXEL: pwm base address 0x%lx - 0x%lx", (long unsigned int)pwm_io_res->start, (long unsigned int)pwm_io_res->end);
+    printk("NEOPIXEL: pwm base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pwm_io_res->start, (long unsigned int)pwm_io_res->end);
   }
 
-  if  (!request_mem_region(pwm_io_res->start, resource_size(pwm_io_res), "neopixel-pwm")) {
+  if  (!request_mem_region(phys_base_addr->start + pwm_io_res->start, resource_size(pwm_io_res), "neopixel-pwm")) {
     dev_err(dev, "pwm -  request_mem_region");
     printk("NEOPIXEL: pwm request region failed. Region already in use?");
     ret = -EINVAL;
     goto no_pwm_request_mem;
   }
 
-  pwm_base_addr = ioremap(pwm_io_res->start, resource_size(pwm_io_res));
+  pwm_base_addr = ioremap(phys_base_addr->start + pwm_io_res->start, resource_size(pwm_io_res));
 
   if(!pwm_base_addr){
     printk("NWOPIXEL: Error remapping pwm io memory");
@@ -369,19 +389,21 @@ int neopixel_pwm_init( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_pwm_ctl_resource;
   } else {
-    printk("NEOPIXEL: pwmctl clock base address 0x%lx - 0x%lx", (long unsigned int)pwmctl_cm_io_res->start, (long unsigned int)pwmctl_cm_io_res->end);
+    printk("NEOPIXEL: pwmctl clock base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pwmctl_cm_io_res->start, (long unsigned int)pwmctl_cm_io_res->end);
   }
 
-  //if  (!request_mem_region(pwmctl_cm_io_res->start, resource_size(pwmctl_cm_io_res), "neopixel-pwm-cm")) {
+  /* SOME PART OF THE KERNEL IS USING THIS AREA. WE WILL USE ANYWAY, BUT, REQUESTING IT WILL FAIL */
+
+  //if  (!request_mem_region(phys_base_addr->start + pwmctl_cm_io_res->start, resource_size(pwmctl_cm_io_res), "neopixel-pwm-cm")) {
   //  dev_err(&pdev->dev, "pwm -  request_mem_region");
   //  printk("NEOPIXEL: pwm request region failed. Region already in use?");
   //  return -EINVAL;
   //}
 
-  pwmctl_cm_base_addr = ioremap(pwmctl_cm_io_res->start, resource_size(pwmctl_cm_io_res));
+  pwmctl_cm_base_addr = ioremap(phys_base_addr->start + pwmctl_cm_io_res->start, resource_size(pwmctl_cm_io_res));
 
   if(!pwmctl_cm_base_addr){
-    printk("NWOPIXEL: Error remapping pwmctl clock io memory");
+    printk("NEOPIXEL: Error remapping pwmctl clock io memory");
     ret = -ENOMEM;
     goto no_remap_pwm_ctl;
   } else {
@@ -420,7 +442,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     goto no_dma_request_channel;
   }
 
-  cfg.dst_addr =  0x7E20C000 + PWM_FIF1;
+  cfg.dst_addr =  bus_base_addr->start + pwm_io_res->start + PWM_FIF1;
   if(dmaengine_slave_config(dma_chan, &cfg) < 0)
   {
     printk("Error configuring DMA\n");
@@ -455,6 +477,7 @@ no_remap_pwm:
 
 no_pwm_request_mem:
 no_neopixel_pwm:
+no_neopixel_resource:
 
   return ret;
 }

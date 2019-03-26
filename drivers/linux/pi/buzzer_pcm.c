@@ -44,7 +44,7 @@
 #include "neopixel_pwm.h"
 
 static volatile void* __iomem pcm_base_addr;
-//static volatile void* __iomem pwmctl_cm_base_addr;
+static volatile void* __iomem pcmctl_cm_base_addr;
 
 static uint8_t* buffer = NULL;
 static uint8_t* dma_buffer = NULL;
@@ -57,12 +57,11 @@ static struct dma_pool* buz_dma_pool;
 static dma_addr_t dma_addr;
 static struct dma_async_tx_descriptor * dma_desc;
 
-//static struct completion cmp;
-
 static struct resource* pcm_io_res;
-//static struct resource* pwmctl_cm_io_res;
+static struct resource* pcmctl_cm_io_res;
+static struct resource* phys_base_addr;
+static struct resource* bus_base_addr;
 
-//static struct task_struct * hardware_test_task;
 
 static dma_cookie_t dma_cookie;
 
@@ -167,23 +166,41 @@ int buzzer_pcm_load( struct platform_device *pdev )
 
   dev = &pdev->dev;
 
+  phys_base_addr = platform_get_resource_byname(pdev, IORESOURCE_MEM, "buzzer-phys-addr");
+  if(!phys_base_addr){
+    printk("BUZZER(%s): phys base address not found",__func__);
+    ret = -ENODEV;
+    goto no_buzzer_resource;
+  } else {
+    printk("BUZZER(%s): phys base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start, (long unsigned int)phys_base_addr->end, __func__);
+  }
+
+  bus_base_addr = platform_get_resource_byname(pdev, IORESOURCE_MEM, "buzzer-bus-addr");
+  if(!bus_base_addr){
+    printk("BUZZER(%s): bus base address not found",__func__);
+    ret = -ENODEV;
+    goto no_buzzer_resource;
+  } else {
+    printk("BUZZER(%s): bus base address 0x%lx - 0x%lx", (long unsigned int)bus_base_addr->start, (long unsigned int)bus_base_addr->end, __func__);
+  }
+
   pcm_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "buzzer-pcm");
   if(!pcm_io_res){
     printk("BUZZER: pcm base address not found");
     ret = -ENODEV;
     goto no_buzzer_pcm;
   } else {
-    printk("BUZZER: pcm base address 0x%lx - 0x%lx", (long unsigned int)pcm_io_res->start, (long unsigned int)pcm_io_res->end);
+    printk("BUZZER: pcm base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pcm_io_res->start, (long unsigned int)pcm_io_res->end);
   }
 
-  if  (!request_mem_region(pcm_io_res->start, resource_size(pcm_io_res), "buzzer-pcm")) {
+  if  (!request_mem_region(phys_base_addr->start + pcm_io_res->start, resource_size(pcm_io_res), "buzzer-pcm")) {
     dev_err(dev, "pcm -  request_mem_region");
     printk("BUZZER: pcm request region failed. Region already in use?");
     ret = -EINVAL;
     goto no_pcm_request_mem;
   }
 
-  pcm_base_addr = ioremap(pcm_io_res->start, resource_size(pcm_io_res));
+  pcm_base_addr = ioremap(phys_base_addr->start + pcm_io_res->start, resource_size(pcm_io_res));
 
   if(!pcm_base_addr){
     printk("BUZZER: Error remapping pcm io memory");
@@ -193,38 +210,24 @@ int buzzer_pcm_load( struct platform_device *pdev )
     printk("BUZZER: PCM address remapped");
   }
 
-  //pwmctl_cm_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "neopixel-pwmctl-cm");
-  //if(!pwmctl_cm_io_res){
-  //  printk("NEOPIXEL: pwmctl clock base address not found");
-  //  ret = -ENODEV;
-  //  goto no_pwm_ctl_resource;
-  //} else {
-  //  printk("NEOPIXEL: pwmctl clock base address 0x%lx - 0x%lx", (long unsigned int)pwmctl_cm_io_res->start, (long unsigned int)pwmctl_cm_io_res->end);
-  //}
+  pcmctl_cm_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "buzzer-pcmctl-cm");
+  if(!pcmctl_cm_io_res){
+    printk("BUZZER: pcmctl clock base address not found");
+    ret = -ENODEV;
+    goto no_pwm_ctl_resource;
+  } else {
+    printk("BUZZER: pcmctl clock base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pcmctl_cm_io_res->start, (long unsigned int)pcmctl_cm_io_res->end);
+  }
 
-  //if  (!request_mem_region(pwmctl_cm_io_res->start, resource_size(pwmctl_cm_io_res), "neopixel-pwm-cm")) {
-  //  dev_err(&pdev->dev, "pwm -  request_mem_region");
-  //  printk("NEOPIXEL: pwm request region failed. Region already in use?");
-  //  return -EINVAL;
-  //}
+  pcmctl_cm_base_addr = ioremap(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res));
 
-  //pwmctl_cm_base_addr = ioremap(pwmctl_cm_io_res->start, resource_size(pwmctl_cm_io_res));
-
-  //if(!pwmctl_cm_base_addr){
-  //  printk("NWOPIXEL: Error remapping pwmctl clock io memory");
-  //  ret = -ENOMEM;
-  //  goto no_remap_pwm_ctl;
-  //} else {
-  //  printk("NEOPIXEL: PWMCTL clock address remapped");
-  //}
-
-  //if(of_property_read_u32(np, "num-leds", &num_leds) ) {
-  //  dev_err(dev, "of_property_read_u32\n");
-  //  ret = -EINVAL;
-  //  goto no_num_leds;
-  //} else {
-  //  printk("NEOPIXEL: number of leds = %d", num_leds);
-  //}
+  if(!pcmctl_cm_base_addr){
+    printk("BUZZER: Error remapping pcmctl clock io memory");
+    ret = -ENOMEM;
+    goto no_remap_pwm_ctl;
+  } else {
+    printk("BUZZER: PCMCTL clock address remapped");
+  }
 
   //buffer_len = num_leds * BYTES_PER_LED + RESET_BYTES;
   //buffer = kzalloc(buffer_len, GFP_KERNEL | GFP_ATOMIC);
@@ -251,7 +254,7 @@ int buzzer_pcm_load( struct platform_device *pdev )
   }
 
   //TODO: change to PCM_TX FIFO
-  cfg.dst_addr =  0x7E20C000 + PWM_FIF1;
+  cfg.dst_addr =  bus_base_addr->start + pcm_io_res->start + PWM_FIF1;
   if(dmaengine_slave_config(dma_chan, &cfg) < 0)
   {
     printk("BUZZER(%s): Error configuring DMA\n", __func__);
@@ -282,6 +285,7 @@ no_remap_pcm:
 
 no_pcm_request_mem:
 no_buzzer_pcm:
+no_buzzer_resource:
 
   return ret;
 }

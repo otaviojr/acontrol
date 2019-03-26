@@ -24,22 +24,21 @@
     fragment@2 {
       target-path = "/";
       __overlay__ {
+
         #address-cells = <0x1>;
         #size-cells = <0x1>;
-
         neopixel@0x3F000000 {
           compatible = "bcm2835-neopixel";
 
           #address-cells = <0x1>;
           #size-cells = <0x1>;
 
-	  reg = <0x3F20C000 0x100 /*0: PWM BASE ADDRESS*/
-                 0x3F1010a0 0x08>;  /*1: PWMCTL BASE ADDRESS*/
+	  reg =  <0x3F000000 0x0     /*0: I/O PHYSICAL ADDRESS*/
+                 0x7E000000 0x0      /*1: I/O BUS ADDRESS*/
+                 0x0020C000 0x100    /*2: PWM BASE ADDRESS OFFSSET*/
+                 0x001010a0 0x08>;   /*3: PWMCTL BASE ADDRESS OFFSSET*/
 
-//          reg = <0x7E20C000 0x100 /*0: PWM BASE ADDRESS*/
-//                 0x7E1010a0 0x08>;  /*1: PWMCTL BASE ADDRESS*/
-
-          reg-names = "neopixel-pwm","neopixel-pwmctl-cm";
+          reg-names = "neopixel-phys-base","neopixel-bus-base","neopixel-pwm","neopixel-pwmctl-cm";
 
           pinctrl-names = "default";
           pinctrl-0 = <&pwm0_gpio12>;
