@@ -183,7 +183,7 @@ static int bcm2835_buzzer_probe(struct platform_device *pdev)
     return PTR_ERR(char_device_object);
   }
 
-  buzzer_pcm_init(pdev);
+  buzzer_pcm_load(pdev);
 
   return 0;
 }

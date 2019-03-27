@@ -41,7 +41,7 @@
 #include <linux/delay.h>
 #include <linux/kthread.h>
 
-#include "neopixel_pwm.h"
+#include "buzzer_pcm.h"
 
 static volatile void* __iomem pcm_base_addr;
 static volatile void* __iomem pcmctl_cm_base_addr;
@@ -70,6 +70,44 @@ static dma_cookie_t dma_cookie;
 
 static int pcm_init( void )
 {
+  uint32_t reg;
+
+  //disable pcm clock
+  reg = PCM_CM_CTL_PASSWORD | PCM_CM_CTL_KILL;
+  writel(reg, pcmctl_cm_base_addr + PCM_CM_CTL);
+
+  msleep(100);
+
+  while( (reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL)) & PCM_CM_CTL_BUSY )
+  {
+    msleep(100);
+    printk("Waiting pcm busy bit");
+  }
+
+  msleep(100);
+
+  //125Khz = 1 bit every 8*10^-6 seconds
+  reg = PCM_CM_CTL_PASSWORD | PCM_CM_DIV_DIVI(4000) | PCM_CM_DIV_DIVF(0);
+  writel(reg, pcmctl_cm_base_addr + PCM_CM_DIV);
+
+  msleep(100);
+
+  //PLLD - PLLD 500Mhz - MASH 1
+  reg = PCM_CM_CTL_PASSWORD | PCM_CM_CTL_MASH(2) | PCM_CM_CTL_SRC(6);
+  writel(reg, pcmctl_cm_base_addr + PCM_CM_CTL);
+
+  msleep(100);
+
+  reg |= PCM_CM_CTL_ENAB;
+  writel(reg, pcmctl_cm_base_addr + PCM_CM_CTL);
+  printk("writing PCM_CM_CTL=0x%X",reg);
+
+  msleep(100);
+
+  reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL);
+  printk("reading PCM_CM_CTL=0x%X",reg);
+
+  return 0;
 }
 
 static void buzzer_callback(void * param)
@@ -214,9 +252,16 @@ int buzzer_pcm_load( struct platform_device *pdev )
   if(!pcmctl_cm_io_res){
     printk("BUZZER: pcmctl clock base address not found");
     ret = -ENODEV;
-    goto no_pwm_ctl_resource;
+    goto no_pcm_ctl_resource;
   } else {
     printk("BUZZER: pcmctl clock base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pcmctl_cm_io_res->start, (long unsigned int)pcmctl_cm_io_res->end);
+  }
+
+  if  (!request_mem_region(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res), "buzzer-pcm")) {
+    dev_err(dev, "pcm cm-  request_mem_region");
+    printk("BUZZER: pcm c, request region failed. Region already in use?");
+    ret = -EINVAL;
+    goto no_pcm_ctl_request_mem;
   }
 
   pcmctl_cm_base_addr = ioremap(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res));
@@ -224,7 +269,7 @@ int buzzer_pcm_load( struct platform_device *pdev )
   if(!pcmctl_cm_base_addr){
     printk("BUZZER: Error remapping pcmctl clock io memory");
     ret = -ENOMEM;
-    goto no_remap_pwm_ctl;
+    goto no_remap_pcm_ctl;
   } else {
     printk("BUZZER: PCMCTL clock address remapped");
   }
@@ -254,7 +299,7 @@ int buzzer_pcm_load( struct platform_device *pdev )
   }
 
   //TODO: change to PCM_TX FIFO
-  cfg.dst_addr =  bus_base_addr->start + pcm_io_res->start + PWM_FIF1;
+  cfg.dst_addr =  bus_base_addr->start + pcm_io_res->start/* + PWM_FIF1*/;
   if(dmaengine_slave_config(dma_chan, &cfg) < 0)
   {
     printk("BUZZER(%s): Error configuring DMA\n", __func__);
@@ -277,6 +322,9 @@ no_buffer:
 //  iounmap(pwmctl_cm_base_addr);
 
 no_remap_pcm_ctl:
+  release_mem_region(pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res));
+
+no_pcm_ctl_request_mem:
 no_pcm_ctl_resource:
   iounmap(pcm_base_addr);
 
@@ -290,15 +338,16 @@ no_buzzer_resource:
   return ret;
 }
 
-int neopixel_pwm_unload( void )
+int buzzer_pcm_unload( void )
 {
   dmaengine_terminate_async(dma_chan);
   dmaengine_synchronize(dma_chan);
 
   iounmap(pcm_base_addr);
-  //iounmap(pwmctl_cm_base_addr);
+  iounmap(pcmctl_cm_base_addr);
 
   release_mem_region(pcm_io_res->start, resource_size(pcm_io_res));
+  release_mem_region(pcm_cm_io_res->start, resource_size(pcm_cm_io_res));
 
   dma_release_channel(dma_chan);
 

@@ -33,7 +33,7 @@
           #address-cells = <0x1>;
           #size-cells = <0x1>;
 
-	  reg =  <0x3F000000 0x0     /*0: I/O PHYSICAL ADDRESS*/
+	        reg =  <0x3F000000 0x0     /*0: I/O PHYSICAL ADDRESS*/
                  0x7E000000 0x0      /*1: I/O BUS ADDRESS*/
                  0x0020C000 0x100    /*2: PWM BASE ADDRESS OFFSSET*/
                  0x001010a0 0x08>;   /*3: PWMCTL BASE ADDRESS OFFSSET*/
@@ -41,7 +41,7 @@
           reg-names = "neopixel-phys-base","neopixel-bus-base","neopixel-pwm","neopixel-pwmctl-cm";
 
           pinctrl-names = "default";
-          pinctrl-0 = <&pwm0_gpio12>;
+          pinctrl-0 = <&pwm_pins>;
 
           dmas = <&dma 5>;
           dma-names = "neopixel-pwm-dma";
