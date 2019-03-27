@@ -9,7 +9,7 @@
         __overlay__ {
             pcm_pins: pcm_pins {
                 brcm,pins = <21>;
-                brcm,function = <0>;
+                brcm,function = <4>;
             };
         };
     };
@@ -33,8 +33,8 @@
 
           reg-names = "buzzer-phys-addr","buzzer-bus-addr","buzzer-pcm", "buzzer-pcmctl-cm";
 
-          pinctrl-names = "default";
           pinctrl-0 = <&pcm_pins>;
+          pinctrl-names = "default";
 
           dmas = <&dma 2>;
           dma-names = "buzzer-pcm-dma";

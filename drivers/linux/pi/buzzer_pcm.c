@@ -68,7 +68,7 @@ static dma_cookie_t dma_cookie;
 #define PWM_DMA_DREQ 		2
 #define BUS_ADDR_OFFSET		0xC0000000
 
-static int pcm_init( void )
+static int pcm_clock_init( void )
 {
   uint32_t reg;
 
@@ -106,6 +106,20 @@ static int pcm_init( void )
 
   reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL);
   printk("reading PCM_CM_CTL=0x%X",reg);
+
+  return 0;
+}
+
+static int pcm_config( void ) 
+{
+  return 0;
+}
+
+static int pcm_init( void )
+{
+  uint32_t reg;
+
+  pcm_clock_init();
 
   return 0;
 }
@@ -322,14 +336,14 @@ no_buffer:
 //  iounmap(pwmctl_cm_base_addr);
 
 no_remap_pcm_ctl:
-  release_mem_region(pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res));
+  release_mem_region(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res));
 
 no_pcm_ctl_request_mem:
 no_pcm_ctl_resource:
   iounmap(pcm_base_addr);
 
 no_remap_pcm:
-  release_mem_region(pcm_io_res->start, resource_size(pcm_io_res));
+  release_mem_region(phys_base_addr->start + pcm_io_res->start, resource_size(pcm_io_res));
 
 no_pcm_request_mem:
 no_buzzer_pcm:
@@ -346,8 +360,8 @@ int buzzer_pcm_unload( void )
   iounmap(pcm_base_addr);
   iounmap(pcmctl_cm_base_addr);
 
-  release_mem_region(pcm_io_res->start, resource_size(pcm_io_res));
-  release_mem_region(pcm_cm_io_res->start, resource_size(pcm_cm_io_res));
+  release_mem_region(phys_base_addr->start + pcm_io_res->start, resource_size(pcm_io_res));
+  release_mem_region(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res));
 
   dma_release_channel(dma_chan);
 

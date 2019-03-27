@@ -66,7 +66,7 @@ static struct resource* pwmctl_cm_io_res;
 static struct resource* phys_base_addr;
 static struct resource* bus_base_addr;
 
-static struct task_struct * hardware_test_task;
+static struct task_struct* hardware_test_task;
 
 static dma_cookie_t dma_cookie;
 
@@ -349,7 +349,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
   }
 
   bus_base_addr = platform_get_resource_byname(pdev, IORESOURCE_MEM, "neopixel-bus-base");
-  if(!phys_base_addr){
+  if(!bus_base_addr){
     printk("NEOPIXEL(%s): bus base address not found",__func__);
     ret = -ENODEV;
     goto no_neopixel_resource;
@@ -363,7 +363,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_neopixel_pwm;
   } else {
-    printk("NEOPIXEL: pwm base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pwm_io_res->start, (long unsigned int)pwm_io_res->end);
+    printk("NEOPIXEL: pwm base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pwm_io_res->start, (long unsigned int)phys_base_addr->start + pwm_io_res->end);
   }
 
   if  (!request_mem_region(phys_base_addr->start + pwm_io_res->start, resource_size(pwm_io_res), "neopixel-pwm")) {
@@ -389,7 +389,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_pwm_ctl_resource;
   } else {
-    printk("NEOPIXEL: pwmctl clock base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pwmctl_cm_io_res->start, (long unsigned int)pwmctl_cm_io_res->end);
+    printk("NEOPIXEL: pwmctl clock base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pwmctl_cm_io_res->start, (long unsigned int)phys_base_addr->start + pwmctl_cm_io_res->end);
   }
 
   /* SOME PART OF THE KERNEL IS USING THIS AREA. WE WILL USE ANYWAY, BUT, REQUESTING IT WILL FAIL */
@@ -473,7 +473,7 @@ no_pwm_ctl_resource:
   iounmap(pwm_base_addr);
 
 no_remap_pwm:
-  release_mem_region(pwm_io_res->start, resource_size(pwm_io_res));
+  release_mem_region(phys_base_addr->start + pwm_io_res->start, resource_size(pwm_io_res));
 
 no_pwm_request_mem:
 no_neopixel_pwm:
@@ -508,7 +508,7 @@ int neopixel_pwm_unload( void )
   iounmap(pwm_base_addr);
   iounmap(pwmctl_cm_base_addr);
 
-  release_mem_region(pwm_io_res->start, resource_size(pwm_io_res));
+  release_mem_region(phys_base_addr->start + pwm_io_res->start, resource_size(pwm_io_res));
 
   dma_release_channel(dma_chan);
 

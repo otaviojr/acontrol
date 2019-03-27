@@ -9,7 +9,7 @@
         __overlay__ {
             pwm_pins: pwm_pins {
                 brcm,pins = <12>;
-                brcm,function = <0>;
+                brcm,function = <BCM2835_FSEL_ALT0>;
             };
         };
     };
@@ -40,8 +40,8 @@
 
           reg-names = "neopixel-phys-base","neopixel-bus-base","neopixel-pwm","neopixel-pwmctl-cm";
 
-          pinctrl-names = "default";
           pinctrl-0 = <&pwm_pins>;
+          pinctrl-names = "default";
 
           dmas = <&dma 5>;
           dma-names = "neopixel-pwm-dma";
