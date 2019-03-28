@@ -1,5 +1,5 @@
 /**
- * @file   neopixel_pcm.c
+ * @file   buzzer_pcm.c
  * @author Otavio Ribeiro
  * @date   23 Mar 2019
  * @brief  Buzzer PCM hardware
@@ -62,10 +62,9 @@ static struct resource* pcmctl_cm_io_res;
 static struct resource* phys_base_addr;
 static struct resource* bus_base_addr;
 
-
 static dma_cookie_t dma_cookie;
 
-#define PWM_DMA_DREQ 		2
+#define PCM_DMA_DREQ 		  2
 #define BUS_ADDR_OFFSET		0xC0000000
 
 static int pcm_clock_init( void )
@@ -78,11 +77,11 @@ static int pcm_clock_init( void )
 
   msleep(100);
 
-  while( (reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL)) & PCM_CM_CTL_BUSY )
-  {
-    msleep(100);
-    printk("Waiting pcm busy bit");
-  }
+  //while( (reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL)) & PCM_CM_CTL_BUSY )
+  //{
+  //  msleep(100);
+  //  printk("Waiting pcm busy bit");
+  //}
 
   msleep(100);
 
@@ -110,16 +109,56 @@ static int pcm_clock_init( void )
   return 0;
 }
 
-static int pcm_config( void ) 
-{
-  return 0;
-}
-
-static int pcm_init( void )
+static int pcm_init( void ) 
 {
   uint32_t reg;
 
+  //Disable clock before change the source
+  reg = readl(pcm_base_addr + PCM_MODE_A);
+  reg |= PCM_MODE_A_CLK_DIS;
+  writel(reg, pcm_base_addr + PCM_MODE_A);
+
+  msleep(100);
+
+  //configure pcm clock source and parameters
   pcm_clock_init();
+
+  reg = PCM_MODE_A_FLEN(127) | //A frame is around 1ms of buzzer audio
+        PCM_MODE_A_FSLEN(127);
+  writel(reg, pcm_base_addr + PCM_MODE_A);
+
+  msleep(100);
+
+  reg = 0;
+  writel(reg, pcm_base_addr + PCM_RXC_A);
+
+  msleep(100);
+
+  reg = PCM_TXC_A_CH1EN;
+  writel(reg, pcm_base_addr + PCM_TXC_A);
+
+  msleep(100);
+
+  reg = PCM_DREQ_A_TX_PANIC(1) |
+        PCM_DREQ_A_TX(4);
+  writel(reg, pcm_base_addr + PCM_DREQ_A);
+
+  msleep(100);
+
+  reg = 0;
+  writel(reg, pcm_base_addr + PCM_INTEN_A);
+
+  msleep(100);
+
+  reg = PCM_CS_A_STBY |
+        PCM_CS_A_DMAEN |
+        PCM_CS_A_RXCLR |
+        PCM_CS_A_TXCLR |
+        PCM_CS_A_TXON |
+        PCM_CS_A_EN;
+  writel(reg, pcm_base_addr + PCM_CS_A);
+
+  msleep(100);
 
   return 0;
 }
@@ -207,12 +246,12 @@ int buzzer_pcm_load( struct platform_device *pdev )
 {
   int ret = 0;
 
-  struct device_node *np = pdev->dev.of_node;
-  struct dma_slave_config cfg =
-  {
+  //struct device_node *np = pdev->dev.of_node;
+
+  struct dma_slave_config cfg = {
     .src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES,
     .dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES,
-    .slave_id = PWM_DMA_DREQ,
+    .slave_id = PCM_DMA_DREQ,
     .direction = DMA_MEM_TO_DEV
   };
 
@@ -224,7 +263,7 @@ int buzzer_pcm_load( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_buzzer_resource;
   } else {
-    printk("BUZZER(%s): phys base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start, (long unsigned int)phys_base_addr->end, __func__);
+    printk("BUZZER(%s): phys base address 0x%lx - 0x%lx", __func__, (long unsigned int)phys_base_addr->start, (long unsigned int)phys_base_addr->end);
   }
 
   bus_base_addr = platform_get_resource_byname(pdev, IORESOURCE_MEM, "buzzer-bus-addr");
@@ -233,7 +272,7 @@ int buzzer_pcm_load( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_buzzer_resource;
   } else {
-    printk("BUZZER(%s): bus base address 0x%lx - 0x%lx", (long unsigned int)bus_base_addr->start, (long unsigned int)bus_base_addr->end, __func__);
+    printk("BUZZER(%s): bus base address 0x%lx - 0x%lx", __func__, (long unsigned int)bus_base_addr->start, (long unsigned int)bus_base_addr->end);
   }
 
   pcm_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "buzzer-pcm");
@@ -242,10 +281,10 @@ int buzzer_pcm_load( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_buzzer_pcm;
   } else {
-    printk("BUZZER: pcm base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pcm_io_res->start, (long unsigned int)pcm_io_res->end);
+    printk("BUZZER: pcm base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pcm_io_res->start, (long unsigned int)phys_base_addr->start + pcm_io_res->end);
   }
 
-  if  (!request_mem_region(phys_base_addr->start + pcm_io_res->start, resource_size(pcm_io_res), "buzzer-pcm")) {
+  if(!request_mem_region(phys_base_addr->start + pcm_io_res->start, resource_size(pcm_io_res), "buzzer-pcm")) {
     dev_err(dev, "pcm -  request_mem_region");
     printk("BUZZER: pcm request region failed. Region already in use?");
     ret = -EINVAL;
@@ -253,7 +292,6 @@ int buzzer_pcm_load( struct platform_device *pdev )
   }
 
   pcm_base_addr = ioremap(phys_base_addr->start + pcm_io_res->start, resource_size(pcm_io_res));
-
   if(!pcm_base_addr){
     printk("BUZZER: Error remapping pcm io memory");
     ret = -ENOMEM;
@@ -268,18 +306,17 @@ int buzzer_pcm_load( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_pcm_ctl_resource;
   } else {
-    printk("BUZZER: pcmctl clock base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pcmctl_cm_io_res->start, (long unsigned int)pcmctl_cm_io_res->end);
+    printk("BUZZER: pcmctl clock base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pcmctl_cm_io_res->start, (long unsigned int)phys_base_addr->start + pcmctl_cm_io_res->end);
   }
 
-  if  (!request_mem_region(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res), "buzzer-pcm")) {
+  /*if(!request_mem_region(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res), "buzzer-pcmctl")) {
     dev_err(dev, "pcm cm-  request_mem_region");
     printk("BUZZER: pcm c, request region failed. Region already in use?");
     ret = -EINVAL;
     goto no_pcm_ctl_request_mem;
-  }
+  }*/
 
   pcmctl_cm_base_addr = ioremap(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res));
-
   if(!pcmctl_cm_base_addr){
     printk("BUZZER: Error remapping pcmctl clock io memory");
     ret = -ENOMEM;
@@ -296,26 +333,23 @@ int buzzer_pcm_load( struct platform_device *pdev )
   //  goto no_buffer;
   //}
 
-  //printk("NEOOPIXEL(%s): buffer_virt = 0x%x; buffer_length = %lu", __func__, (unsigned int)buffer, buffer_len);
+  //printk("BUZZER(%s): buffer_virt = 0x%x; buffer_length = %lu", __func__, (unsigned int)buffer, buffer_len);
 
-  //neo_dma_pool =  dma_pool_create("neopixel_dma", dev, buffer_len, 32, 4096);
-  //if(!neo_dma_pool){
-  //  printk("NEOPIXEL(%s): Error creating dma memory pool.", __func__);
+  //buzzer_dma_pool =  dma_pool_create("buzzer_dma", dev, buffer_len, 32, 4096);
+  //if(!buzzer_dma_pool){
+  //  printk("BUZZER(%s): Error creating dma memory pool.", __func__);
   //  goto no_dma_pool;
   //}
 
-  dma_chan = dma_request_slave_channel(dev, "neopixel-pcm-dma");
-  if(dma_chan == NULL)
-  {
+  dma_chan = dma_request_slave_channel(dev, "buzzer-pcm-dma");
+  if(!dma_chan) {
     printk("BUZZER(%s): Error requesting DMA channel", __func__);
     ret = -ENODEV;
     goto no_dma_request_channel;
   }
 
-  //TODO: change to PCM_TX FIFO
-  cfg.dst_addr =  bus_base_addr->start + pcm_io_res->start/* + PWM_FIF1*/;
-  if(dmaengine_slave_config(dma_chan, &cfg) < 0)
-  {
+  cfg.dst_addr =  bus_base_addr->start + pcm_io_res->start + PCM_FIFO_A;
+  if(dmaengine_slave_config(dma_chan, &cfg) < 0) {
     printk("BUZZER(%s): Error configuring DMA\n", __func__);
     ret = -ENODEV;
     goto no_dma_config;
@@ -333,10 +367,10 @@ no_dma_pool:
 //  kfree(buffer);
 
 no_buffer:
-//  iounmap(pwmctl_cm_base_addr);
+  iounmap(pcmctl_cm_base_addr);
 
 no_remap_pcm_ctl:
-  release_mem_region(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res));
+  //release_mem_region(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res));
 
 no_pcm_ctl_request_mem:
 no_pcm_ctl_resource:
@@ -361,7 +395,7 @@ int buzzer_pcm_unload( void )
   iounmap(pcmctl_cm_base_addr);
 
   release_mem_region(phys_base_addr->start + pcm_io_res->start, resource_size(pcm_io_res));
-  release_mem_region(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res));
+  //release_mem_region(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res));
 
   dma_release_channel(dma_chan);
 

@@ -36,7 +36,7 @@
 #include <linux/gpio.h>                 // Required for the GPIO functions
 #include <linux/kthread.h>              // Required for threads code
 
-#include <linux/delay.h>		// sleep functions
+#include <linux/delay.h>		            // sleep functions
 
 #include "buzzer_ioctl.h"
 #include "buzzer_drv.h"
@@ -58,12 +58,14 @@ static int bcm2835_buzzer_remove(struct platform_device *pdev);
 static int dev_open(struct inode* inodep, struct file* filep);
 static int dev_release(struct inode* inodep, struct file* filep);
 static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg);
+static ssize_t dev_write(struct file *filp, const char __user *buf, size_t count, loff_t *pos);
 
 static struct file_operations dev_file_operations = {
   .owner = THIS_MODULE,
   .open = dev_open,
   .release = dev_release,
-  .unlocked_ioctl = dev_ioctl
+  .unlocked_ioctl = dev_ioctl,
+  .write = dev_write
 };
 
 static struct class *device_class;
@@ -148,44 +150,67 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
   //return ret;
 }
 
+static ssize_t dev_write(struct file *filp, const char __user *buf, size_t count, loff_t *pos)
+{
+  return 0;
+}
+
 static int bcm2835_buzzer_probe(struct platform_device *pdev)
 {
+  int ret = 0;
   int result = 0;
 
   printk("BUZZER: probe entered");
 
   device_class = class_create(THIS_MODULE, "buzzer");
-  if(IS_ERR(device_class))
-  {
+  if(IS_ERR(device_class)) {
      printk(KERN_ALERT "BUZZER: Failed to create device class");
-     return PTR_ERR(device_class);
+     ret = PTR_ERR(device_class);
+     goto no_class_create;
   }
 
   /* character device interface */
   result = alloc_chrdev_region(&dev, FIRST_MINOR, MINOR_CNT, "buzzer");
-  if(result < 0)
-  {
+  if(result < 0) {
     printk(KERN_ALERT "BUZZER: Failed registering region");
-    return result;
+    ret = result;
+    goto no_alloc_region;
   }
+
   cdev_init(&c_dev, &dev_file_operations);
   result = cdev_add(&c_dev, dev, MINOR_CNT);
-  if(result < 0)
-  {
+  if(result < 0) {
     printk(KERN_ALERT "BUZZER: Error adding char device to region");
-    return result;
+    ret = result;
+    goto no_dev_init;
   }
 
   char_device_object = device_create(device_class, NULL, dev, NULL,  "buzzer");
-  if(IS_ERR(char_device_object))
-  {
+  if(IS_ERR(char_device_object)) {
     printk(KERN_ALERT "BUZZER: Failed to create char device");
-    return PTR_ERR(char_device_object);
+    ret = PTR_ERR(char_device_object);
+    goto no_char_device_object;
   }
-
-  buzzer_pcm_load(pdev);
-
+  
+  ret = buzzer_pcm_load(pdev);
+  if(ret != 0){
+    printk(KERN_ALERT "BUZZER: Failed to load PCM");
+    goto no_char_device_object;
+  }
+  
   return 0;
+
+no_char_device_object:
+  cdev_del(&c_dev);
+
+no_dev_init:
+  unregister_chrdev_region(dev,MINOR_CNT);
+
+no_alloc_region:
+  class_destroy(device_class);
+
+no_class_create:
+  return ret;
 }
 
 static int bcm2835_buzzer_remove(struct platform_device *pdev)
@@ -213,7 +238,7 @@ static struct platform_driver bcm2835_buzzer_driver = {
 	.remove	= bcm2835_buzzer_remove,
 	.driver = {
 		.name = "bcm2835-buzzer",
-                .owner = THIS_MODULE,
+    .owner = THIS_MODULE,
 		.of_match_table = of_match_ptr(bcm2835_buzzer_match),
 	},
 };

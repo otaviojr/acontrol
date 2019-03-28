@@ -153,42 +153,54 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
 
 static int bcm2835_neopixel_probe(struct platform_device *pdev)
 {
+  int ret = 0;
   int result = 0;
 
   printk("NEOPIXEL: probe entered");
 
   device_class = class_create(THIS_MODULE, "neopixel");
-  if(IS_ERR(device_class))
-  {
+  if(IS_ERR(device_class)) {
      printk(KERN_ALERT "NEOPIXEL: Failed to create device class");
-     return PTR_ERR(device_class);
+     ret = PTR_ERR(device_class);
+     goto no_class_create;
   }
 
   /* character device interface */
   result = alloc_chrdev_region(&dev, FIRST_MINOR, MINOR_CNT, "neopixel");
-  if(result < 0)
-  {
+  if(result < 0) {
     printk(KERN_ALERT "NEOPIXEL: Failed registering region");
-    return result;
+    ret = result;
+    goto no_alloc_region;
   }
+
   cdev_init(&c_dev, &dev_file_operations);
   result = cdev_add(&c_dev, dev, MINOR_CNT);
-  if(result < 0)
-  {
+  if(result < 0) {
     printk(KERN_ALERT "NEOPIXEL: Error adding char device to region");
-    return result;
+    ret = result;
+    goto no_dev_init;
   }
 
   char_device_object = device_create(device_class, NULL, dev, NULL,  "neopixel");
-  if(IS_ERR(char_device_object))
-  {
+  if(IS_ERR(char_device_object)) {
     printk(KERN_ALERT "NEOPIXEL: Failed to create char device");
-    return PTR_ERR(char_device_object);
+    ret = PTR_ERR(char_device_object);
+    goto no_char_device_object;
   }
 
-  neopixel_pwm_init(pdev);
+  return neopixel_pwm_init(pdev);
 
-  return 0;
+no_char_device_object:
+  cdev_del(&c_dev);
+
+no_dev_init:
+  unregister_chrdev_region(dev,MINOR_CNT);
+
+no_alloc_region:
+  class_destroy(device_class);
+
+no_class_create:
+  return ret;
 }
 
 static int bcm2835_neopixel_remove(struct platform_device *pdev)
