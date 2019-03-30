@@ -83,7 +83,7 @@ pub struct NeoPixelSpinnerAnimation {
   red: u8,
   green: u8,
   blue: u8,
-//  custom: Option<Box<std::any::Any + Send + Sync>>,
+  //custom: Option<Box<std::any::Any + Send + Sync>>,
 }
 
 pub struct NeoPixelBlinkAnimation {

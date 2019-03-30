@@ -32,4 +32,9 @@
   #define FIRST_MINOR       1
   #define MINOR_CNT         3
 
+  struct buzzer_tone {
+    unsigned long freq;
+    unsigned long period;
+  };
+
 #endif //__BUZZER_DRV_H__

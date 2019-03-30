@@ -29,12 +29,12 @@
 #ifndef __NEOPIXEL_IOCTL_H__
 #define __NEOPIXEL_IOCTL_H__
 
-  #define NEOPIXEL_IOC_MAGIC                'N'
+  #define NEOPIXEL_IOC_MAGIC                  'N'
 
   #define NEOPIXEL_IOCTL_GET_VERSION          _IOR(NEOPIXEL_IOC_MAGIC, 1, unsigned char[6])
-  #define NEOPIXEL_IOCTL_GET_NUM_LEDS	      _IOR(NEOPIXEL_IOC_MAGIC, 2, long*)
+  #define NEOPIXEL_IOCTL_GET_NUM_LEDS	        _IOR(NEOPIXEL_IOC_MAGIC, 2, long*)
   #define NEOPIXEL_IOCTL_SET_PIXEL            _IOW(NEOPIXEL_IOC_MAGIC, 3, struct neopixel_pixel*)
-  #define NEOPIXEL_IOCTL_SHOW		      _IOR(NEOPIXEL_IOC_MAGIC, 4, long*)
+  #define NEOPIXEL_IOCTL_SHOW		              _IOR(NEOPIXEL_IOC_MAGIC, 4, long*)
   #define NEOPIXEL_IOCTL_HARDWARE_TEST        _IOR(NEOPIXEL_IOC_MAGIC, 5, long*)
   //#define OTAROVER_IOCTL_SET_M_ENABLE       _IOW(OTAROVER_IOC_MAGIC, 2, long*)
   //#define OTAROVER_IOCTL_GET_M1_SPEED       _IOR(OTAROVER_IOC_MAGIC, 3, long*)

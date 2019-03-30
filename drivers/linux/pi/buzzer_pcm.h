@@ -14,25 +14,25 @@
 
 #define PCM_CS_A_STBY			(1 << 25)
 #define PCM_CS_A_SYNC			(1 << 24)
-#define PCM_CS_A_RXSEX		(1 << 23)
+#define PCM_CS_A_RXSEX		    (1 << 23)
 #define PCM_CS_A_RXF			(1 << 22)
 #define PCM_CS_A_TXE			(1 << 21)
 #define PCM_CS_A_RXD			(1 << 20)
 #define PCM_CS_A_TXD			(1 << 19)
 #define PCM_CS_A_RXR			(1 << 18)
 #define PCM_CS_A_TXW			(1 << 17)
-#define PCM_CS_A_RXERR		(1 << 16)
-#define PCM_CS_A_TXERR		(1 << 15)
-#define PCM_CS_A_RXSYNC		(1 << 14)
-#define PCM_CS_A_TXSYNC		(1 << 13)
-#define PCM_CS_A_DMAEN		(1 << 9)
-#define PCM_CS_A_RXTHR(v)	(v << 7)
-#define PCM_CS_A_TXTHR(v)	(v << 5)
-#define PCM_CS_A_RXCLR    (1 << 4)
-#define PCM_CS_A_TXCLR    (1 << 3)
-#define PCM_CS_A_TXON     (1 << 2)
-#define PCM_CS_A_RXON     (1 << 1)
-#define PCM_CS_A_EN       (1 << 0)
+#define PCM_CS_A_RXERR		    (1 << 16)
+#define PCM_CS_A_TXERR		    (1 << 15)
+#define PCM_CS_A_RXSYNC		    (1 << 14)
+#define PCM_CS_A_TXSYNC		    (1 << 13)
+#define PCM_CS_A_DMAEN		    (1 << 9)
+#define PCM_CS_A_RXTHR(v)	    (v << 7)
+#define PCM_CS_A_TXTHR(v)	    (v << 5)
+#define PCM_CS_A_RXCLR          (1 << 4)
+#define PCM_CS_A_TXCLR          (1 << 3)
+#define PCM_CS_A_TXON           (1 << 2)
+#define PCM_CS_A_RXON           (1 << 1)
+#define PCM_CS_A_EN             (1 << 0)
 
 #define PCM_MODE_A_CLK_DIS      (1 << 28)
 #define PCM_MODE_A_PDMN         (1 << 27)
@@ -53,7 +53,7 @@
 #define PCM_RXC_A_CH2WEX        (1 << 15)
 #define PCM_RXC_A_CH2EN         (1 << 14)
 #define PCM_RXC_A_CH2POS(v)     (v << 4)
-#define PCM_RXC_A_CH2WID(v)      (v << 0)
+#define PCM_RXC_A_CH2WID(v)     (v << 0)
 
 #define PCM_TXC_A_CH1WEX        (1 << 31)
 #define PCM_TXC_A_CH1EN         (1 << 30)
@@ -74,10 +74,10 @@
 #define PCM_INTEN_A_RXR         (1 << 1)
 #define PCM_INTEN_A_TXW         (1 << 0)
 
-#define PCM_INTSTC_A_RXERR       (1 << 3)
-#define PCM_INTSTC_A_TXERR       (1 << 2)
-#define PCM_INTSTC_A_RXR         (1 << 1)
-#define PCM_INTSTC_A_TXW         (1 << 0)
+#define PCM_INTSTC_A_RXERR      (1 << 3)
+#define PCM_INTSTC_A_TXERR      (1 << 2)
+#define PCM_INTSTC_A_RXR        (1 << 1)
+#define PCM_INTSTC_A_TXW        (1 << 0)
 
 /* pcm clt registers base address */
 #define PCM_CM_CTL	0x00
@@ -96,5 +96,6 @@
 
 int buzzer_pcm_load(struct platform_device* pdev);
 int buzzer_pcm_unload( void );
+int buzzer_pcm_play_tone(struct buzzer_tone* tone);
 
 #endif //__BUZZER_PCM_H__

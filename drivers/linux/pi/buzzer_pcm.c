@@ -41,13 +41,14 @@
 #include <linux/delay.h>
 #include <linux/kthread.h>
 
+#include "buzzer_drv.h"
 #include "buzzer_pcm.h"
 
 static volatile void* __iomem pcm_base_addr;
 static volatile void* __iomem pcmctl_cm_base_addr;
 
 static uint8_t* buffer = NULL;
-static uint8_t* dma_buffer = NULL;
+//static uint8_t* dma_buffer = NULL;
 
 static unsigned long buffer_len;
 
@@ -67,6 +68,8 @@ static dma_cookie_t dma_cookie;
 #define PCM_DMA_DREQ 		  2
 #define BUS_ADDR_OFFSET		0xC0000000
 
+#define PCM_FREQUENCY     125000
+
 static int pcm_clock_init( void )
 {
   uint32_t reg;
@@ -77,11 +80,11 @@ static int pcm_clock_init( void )
 
   msleep(100);
 
-  //while( (reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL)) & PCM_CM_CTL_BUSY )
-  //{
-  //  msleep(100);
-  //  printk("Waiting pcm busy bit");
-  //}
+  while( (reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL)) & PCM_CM_CTL_BUSY )
+  {
+    msleep(100);
+    printk("Waiting pcm busy bit");
+  }
 
   msleep(100);
 
@@ -199,26 +202,28 @@ static void buzzer_callback(void * param)
 
   if(end)
   {
-    dma_pool_free(buz_dma_pool, dma_buffer, dma_addr);
+    dma_unmap_single(dev, dma_addr, buffer_len, DMA_TO_DEVICE);
   }
 
-  //printk("BUZZER: dma callback finished");
+  printk("BUZZER: dma callback finished");
 }
 
 static int start_dma( void )
 {
-  //printk("BUZZER(%s): DMA Started", __func__);
+  printk("BUZZER(%s): DMA Started", __func__);
 
-  dma_buffer = dma_pool_alloc(buz_dma_pool, GFP_KERNEL, &dma_addr);
-  if(!dma_buffer)
+  dma_addr = dma_map_single(dev, buffer, buffer_len, DMA_TO_DEVICE);
+  if(dma_mapping_error(dev, dma_addr))
   {
     printk("BUZZER(%s): No dma memory available", __func__);
     return -ENOMEM;
   }
 
-  //printk("NEOOPIXEL(%s): dma_buffer_virt = 0x%x; dma_buffer_phys = 0x%x; dma_buffer_length = %lu", __func__, (unsigned int)dma_buffer, (unsigned int)dma_addr, buffer_len);
-
-  //fill_dma_buffer();
+  printk("BUZZER(%s): dma_buffer_virt = 0x%x; dma_buffer_phys = 0x%x; dma_buffer_length = %lu", 
+					__func__, 
+					(unsigned int)buffer, 
+					(unsigned int)dma_addr, 
+					buffer_len);
 
   dma_desc = dmaengine_prep_slave_single(dma_chan, dma_addr + BUS_ADDR_OFFSET, buffer_len, DMA_TO_DEVICE, DMA_PREP_INTERRUPT );
 
@@ -238,6 +243,40 @@ static int start_dma( void )
   }
 
   dma_async_issue_pending(dma_chan);
+
+  return 0;
+}
+
+int buzzer_pcm_play_tone(struct buzzer_tone* tone) {
+
+  unsigned long i;
+  unsigned long bytes = (PCM_FREQUENCY / tone->freq)/8;
+
+  printk("BUZZER(%s): playing tone, switching at %d bytes\n", __func__, bytes);
+
+  if(buffer != NULL) {
+    kfree(buffer);
+  }
+
+  buffer_len = (PCM_FREQUENCY * tone->period)/8;
+
+  printk("BUZZER(%s): Playing tone buffer length: %d", __func__, buffer_len);
+
+  buffer = kzalloc(buffer_len, GFP_KERNEL | GFP_ATOMIC);
+  if(buffer == NULL) {
+    printk("Failed to allocate pcm buffer\n");
+    return -1;
+  }
+
+  unsigned short int out = 0xFF;
+  for(i = 0; i < buffer_len; i++) {
+    buffer[i] = out;
+
+    if(i % bytes == 0)
+      out = (out == 0xFF ? 0x00 : 0xFF);
+  }
+
+  start_dma();
 
   return 0;
 }
@@ -399,8 +438,9 @@ int buzzer_pcm_unload( void )
 
   dma_release_channel(dma_chan);
 
-//  kfree(buffer);
-//  dma_pool_destroy(neo_dma_pool);
+  if(buffer != NULL){
+    kfree(buffer);
+  }
 
   return 0;
 }

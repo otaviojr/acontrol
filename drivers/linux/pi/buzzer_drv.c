@@ -89,7 +89,7 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
 {
   long ret = 0;
   //long value = 0;
-  //struct neopixel_pixel pixel;
+  struct buzzer_tone tone;
 
   if (_IOC_TYPE(cmd) != BUZZER_IOC_MAGIC) return -EINVAL;
   if (_IOC_NR(cmd) > BUZZER_IOCTL_MAX_CMD) return -EINVAL;
@@ -100,16 +100,14 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
     ret = !access_ok(VERIFY_READ, (void *)arg, _IOC_SIZE(cmd));
   }
 
-  return -EACCES;
+  if (ret) return -EACCES;
 
-  //if (ret) return -EACCES;
-
-  //switch(cmd){
-  //  case NEOPIXEL_IOCTL_GET_VERSION:
-  //    if(copy_to_user((char*)arg, module_version, strlen(module_version) )){
-  //      return -EACCES;
-  //    }
-  //    break;
+  switch(cmd){
+    case BUZZER_IOCTL_GET_VERSION:
+      if(copy_to_user((char*)arg, module_version, strlen(module_version) )){
+        return -EACCES;
+      }
+      break;
 
   //  case  NEOPIXEL_IOCTL_GET_NUM_LEDS:
   //    value = neopixel_pwm_get_num_leds();
@@ -118,13 +116,13 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
   //    }
   //    break;
 
-  //  case NEOPIXEL_IOCTL_SET_PIXEL:
-  //    if(copy_from_user((struct neopixel_pixel*)&pixel, (struct neopixel_pixel*)arg, sizeof(struct neopixel_pixel))){
-  //      return -EFAULT;
-  //    }
-      //printk("NEOPIXEL: set_pixel: %lu,%d,%d,%d", pixel.pixel, pixel.red, pixel.green, pixel.blue);
-  //    neopixel_pwm_set_pixel(pixel.pixel, pixel.red, pixel.green, pixel.blue);
-  //    break;
+    case BUZZER_IOCTL_PLAY_TONE:
+      if(copy_from_user((struct buzzer_tone*)&tone, (struct buzzer_tone*)arg, sizeof(struct buzzer_tone))){
+        return -EFAULT;
+      }
+      printk("BUZZER: play_tone: %lu,%lu", tone.freq, tone.period);
+      buzzer_pcm_play_tone(&tone);
+      break;
 
   //  case NEOPIXEL_IOCTL_SHOW:
       //printk("NEOPIXEL: show");
@@ -145,9 +143,9 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
   //  default:
   //    printk("NEOPIXEL: Unknow ioctl command");
   //    return -EINVAL;
-  //}
+  }
 
-  //return ret;
+  return ret;
 }
 
 static ssize_t dev_write(struct file *filp, const char __user *buf, size_t count, loff_t *pos)

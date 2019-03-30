@@ -29,9 +29,10 @@
 #ifndef __BUZZER_IOCTL_H__
 #define __BUZZER_IOCTL_H__
 
-  #define BUZZER_IOC_MAGIC                'N'
+  #define BUZZER_IOC_MAGIC                  'B'
 
-  #define BUZZER_IOCTL_GET_VERSION          _IOR(NEOPIXEL_IOC_MAGIC, 1, unsigned char[6])
-  #define BUZZER_IOCTL_MAX_CMD            1
+  #define BUZZER_IOCTL_GET_VERSION          _IOR(BUZZER_IOC_MAGIC, 1, unsigned char[6])
+  #define BUZZER_IOCTL_PLAY_TONE            _IOW(BUZZER_IOC_MAGIC, 2, struct buzzer_tone*)
+  #define BUZZER_IOCTL_MAX_CMD              2
 
 #endif //__BUZZER_IOCTL_H__
