@@ -2,7 +2,7 @@
  * @file   neopixel_ioctl.h
  * @author Otavio Ribeiro
  * @date   16 Dec 2018
- * @brief  Kernel IOCTL definitions
+ * @brief  Neopixel linux kernel module IOCTL definitions
  *
  * Copyright (c) 2018 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *

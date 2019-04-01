@@ -2,7 +2,7 @@
  * @file   neopixel_pwm.c
  * @author Otavio Ribeiro
  * @date   17 Dec 2018
- * @brief  NeoPixel PWM hardware
+ * @brief  NeoPixel linux kernel PWM module
  *
  * Copyright (c) 2018 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
