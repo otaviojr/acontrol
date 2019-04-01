@@ -278,7 +278,8 @@ int buzzer_pcm_play_tone(struct buzzer_tone* tone) {
     kfree(buffer);
   }
 
-  // we multiply for 10 for any unknown reason. Stoping with math... 
+  // we multiply for 10 to get the right period
+  // for any unknown reason. Stoping with math... 
   // starting tunning by using heuristic algorithm.... 3 a.m and 
   // I have to  work tomorow
   buffer_len = (((PCM_FREQUENCY/1000) * tone->period)/8) *10; 
@@ -387,22 +388,6 @@ int buzzer_pcm_load( struct platform_device *pdev )
     printk("BUZZER: PCMCTL clock address remapped");
   }
 
-  //buffer_len = num_leds * BYTES_PER_LED + RESET_BYTES;
-  //buffer = kzalloc(buffer_len, GFP_KERNEL | GFP_ATOMIC);
-  //if(buffer == NULL)
-  //{
-  //  printk("Failed to allocate pwm buffer");
-  //  goto no_buffer;
-  //}
-
-  //printk("BUZZER(%s): buffer_virt = 0x%x; buffer_length = %lu", __func__, (unsigned int)buffer, buffer_len);
-
-  //buzzer_dma_pool =  dma_pool_create("buzzer_dma", dev, buffer_len, 32, 4096);
-  //if(!buzzer_dma_pool){
-  //  printk("BUZZER(%s): Error creating dma memory pool.", __func__);
-  //  goto no_dma_pool;
-  //}
-
   dma_chan = dma_request_slave_channel(dev, "buzzer-pcm-dma");
   if(!dma_chan) {
     printk("BUZZER(%s): Error requesting DMA channel", __func__);
@@ -431,9 +416,6 @@ no_dma_config:
 
 no_dma_request_channel:
 no_dma_pool:
-//  kfree(buffer);
-
-no_buffer:
   iounmap(pcmctl_cm_base_addr);
 
 no_remap_pcm_ctl:
