@@ -2,7 +2,7 @@
  * @file   buzzer_pcm.c
  * @author Otavio Ribeiro
  * @date   23 Mar 2019
- * @brief  Buzzer PCM hardware
+ * @brief  Buzzer PCM linux kernel device driver
  *
  * Copyright (c) 2019 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
