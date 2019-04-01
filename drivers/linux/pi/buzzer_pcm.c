@@ -72,7 +72,7 @@ static dma_cookie_t dma_cookie;
 
 static int pcm_clock_init( void )
 {
-  uint32_t reg;
+  uint32_t reg, counter;
 
   //disable pcm clock
   reg = PCM_CM_CTL_PASSWORD | PCM_CM_CTL_KILL;
@@ -80,34 +80,44 @@ static int pcm_clock_init( void )
 
   msleep(100);
 
-  while( (reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL)) & PCM_CM_CTL_BUSY )
+  counter = 0;
+  while( ((reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL)) & PCM_CM_CTL_BUSY) != 0)
   {
     msleep(100);
-    printk("Waiting pcm busy bit");
+    printk("Waiting pcm busy bit: 0x%X\n", reg);
+    if(counter++ == 100){
+      printk("Timeout waiting busy bit.\n");
+      return -1;
+    }
   }
 
   msleep(100);
 
   //125Khz = 1 bit every 8*10^-6 seconds
-  reg = PCM_CM_CTL_PASSWORD | PCM_CM_DIV_DIVI(4000) | PCM_CM_DIV_DIVF(0);
+  reg = PCM_CM_CTL_PASSWORD | PCM_CM_DIV_DIVI(100) | PCM_CM_DIV_DIVF(0);
   writel(reg, pcmctl_cm_base_addr + PCM_CM_DIV);
 
   msleep(100);
 
-  //PLLD - PLLD 500Mhz - MASH 1
-  reg = PCM_CM_CTL_PASSWORD | PCM_CM_CTL_MASH(2) | PCM_CM_CTL_SRC(6);
-  writel(reg, pcmctl_cm_base_addr + PCM_CM_CTL);
-
-  msleep(100);
-
-  reg |= PCM_CM_CTL_ENAB;
+  //PLLD - PLLD 500Mhz - MASH 0
+  reg = PCM_CM_CTL_PASSWORD | PCM_CM_CTL_MASH(0) | PCM_CM_CTL_SRC(6);
   writel(reg, pcmctl_cm_base_addr + PCM_CM_CTL);
   printk("writing PCM_CM_CTL=0x%X",reg);
 
   msleep(100);
 
   reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL);
-  printk("reading PCM_CM_CTL=0x%X",reg);
+  printk("reading PCM_CM_CTL=0x%X", reg);
+
+  reg |= PCM_CM_CTL_PASSWORD | PCM_CM_CTL_ENAB;
+
+  writel(reg, pcmctl_cm_base_addr + PCM_CM_CTL);
+  printk("writing PCM_CM_CTL=0x%X",reg);
+
+  msleep(100);
+
+  reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL);
+  printk("reading PCM_CM_CTL=0x%X", reg);
 
   return 0;
 }
@@ -124,7 +134,9 @@ static int pcm_init( void )
   msleep(100);
 
   //configure pcm clock source and parameters
-  pcm_clock_init();
+  if(pcm_clock_init() < 0) {
+    return -1;
+  }
 
   reg = PCM_MODE_A_FLEN(127) | //A frame is around 1ms of buzzer audio
         PCM_MODE_A_FSLEN(127);
@@ -142,8 +154,8 @@ static int pcm_init( void )
 
   msleep(100);
 
-  reg = PCM_DREQ_A_TX_PANIC(1) |
-        PCM_DREQ_A_TX(4);
+  reg = PCM_DREQ_A_TX_PANIC(10) |
+        PCM_DREQ_A_TX(63);
   writel(reg, pcm_base_addr + PCM_DREQ_A);
 
   msleep(100);
@@ -177,25 +189,25 @@ static void buzzer_callback(void * param)
 
   switch (status) {
     case DMA_IN_PROGRESS:
-      //printk("BUZZER(%s): Received DMA_IN_PROGRESS\n", __func__);
+      printk("BUZZER(%s): Received DMA_IN_PROGRESS\n", __func__);
       break;
 
     case DMA_PAUSED:
-      //printk("BUZZER(%s): Received DMA_PAUSED\n", __func__);
+      printk("BUZZER(%s): Received DMA_PAUSED\n", __func__);
       break;
 
     case DMA_ERROR:
-      //printk("BUZZER(%s): Received DMA_ERROR\n", __func__);
+      printk("BUZZER(%s): Received DMA_ERROR\n", __func__);
       end = 1;
       break;
 
     case DMA_COMPLETE:
-      //printk("BUZZER(%s): Received DMA_COMPLETE\n", __func__);
+      printk("BUZZER(%s): Received DMA_COMPLETE\n", __func__);
       end = 1;
       break;
 
     default:
-      //printk("BUZZER(%s): Received unknown status\n", __func__);
+      printk("BUZZER(%s): Received unknown status\n", __func__);
       end = 1;
       break;
   }
@@ -203,6 +215,7 @@ static void buzzer_callback(void * param)
   if(end)
   {
     dma_unmap_single(dev, dma_addr, buffer_len, DMA_TO_DEVICE);
+    dma_addr = NULL;
   }
 
   printk("BUZZER: dma callback finished");
@@ -211,6 +224,10 @@ static void buzzer_callback(void * param)
 static int start_dma( void )
 {
   printk("BUZZER(%s): DMA Started", __func__);
+
+  if(dma_addr != NULL){
+    dma_unmap_single(dev, dma_addr, buffer_len, DMA_TO_DEVICE);
+  }
 
   dma_addr = dma_map_single(dev, buffer, buffer_len, DMA_TO_DEVICE);
   if(dma_mapping_error(dev, dma_addr))
@@ -250,15 +267,21 @@ static int start_dma( void )
 int buzzer_pcm_play_tone(struct buzzer_tone* tone) {
 
   unsigned long i;
+  unsigned int out = 0xFF;
   unsigned long bytes = (PCM_FREQUENCY / tone->freq)/8;
 
-  printk("BUZZER(%s): playing tone, switching at %d bytes\n", __func__, bytes);
+  printk("BUZZER(%s): playing tone, switching after %d bytes\n", __func__, bytes);
+
+  dmaengine_terminate_sync(dma_chan);
 
   if(buffer != NULL) {
     kfree(buffer);
   }
 
-  buffer_len = (PCM_FREQUENCY * tone->period)/8;
+  // we multiply for 10 for any unknown reason. Stoping with math... 
+  // starting tunning by using heuristic algorithm.... 3 a.m and 
+  // I have to  work tomorow
+  buffer_len = (((PCM_FREQUENCY/1000) * tone->period)/8) *10; 
 
   printk("BUZZER(%s): Playing tone buffer length: %d", __func__, buffer_len);
 
@@ -268,12 +291,12 @@ int buzzer_pcm_play_tone(struct buzzer_tone* tone) {
     return -1;
   }
 
-  unsigned short int out = 0xFF;
   for(i = 0; i < buffer_len; i++) {
     buffer[i] = out;
 
-    if(i % bytes == 0)
+    if(i % bytes == 0){
       out = (out == 0xFF ? 0x00 : 0xFF);
+    }
   }
 
   start_dma();
@@ -394,10 +417,15 @@ int buzzer_pcm_load( struct platform_device *pdev )
     goto no_dma_config;
   }
 
-  pcm_init();
+  if(pcm_init() < 0){
+    printk("BUZZER(%s): Error configuring PCM device\n", __func__);
+    ret = -ENODEV;
+    goto pcm_init_error;
+  }
 
   return 0;
 
+pcm_init_error:
 no_dma_config:
   dma_release_channel(dma_chan);
 

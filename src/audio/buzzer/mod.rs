@@ -126,13 +126,102 @@ impl Audio for Buzzer {
   fn play_error(&mut self) -> Result<(), String> {
     let buzzer = self.buzzer.clone();
     let _handler = thread::spawn(move || {
-      for i in 0..3 {
-        let tone: buzzer_ioctl::BuzzerTone = buzzer_ioctl::BuzzerTone { freq: 122, period: 6 };
-        buzzer.lock().unwrap().play_tone(&tone);
-        thread::sleep(Duration::from_millis(1000));
-        //buzzer.lock().unwrap().set_buzz(false);
-        //thread::sleep(Duration::from_millis(500));
-      }
+
+      let mut tone: buzzer_ioctl::BuzzerTone = buzzer_ioctl::BuzzerTone { freq: 261, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 294, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 329, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 349, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 349, period: 400 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(500));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 349, period: 400 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(500));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 261, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 294, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 261, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 294, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 294, period: 400 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(500));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 294, period: 400 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(500));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 261, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 392, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 349, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 329, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 329, period: 400 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(500));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 329, period: 400 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(500));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 261, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 294, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 329, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 349, period: 600 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(600));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 349, period: 400 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(500));
+
+      tone = buzzer_ioctl::BuzzerTone { freq: 349, period: 400 };
+      buzzer.lock().unwrap().play_tone(&tone);
+      thread::sleep(Duration::from_millis(500));
     });
 
     Ok(())

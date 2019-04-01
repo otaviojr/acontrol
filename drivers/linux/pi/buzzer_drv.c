@@ -189,14 +189,17 @@ static int bcm2835_buzzer_probe(struct platform_device *pdev)
     ret = PTR_ERR(char_device_object);
     goto no_char_device_object;
   }
-  
+
   ret = buzzer_pcm_load(pdev);
   if(ret != 0){
     printk(KERN_ALERT "BUZZER: Failed to load PCM");
-    goto no_char_device_object;
+    goto pcm_fails;
   }
-  
+
   return 0;
+
+pcm_fails:
+  device_destroy(device_class, dev);
 
 no_char_device_object:
   cdev_del(&c_dev);
