@@ -124,7 +124,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
 				nfc_drv: Box<NfcReader+Sync+Send>, 
 				audio_drv: Box<Audio+Sync+Send>,
 				persist_drv: Box<Persist+Sync+Send>,
-                                display_drv: Box<Display+Sync+Send>) -> bool {
+        display_drv: Box<Display+Sync+Send>) -> bool {
 
   let asystem = &ACONTROL_SYSTEM;
   unsafe {
