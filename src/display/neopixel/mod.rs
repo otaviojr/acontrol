@@ -266,7 +266,7 @@ impl NeoPixel {
             break; 
           }
 
-	  thread::sleep(Duration::from_millis(wait));
+	        thread::sleep(Duration::from_millis(wait));
         }
       }
       Ok(())
@@ -419,52 +419,6 @@ impl NeoPixel {
 
       Ok(100)
     })
-
-    //let mut animation_info = NeoPixelSpinnerAnimation::new(0,0,255);
-    //self.animation_spinner(animation_info, |next: bool, params: &mut NeoPixelSpinnerAnimation| {
-    //  Ok(100)
-    //})
-
-    //let _ret = self.show_success("Success Test", 5);
-    //let _ret = self.wait_animation_ends();
-
-    //thread::sleep(Duration::from_millis(10000));
-    //self.show_error("Error Test", ErrorType::Authorization, 20);
-
-    //let mut animation_info = NeoPixelBlinkAnimation::new(255,0,0,3);
-    //self.animation_blink(animation_info, |next: bool, params: &mut NeoPixelBlinkAnimation| {
-    //  Ok(500)
-    //});
-
-    //let mut animation_info = NeoPixelWipeAnimation::repeat(255,0,0,3);
-    //self.animation_color_wipe(animation_info, |next: bool, params:&mut NeoPixelWipeAnimation| {
-    //  if next == true {
-    //    match params.repeat {
-    //      3 => {
-    //        params.red = 255;
-    //        params.green = 0;
-    //        params.blue = 0;
-    //      },
-    //      2 => {
-    //        params.red = 0;
-    //        params.green = 255;
-    //        params.blue = 0;
-    //      },
-    //      1 => {
-    //        params.red = 0;
-    //        params.green = 0;
-    //        params.blue = 255;
-    //      },
-    //      _ => {
-    //        params.red = 0;
-    //        params.green = 0;
-    //        params.blue = 0;
-    //      }
-    //    }
-    //  }
-
-    //  Ok(150)
-    //});
   }
 }
 
