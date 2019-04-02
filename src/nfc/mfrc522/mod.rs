@@ -144,6 +144,7 @@ impl Error {
   }
 }
 
+#[allow(dead_code)]
 struct Mfrc522ThreadSafe {
   spidev: Option<Spidev>,
   ss: Option<Pin>,
@@ -265,7 +266,6 @@ impl Mfrc522ThreadSafe {
     //calc crc command
     try!(self.command(Command::CalcCRC));
     
-    let irq: u8;
     let now = Instant::now();
     loop {
       let sec = (now.elapsed().as_secs() as f64) + (now.elapsed().subsec_nanos() as f64 / 1000_000_000.0);

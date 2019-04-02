@@ -12,6 +12,7 @@ use serialport::prelude::*;
 
 #[derive(Clone, Copy, PartialEq)]
 #[allow(dead_code)]
+#[allow(non_camel_case_types)]
 pub enum FingerprintDriverState {
   READ,
   ENROLL1,
@@ -21,6 +22,7 @@ pub enum FingerprintDriverState {
   ENROLL2_WAIT,
 }
 
+#[allow(dead_code)]
 impl FingerprintDriverState {
 
   fn name(&self) -> &'static str {
@@ -232,6 +234,7 @@ struct FingerprintTemplatePacket {
   template: Option<Vec<u8>>
 }
 
+#[allow(dead_code)]
 impl FingerprintTemplatePacket {
   fn new() -> Self {
     FingerprintTemplatePacket {template: None }

@@ -2,11 +2,12 @@ use fingerprint::{Fingerprint, FingerprintState, FingerprintData};
 use nfc::{NfcReader};
 use audio::{Audio};
 use persist::{Persist, Card};
-use display::{Display, DisplayState, Animation, AnimationType, AnimationColor};
+use display::{Display, Animation, AnimationType, AnimationColor};
 
 use std::sync::Mutex;
 use std::collections::HashMap;
 
+#[derive(PartialEq)]
 #[allow(dead_code)]
 pub enum NFCSystemState {
   READ,
@@ -198,16 +199,25 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               FingerprintState::READING => {
               },
               FingerprintState::WAITING => {
+                let _ret = acontrol_system_get_audio_drv(|audio|{
+                  let _ret = audio.play_alert();
+                });
                 let _ret = acontrol_system_get_display_drv(|display|{
                   let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
                 });
               },
               FingerprintState::SUCCESS => {
+                let _ret = acontrol_system_get_audio_drv(|audio|{
+                  let _ret = audio.play_success();
+                });
                 let _ret = acontrol_system_get_display_drv(|display|{
                   let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",0);
                 });
               },
               FingerprintState::ERROR => {
+                let _ret = acontrol_system_get_audio_drv(|audio|{
+                  let _ret = audio.play_error();
+                });
                 let _ret = acontrol_system_get_display_drv(|display|{
                   let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
                   let _ret = display.wait_animation_ends();
@@ -216,6 +226,11 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               FingerprintState::ENROLL => {
                 let data_locked = (*ACONTROL_SYSTEM).fingerprint_data.lock().unwrap();
                 if let (&Some(ref name), &Some(ref pos)) = (&data_locked.name, &data_locked.pos){
+
+                  let _ret = acontrol_system_get_audio_drv(|audio|{
+                    let _ret = audio.play_new();
+                  });
+
                   let _ret = acontrol_system_get_display_drv(|display|{
                     let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",3);
                     let _ret = display.wait_animation_ends();
@@ -224,12 +239,18 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                 }
               },
               FingerprintState::AUTHORIZED => {
+                let _ret = acontrol_system_get_audio_drv(|audio|{
+                  let _ret = audio.play_granted();
+                });
                 let _ret = acontrol_system_get_display_drv(|display|{
                   let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",3);
                   let _ret = display.wait_animation_ends();
                 });
               }
               FingerprintState::NOT_AUTHORIZED => {
+                let _ret = acontrol_system_get_audio_drv(|audio|{
+                  let _ret = audio.play_denieded();
+                });
                 let _ret = acontrol_system_get_display_drv(|display|{
                   let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
                   let _ret = display.wait_animation_ends();
@@ -279,17 +300,51 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
 
                           if let Ok(card) = drv.lock().unwrap().nfc_find(&uuid) {
                             println!("Card {:?} from {} authorized!", uuid, String::from_utf8(card.name).unwrap());
+
+                            let _ret = acontrol_system_get_audio_drv(|audio|{
+                              let _ret = audio.play_granted();
+                            });
+                            let _ret = acontrol_system_get_display_drv(|display|{
+                              let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",3);
+                              let _ret = display.wait_animation_ends();
+                            });
+
                             //TODO: Access Granted
+
                           } else {
                             println!("Card {:?} not found!", uuid);
+
+                            let _ret = acontrol_system_get_audio_drv(|audio|{
+                              let _ret = audio.play_denieded();
+                            });
+                            let _ret = acontrol_system_get_display_drv(|display|{
+                              let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
+                              let _ret = display.wait_animation_ends();
+                            });
                           }
 
                         } else {
                           println!("Invalid card signature: {:?} - {:?}",val, NFC_CARD_SIGNATURE.as_bytes().to_vec());
+
+                          let _ret = acontrol_system_get_audio_drv(|audio|{
+                            let _ret = audio.play_denieded();
+                          });
+                          let _ret = acontrol_system_get_display_drv(|display|{
+                            let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
+                            let _ret = display.wait_animation_ends();
+                          });
                         }
                       },
                       Err(err) => {
                         println!("Error reading card: {}", err);
+
+                        let _ret = acontrol_system_get_audio_drv(|audio|{
+                          let _ret = audio.play_denieded();
+                        });
+                        let _ret = acontrol_system_get_display_drv(|display|{
+                          let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
+                          let _ret = display.wait_animation_ends();
+                        });
                       }
                     }
                   },
@@ -309,6 +364,13 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               NFCSystemState::WRITE => {
                 if let Err(err) = drv_inner.write_data(&uuid, *NFC_CARD_SIGNATURE_BLOCK, &NFC_CARD_SIGNATURE.as_bytes().to_vec()) {
                   eprintln!("No... we really have a problem here. Can't write either.");
+                  let _ret = acontrol_system_get_audio_drv(|audio|{
+                    let _ret = audio.play_error();
+                  });
+                  let _ret = acontrol_system_get_display_drv(|display|{
+                    let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
+                    let _ret = display.wait_animation_ends();
+                  });
                 } else {
                   println!("Ok... signature written successfully!");
                   match *ACONTROL_SYSTEM.persist_drv.lock().unwrap() {
@@ -318,6 +380,22 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                       if let Err(_err) = persist_drv.nfc_find(&uuid) {
                         if let Err(err) = persist_drv.nfc_add(&uuid, &params[&String::from("name")].as_bytes().to_vec()) {
                           eprintln!("Error persisting card info. Card not authorized! => ({})",err);
+                          let _ret = acontrol_system_get_audio_drv(|audio|{
+                            let _ret = audio.play_error();
+                          });
+                          let _ret = acontrol_system_get_display_drv(|display|{
+                            let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
+                            let _ret = display.wait_animation_ends();
+                          });
+                        } else {
+                          println!("Card successfully added");
+                          let _ret = acontrol_system_get_audio_drv(|audio|{
+                            let _ret = audio.play_new();
+                          });
+                          let _ret = acontrol_system_get_display_drv(|display|{
+                            let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",3);
+                            let _ret = display.wait_animation_ends();
+                          });
                         }
                       } else {
                         println!("Card already white listed");
@@ -334,6 +412,21 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                 if let Err(err) = drv_inner.restore(&uuid) {
                   eprintln!("Error restoring!");
                   eprintln!("format return: {}", err);
+                  let _ret = acontrol_system_get_audio_drv(|audio|{
+                    let _ret = audio.play_error();
+                  });
+                  let _ret = acontrol_system_get_display_drv(|display|{
+                    let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Success, "Done",3);
+                    let _ret = display.wait_animation_ends();
+                  });
+                } else {
+                  let _ret = acontrol_system_get_audio_drv(|audio|{
+                    let _ret = audio.play_success();
+                  });
+                  let _ret = acontrol_system_get_display_drv(|display|{
+                    let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",3);
+                    let _ret = display.wait_animation_ends();
+                  });
                 }
                 next_nfc_system_state = Some(NFCSystemState::READ)
               }
@@ -365,6 +458,15 @@ pub fn acontrol_system_set_nfc_state(state: NFCSystemState, params: Option<HashM
     *ACONTROL_SYSTEM.nfc_state_params.lock().unwrap() = p;
   }
   *ACONTROL_SYSTEM.nfc_state.lock().unwrap() = state;
+
+  if *ACONTROL_SYSTEM.nfc_state.lock().unwrap() == NFCSystemState::AUTHORIZE {
+    let _ret = acontrol_system_get_audio_drv(|audio|{
+      let _ret = audio.play_alert();
+    });
+    let _ret = acontrol_system_get_display_drv(|display|{
+      let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+    });
+  }
 }
 
 pub fn acontrol_system_fingerprint_start_enroll(params: HashMap<String,String>) -> Result<(), String>{
@@ -414,6 +516,21 @@ pub fn acontrol_system_get_display_drv<F, T>(f:F) -> Result<(),String>
     },
     None => {
       Err(String::from("Display device not found"))
+    }
+  }
+}
+
+pub fn acontrol_system_get_audio_drv<F, T>(f:F) -> Result<(),String>
+  where F: FnOnce(&mut Audio) -> T {
+
+  match *ACONTROL_SYSTEM.audio_drv.lock().unwrap()  {
+    Some(ref drv) => {
+      let audio = &mut *(*drv.lock().unwrap());
+      f(audio);
+      Ok(())
+    },
+    None => {
+      Err(String::from("Audio device not found"))
     }
   }
 }

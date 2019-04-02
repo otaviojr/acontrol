@@ -1,6 +1,5 @@
-use display::{Display, DisplayState, ErrorType, Animation, AnimationType, AnimationColor};
+use display::{Display, Animation, AnimationType, AnimationColor};
 
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -8,13 +7,12 @@ use std::thread;
 use std::sync::mpsc;
 use std::time::{Duration,Instant};
 
-use std::io;
 use std::fs::OpenOptions;
 use std::os::unix::io::{RawFd,AsRawFd};
-use std::ptr;
 use std::mem;
 
 #[allow(dead_code)]
+#[allow(non_camel_case_types)]
 mod neopixel_ioctl {
   const NEOPIXEL_IOC_MAGIC: u8 = b'N';
   const NEOPIXEL_IOCTL_GET_VERSION: u8 = 1;
@@ -149,7 +147,7 @@ impl NeoPixelInterface {
   }
 
   fn get_driver_fd(&self) -> Option<RawFd> {
-    let mut driver_fd_locked = self.driver_fd.lock().unwrap();
+    let driver_fd_locked = self.driver_fd.lock().unwrap();
     return *driver_fd_locked;
   }
 
@@ -414,7 +412,7 @@ impl NeoPixel {
     let now = Instant::now();
     let dismiss = 5;
 
-    let mut animation_info = NeoPixelSpinnerAnimation::new(0,0,255);
+    let animation_info = NeoPixelSpinnerAnimation::new(0,0,255);
       self.animation_spinner(animation_info, move |_next: bool, _params: &mut NeoPixelSpinnerAnimation| {
 
       if now.elapsed().as_secs() > dismiss && dismiss > 0 { return Ok(-1) }
@@ -502,7 +500,7 @@ impl Display for NeoPixel {
     Ok(())
   }
 
-  fn show_animation(&mut self, animation: Animation, color: AnimationColor, animation_type: AnimationType, message: &str, dismiss: u64) -> Result<(), String> {
+  fn show_animation(&mut self, animation: Animation, color: AnimationColor, _animation_type: AnimationType, _message: &str, dismiss: u64) -> Result<(), String> {
 
     let now = Instant::now();
 

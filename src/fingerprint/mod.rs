@@ -2,6 +2,7 @@ pub mod gt521fx;
 
 #[derive(Clone, Copy, PartialEq)]
 #[allow(dead_code)]
+#[allow(non_camel_case_types)]
 pub enum FingerprintState {
   WAITING,
   READING,

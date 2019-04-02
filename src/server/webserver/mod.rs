@@ -9,7 +9,6 @@ use system;
 use server::{Server,WebServerDefaultResponse,WebCard,WebServerNfcListResponse};
 
 use std::collections::HashMap;
-use std::ptr::null;
 
 use persist::Card;
 
@@ -222,7 +221,7 @@ impl Server for WebServer {
 
     router.post("/fingerprint/enroll",WebServer::fingerprint_start_enroll, "fingerprint_start_enroll");
 
-    let mut chain = Chain::new(router);
+    let chain = Chain::new(router);
 
     if let Err(err) = Iron::new(chain).http(format!("{}:{}",self.host,self.port.to_string())) {
       return Err(format!("{}(=> {})", "Error initializing webserver",err));

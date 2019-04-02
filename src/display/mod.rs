@@ -1,22 +1,22 @@
 pub mod neopixel;
 
-#[derive(Clone, Copy)]
-#[allow(dead_code)]
-pub enum DisplayState {
-  Idle,
-  WaitInput,
-  WaitProcessing,
-  Success,
-  Error,
-}
+//#[derive(Clone, Copy)]
+//#[allow(dead_code)]
+//pub enum DisplayState {
+//  Idle,
+//  WaitInput,
+//  WaitProcessing,
+//  Success,
+//  Error,
+//}
 
-#[derive(Clone, Copy)]
-#[allow(dead_code)]
-pub enum ErrorType {
-  Authorization,
-  Network,
-  Hardware,
-}
+//#[derive(Clone, Copy)]
+//#[allow(dead_code)]
+//pub enum ErrorType {
+//  Authorization,
+//  Network,
+//  Hardware,
+//}
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
