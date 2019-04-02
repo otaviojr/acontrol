@@ -132,7 +132,7 @@ impl Audio for Buzzer {
     Sounds::play_supermario(self)
   }
 
-  fn play_denieded(&mut self) -> Result<(), String> {
+  fn play_denied(&mut self) -> Result<(), String> {
     Sounds::play_starwars(self)
   }
 

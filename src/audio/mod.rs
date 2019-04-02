@@ -4,7 +4,7 @@ pub trait Audio {
   fn init(&mut self) -> Result<(),String>;
   fn play_new(&mut self) -> Result<(), String>;
   fn play_granted(&mut self) -> Result<(), String>;
-  fn play_denieded(&mut self) -> Result<(), String>;
+  fn play_denied(&mut self) -> Result<(), String>;
   fn play_success(&mut self) -> Result<(), String>;
   fn play_error(&mut self) -> Result<(), String>;
   fn play_alert(&mut self) -> Result<(), String>;

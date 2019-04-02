@@ -249,7 +249,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               }
               FingerprintState::NOT_AUTHORIZED => {
                 let _ret = acontrol_system_get_audio_drv(|audio|{
-                  let _ret = audio.play_denieded();
+                  let _ret = audio.play_denied();
                 });
                 let _ret = acontrol_system_get_display_drv(|display|{
                   let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
@@ -315,7 +315,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                             println!("Card {:?} not found!", uuid);
 
                             let _ret = acontrol_system_get_audio_drv(|audio|{
-                              let _ret = audio.play_denieded();
+                              let _ret = audio.play_denied();
                             });
                             let _ret = acontrol_system_get_display_drv(|display|{
                               let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
@@ -327,7 +327,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                           println!("Invalid card signature: {:?} - {:?}",val, NFC_CARD_SIGNATURE.as_bytes().to_vec());
 
                           let _ret = acontrol_system_get_audio_drv(|audio|{
-                            let _ret = audio.play_denieded();
+                            let _ret = audio.play_denied();
                           });
                           let _ret = acontrol_system_get_display_drv(|display|{
                             let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
@@ -339,7 +339,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                         println!("Error reading card: {}", err);
 
                         let _ret = acontrol_system_get_audio_drv(|audio|{
-                          let _ret = audio.play_denieded();
+                          let _ret = audio.play_denied();
                         });
                         let _ret = acontrol_system_get_display_drv(|display|{
                           let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);

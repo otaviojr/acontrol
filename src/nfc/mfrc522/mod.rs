@@ -59,32 +59,32 @@ impl Register {
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 enum Command {
-  Idle			= 0b0000,
-  Mem			= 0b0001,
+  Idle			        = 0b0000,
+  Mem			          = 0b0001,
   GenerateRandomID	= 0b0010,
-  CalcCRC		= 0b0011,
-  Transmit		= 0b0100,
-  NoCmdChange		= 0b0111,
-  Receive		= 0b1000,
-  Transceive		= 0b1100,
-  MFAuthent		= 0b1110,
-  SoftReset		= 0b1111
+  CalcCRC		        = 0b0011,
+  Transmit		      = 0b0100,
+  NoCmdChange		    = 0b0111,
+  Receive		        = 0b1000,
+  Transceive		    = 0b1100,
+  MFAuthent		      = 0b1110,
+  SoftReset		      = 0b1111
 }
 
 #[allow(dead_code)]
 impl Command {
   fn name(&self) -> &'static str {
     match *self {
-      Command::Idle => "Idle",
-      Command::Mem => "Mem",
-      Command::GenerateRandomID => "GenerateRandomID",
-      Command::CalcCRC => "CalcCRC",
-      Command::Transmit => "Transmit",
-      Command::NoCmdChange => "NoCmdChange",
-      Command::Receive => "Receive",
-      Command::Transceive => "Transceive",
-      Command::MFAuthent => "MFAuthent",
-      Command::SoftReset => "SoftReset"
+      Command::Idle =>              "Idle",
+      Command::Mem =>               "Mem",
+      Command::GenerateRandomID =>  "GenerateRandomID",
+      Command::CalcCRC =>           "CalcCRC",
+      Command::Transmit =>          "Transmit",
+      Command::NoCmdChange =>       "NoCmdChange",
+      Command::Receive =>           "Receive",
+      Command::Transceive =>        "Transceive",
+      Command::MFAuthent =>         "MFAuthent",
+      Command::SoftReset =>         "SoftReset"
     }
   }
 
@@ -121,6 +121,7 @@ enum Error {
   SPI			= 0x11,
 }
 
+#[allow(dead_code)]
 impl Error {
   fn value(&mut self) -> u8 {
     let value = *self as u8;
