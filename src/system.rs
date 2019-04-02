@@ -225,7 +225,8 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               },
               FingerprintState::AUTHORIZED => {
                 let _ret = acontrol_system_get_display_drv(|display|{
-                  let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",0);
+                  let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",3);
+                  let _ret = display.wait_animation_ends();
                 });
               }
               FingerprintState::NOT_AUTHORIZED => {

@@ -183,76 +183,75 @@ impl Buzzer {
 
     let _handler = thread::spawn( move || {
       if let Ok(ref mut buzzer_locked) = buzzer.lock() {
-        (*buzzer_locked).play_tone(Tone::NOTE_E7,12);
-        (*buzzer_locked).play_tone(Tone::NOTE_E7,12);
-        (*buzzer_locked).play_tone(Tone::NOTE_E7,12);    
-        thread::sleep(Duration::from_millis(12));
-        (*buzzer_locked).play_tone(Tone::NOTE_C7,12);
-        (*buzzer_locked).play_tone(Tone::NOTE_E7,12);
-        thread::sleep(Duration::from_millis(12));
-        (*buzzer_locked).play_tone(Tone::NOTE_G7,12);
-        thread::sleep(Duration::from_millis(36));
-        (*buzzer_locked).play_tone(Tone::NOTE_G6,12);
-        thread::sleep(Duration::from_millis(36));
+        (*buzzer_locked).play_tone(Tone::NOTE_E5,200);
+        (*buzzer_locked).play_tone(Tone::NOTE_E5,200);
+        (*buzzer_locked).play_tone(Tone::NOTE_E5,200);    
+        thread::sleep(Duration::from_millis(200));
+        (*buzzer_locked).play_tone(Tone::NOTE_C5,200);
+        (*buzzer_locked).play_tone(Tone::NOTE_E5,200);
+        thread::sleep(Duration::from_millis(200));
+        (*buzzer_locked).play_tone(Tone::NOTE_G5,200);
+        thread::sleep(Duration::from_millis(680));
+        (*buzzer_locked).play_tone(Tone::NOTE_G4,200);
+        thread::sleep(Duration::from_millis(680));
 
-        (*buzzer_locked).play_tone(Tone::NOTE_C7,12);
-        thread::sleep(Duration::from_millis(24));
-        (*buzzer_locked).play_tone(Tone::NOTE_G6,12);
-        thread::sleep(Duration::from_millis(24));
-        (*buzzer_locked).play_tone(Tone::NOTE_E6,12);
-        thread::sleep(Duration::from_millis(24));
-        (*buzzer_locked).play_tone(Tone::NOTE_A6,12);
-        thread::sleep(Duration::from_millis(12));
-        (*buzzer_locked).play_tone(Tone::NOTE_B6,12);
-        thread::sleep(Duration::from_millis(12));
-        (*buzzer_locked).play_tone(Tone::NOTE_AS6,12);
-        (*buzzer_locked).play_tone(Tone::NOTE_A6,12);
-        thread::sleep(Duration::from_millis(12));
+        (*buzzer_locked).play_tone(Tone::NOTE_C5,200);
+        thread::sleep(Duration::from_millis(440));
+        (*buzzer_locked).play_tone(Tone::NOTE_G4,200);
+        thread::sleep(Duration::from_millis(440));
+        (*buzzer_locked).play_tone(Tone::NOTE_E4,200);
+        thread::sleep(Duration::from_millis(440));
+        (*buzzer_locked).play_tone(Tone::NOTE_A4,200);
+        thread::sleep(Duration::from_millis(200));
+        (*buzzer_locked).play_tone(Tone::NOTE_B4,200);
+        thread::sleep(Duration::from_millis(200));
+        (*buzzer_locked).play_tone(Tone::NOTE_AS4,200);
+        (*buzzer_locked).play_tone(Tone::NOTE_A4,200);
+        thread::sleep(Duration::from_millis(200));
 
-        (*buzzer_locked).play_tone(Tone::NOTE_G6,9);
-        (*buzzer_locked).play_tone(Tone::NOTE_E7,9);
-        (*buzzer_locked).play_tone(Tone::NOTE_G7,9);    
-        (*buzzer_locked).play_tone(Tone::NOTE_A7,12);
-        thread::sleep(Duration::from_millis(12));
-        (*buzzer_locked).play_tone(Tone::NOTE_F7,12);
-        (*buzzer_locked).play_tone(Tone::NOTE_G7,12);    
-        thread::sleep(Duration::from_millis(12));
-        (*buzzer_locked).play_tone(Tone::NOTE_E7,12);
-        thread::sleep(Duration::from_millis(12));
-        (*buzzer_locked).play_tone(Tone::NOTE_C7,12);
-        (*buzzer_locked).play_tone(Tone::NOTE_D7,12);
-        (*buzzer_locked).play_tone(Tone::NOTE_B6,12);
-        thread::sleep(Duration::from_millis(24));
+        (*buzzer_locked).play_tone(Tone::NOTE_G4,140);
+        (*buzzer_locked).play_tone(Tone::NOTE_E5,140);
+        (*buzzer_locked).play_tone(Tone::NOTE_G5,140);    
+        (*buzzer_locked).play_tone(Tone::NOTE_A5,200);
+        thread::sleep(Duration::from_millis(200));
+        (*buzzer_locked).play_tone(Tone::NOTE_F5,200);
+        (*buzzer_locked).play_tone(Tone::NOTE_G5,200);    
+        thread::sleep(Duration::from_millis(200));
+        (*buzzer_locked).play_tone(Tone::NOTE_E5,200);
+        thread::sleep(Duration::from_millis(200));
+        (*buzzer_locked).play_tone(Tone::NOTE_C5,200);
+        (*buzzer_locked).play_tone(Tone::NOTE_D5,200);
+        (*buzzer_locked).play_tone(Tone::NOTE_B4,200);
+        thread::sleep(Duration::from_millis(440));
 
-        (*buzzer_locked).play_tone(Tone::NOTE_C7,12);
-        thread::sleep(Duration::from_millis(24));
-        (*buzzer_locked).play_tone(Tone::NOTE_G6,12);
-        thread::sleep(Duration::from_millis(24));
-        (*buzzer_locked).play_tone(Tone::NOTE_E6,9);    
-        thread::sleep(Duration::from_millis(24));
-        (*buzzer_locked).play_tone(Tone::NOTE_A6,12);
-        thread::sleep(Duration::from_millis(12));
-        (*buzzer_locked).play_tone(Tone::NOTE_B6,12);
-        thread::sleep(Duration::from_millis(12));
-        (*buzzer_locked).play_tone(Tone::NOTE_AS6,12);
-        (*buzzer_locked).play_tone(Tone::NOTE_A6,12);
-        thread::sleep(Duration::from_millis(12));
+        (*buzzer_locked).play_tone(Tone::NOTE_C5,200);
+        thread::sleep(Duration::from_millis(440));
+        (*buzzer_locked).play_tone(Tone::NOTE_G4,200);
+        thread::sleep(Duration::from_millis(440));
+        (*buzzer_locked).play_tone(Tone::NOTE_E4,140);    
+        thread::sleep(Duration::from_millis(440));
+        (*buzzer_locked).play_tone(Tone::NOTE_A4,200);
+        thread::sleep(Duration::from_millis(200));
+        (*buzzer_locked).play_tone(Tone::NOTE_B4,200);
+        thread::sleep(Duration::from_millis(200));
+        (*buzzer_locked).play_tone(Tone::NOTE_AS4,200);
+        (*buzzer_locked).play_tone(Tone::NOTE_A4,200);
+        thread::sleep(Duration::from_millis(200));
 
-
-        (*buzzer_locked).play_tone(Tone::NOTE_G6,9);
-        (*buzzer_locked).play_tone(Tone::NOTE_E7,9);
-        (*buzzer_locked).play_tone(Tone::NOTE_G7,9);    
-        (*buzzer_locked).play_tone(Tone::NOTE_A7,12);
-        thread::sleep(Duration::from_millis(12));
-        (*buzzer_locked).play_tone(Tone::NOTE_F7,12);
-        (*buzzer_locked).play_tone(Tone::NOTE_G7,12);    
-        thread::sleep(Duration::from_millis(12));
-        (*buzzer_locked).play_tone(Tone::NOTE_E7,12);
-        thread::sleep(Duration::from_millis(12));
-        (*buzzer_locked).play_tone(Tone::NOTE_C7,12);
-        (*buzzer_locked).play_tone(Tone::NOTE_D7,12);
-        (*buzzer_locked).play_tone(Tone::NOTE_B6,12);
-        thread::sleep(Duration::from_millis(24));
+        (*buzzer_locked).play_tone(Tone::NOTE_G4,140);
+        (*buzzer_locked).play_tone(Tone::NOTE_E5,140);
+        (*buzzer_locked).play_tone(Tone::NOTE_G5,140);    
+        (*buzzer_locked).play_tone(Tone::NOTE_A5,200);
+        thread::sleep(Duration::from_millis(200));
+        (*buzzer_locked).play_tone(Tone::NOTE_F5,200);
+        (*buzzer_locked).play_tone(Tone::NOTE_G5,200);    
+        thread::sleep(Duration::from_millis(200));
+        (*buzzer_locked).play_tone(Tone::NOTE_E5,200);
+        thread::sleep(Duration::from_millis(200));
+        (*buzzer_locked).play_tone(Tone::NOTE_C5,200);
+        (*buzzer_locked).play_tone(Tone::NOTE_D5,200);
+        (*buzzer_locked).play_tone(Tone::NOTE_B4,200);
+        thread::sleep(Duration::from_millis(440));
       };
     });
 
@@ -464,7 +463,7 @@ impl Audio for Buzzer {
   }
 
   fn play_error(&mut self) -> Result<(), String> {
-    self. play_supermario()
+    self. play_starwars()
   }
 
   fn play_alert(&mut self) -> Result<(), String> {
