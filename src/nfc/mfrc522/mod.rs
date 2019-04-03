@@ -14,33 +14,33 @@ use sysfs_gpio::{Direction, Pin};
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 enum Register {
-    BitFraming = 0x0d,
-    Coll = 0x0e,
-    ComIEn = 0x02,
-    ComIrq = 0x04,
-    Command = 0x01,
-    CrcResultH = 0x21,
-    CrcResultL = 0x22,
-    Demod = 0x19,
-    DivIrq = 0x05,
-    Error = 0x06,
-    FifoData = 0x09,
-    FifoLevel = 0x0a,
-    ModWidth = 0x24,
-    Mode = 0x11,
-    ReloadH = 0x2c,
-    ReloadL = 0x2d,
-    RxMode = 0x13,
-    Status1 = 0x07,
-    Status2 = 0x08,
-    TCountValH = 0x2e,
-    TCountValL = 0x2f,
-    TMode = 0x2a,
-    TPrescaler = 0x2b,
-    TxAsk = 0x15,
-    TxControl = 0x14,
-    TxMode = 0x12,
-    Version = 0x37,
+    BitFraming =  0x0d,
+    Coll =        0x0e,
+    ComIEn =      0x02,
+    ComIrq =      0x04,
+    Command =     0x01,
+    CrcResultH =  0x21,
+    CrcResultL =  0x22,
+    Demod =       0x19,
+    DivIrq =      0x05,
+    Error =       0x06,
+    FifoData =    0x09,
+    FifoLevel =   0x0a,
+    ModWidth =    0x24,
+    Mode =        0x11,
+    ReloadH =     0x2c,
+    ReloadL =     0x2d,
+    RxMode =      0x13,
+    Status1 =     0x07,
+    Status2 =     0x08,
+    TCountValH =  0x2e,
+    TCountValL =  0x2f,
+    TMode =       0x2a,
+    TPrescaler =  0x2b,
+    TxAsk =       0x15,
+    TxControl =   0x14,
+    TxMode =      0x12,
+    Version =     0x37,
 }
 
 const R: u8 = 1 << 7;
@@ -100,25 +100,25 @@ enum Error {
   /// FIFO buffer overflow
   BufferOverflow	= 0x01,
   /// Collision
-  Collision		= 0x02,
+  Collision		    = 0x02,
   /// Wrong CRC
-  Crc			= 0x03,
+  Crc			        = 0x03,
   /// Incomplete RX frame
   IncompleteFrame	= 0x04,
   /// Internal temperature sensor detects overheating
-  Overheating		= 0x05,
+  Overheating		  = 0x05,
   /// Parity check failed
-  Parity		= 0x06,
+  Parity		      = 0x06,
   /// Error during MFAuthent operation
-  Protocol		= 0x07,
+  Protocol		    = 0x07,
   /// Write Error
-  Wr			= 0x08,
+  Wr			        = 0x08,
   /// Timeout Error
-  Timeout		= 0x09,
+  Timeout		      = 0x09,
   //// No Memory
-  NoMem			= 0x10,
+  NoMem			      = 0x10,
   /// SPI Error
-  SPI			= 0x11,
+  SPI			        = 0x11,
 }
 
 #[allow(dead_code)]

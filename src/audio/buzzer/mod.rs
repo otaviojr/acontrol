@@ -74,12 +74,13 @@ unsafe impl Send for BuzzerThreadSafe {}
 
 pub struct Buzzer {
   devfile: Option<std::fs::File>,
-  buzzer: Arc<Mutex<BuzzerThreadSafe>>
+  buzzer: Arc<Mutex<BuzzerThreadSafe>>,
+  sound_worker: Option<std::thread::JoinHandle<Result<(), String>>>,
 }
 
 impl Buzzer {
   pub fn new() -> Self {
-    return Buzzer {devfile: None, buzzer: Arc::new(Mutex::new(BuzzerThreadSafe {driver_fd: Mutex::new(None)}))};
+    return Buzzer {sound_worker:  None, devfile: None, buzzer: Arc::new(Mutex::new(BuzzerThreadSafe {driver_fd: Mutex::new(None)}))};
   }
 }
 
@@ -119,7 +120,7 @@ impl Audio for Buzzer {
       println!("Buzzer driver version {} found!", String::from_utf8(version.to_vec()).unwrap());
     }
 
-    let _ret = Sounds::play_harrypotter(self);
+    let _ret = Sounds::play_piratescaribean(self);
     
     Ok(())
   }

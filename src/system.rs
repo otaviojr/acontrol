@@ -434,7 +434,6 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
 
             if let Some(state) = next_nfc_system_state {
               acontrol_system_set_nfc_state(state,None);
-              next_nfc_system_state = None;
             }
 
             return true;
