@@ -292,7 +292,7 @@ impl Mfrc522ThreadSafe {
   fn check_error(&mut self) -> Result<(), Error> {
 
     let err = match self.read(Register::Error) {
-      Err(err) => return Err(Error::SPI),
+      Err(_err) => return Err(Error::SPI),
       Ok(err) => err
     };
 
@@ -507,7 +507,7 @@ impl MiFare for Mfrc522ThreadSafe {
     tx_buf.extend(uuid);
 
     match self.authent(&tx_buf, 0) {
-      Ok(val) => Ok(()),
+      Ok(_val) => Ok(()),
       Err(ref mut err) => Err(format!("Error authenticating ({})",err.name()))
     }
   }
@@ -527,7 +527,7 @@ impl MiFare for Mfrc522ThreadSafe {
     }
 
     match self.transceive(&tx_buf, 0) {
-      Ok(val) => {
+      Ok(_val) => {
         let mut buf: Vec<u8> = data[..16].to_vec();
 
         if let Err(_err) = self.calc_crc(&buf).map(|crc| {
@@ -539,7 +539,7 @@ impl MiFare for Mfrc522ThreadSafe {
 
 
         match self.transceive(&buf, 0) {
-          Ok(val) => {
+          Ok(_val) => {
             Ok(())
           },
           Err(ref mut err) => Err(format!("{} {} => {}","NFC MiFare error reading address {}", addr, err.name()))
@@ -602,7 +602,7 @@ impl MiFare for Mfrc522ThreadSafe {
 
     loop {
       match self.auth(PICC::AUTH1A.value(), addr, uuid, key) {
-        Ok(val) => {
+        Ok(_val) => {
           if let Err(err) = self.write_data(addr, &packet) {
             return Err(err);
           }
@@ -670,7 +670,7 @@ impl NfcReader for Mfrc522 {
 
     let mut mfrc522_init = false;
 
-    for i in 0..10 {
+    for _i in 0..10 {
       thread::sleep(Duration::from_millis(50));
       if let Ok(version) = mfrc522.lock().unwrap().version() {
         println!("NFC hardware version: 0x{:X}", version);
@@ -709,7 +709,7 @@ impl NfcReader for Mfrc522 {
         {
           let mut mfrc522_inner = mfrc522.lock().unwrap();
 
-          if let Err(err) = mfrc522_inner.reset() {
+          if let Err(_err) = mfrc522_inner.reset() {
             println!("Error reseting reader");
             break;
           }
@@ -767,7 +767,7 @@ impl NfcReader for Mfrc522 {
           }
         };
 
-        if let Ok(val) = ret {
+        if let Ok(_val) = ret {
           func(uuid, sak);
         }
 
@@ -829,7 +829,7 @@ impl NfcReader for Mfrc522 {
       if cur_addr+1 % 4 == 0 { cur_addr += 1; }
 
       match mfrc522_inner.auth(PICC::AUTH1A.value(), cur_addr, uuid, MifareAuthKey::CustomKeyA) {
-        Ok(val) => {
+        Ok(_val) => {
           //println!("Successfuly authenticated on block {}", addr);
 
           match mfrc522_inner.read_data(cur_addr) {
@@ -866,7 +866,7 @@ impl NfcReader for Mfrc522 {
       if cur_addr+1 % 4 == 0 { cur_addr += 1; }
 
       match mfrc522_inner.auth(PICC::AUTH1A.value(), cur_addr, uuid, MifareAuthKey::CustomKeyA) {
-        Ok(val) => {
+        Ok(_val) => {
           
           packet.clear();
 

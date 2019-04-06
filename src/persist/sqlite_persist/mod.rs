@@ -17,7 +17,7 @@ impl SQLitePersist {
 
 impl Persist for SQLitePersist {
   fn init(&mut self, params: &HashMap<String,String>) -> Result<(), String> {
-    let mut path = Path::new(&params["DATA_PATH"]).join("acontrol.db");
+    let path = Path::new(&params["DATA_PATH"]).join("acontrol.db");
     self.conn = match Connection::open(path) {
       Ok(conn) => Some(conn),
       Err(err) => return Err(format!("Error openning database file: {}",err)),
@@ -118,7 +118,7 @@ impl Persist for SQLitePersist {
     Err(format!("{}","Card Not Found"))
   }
 
-  fn nfc_delete(&mut self, uuid: &Vec<u8>) -> Result<(), String> {
+  fn nfc_delete(&mut self, _uuid: &Vec<u8>) -> Result<(), String> {
     Ok(())
   }
 
@@ -185,7 +185,7 @@ impl Persist for SQLitePersist {
     Err(format!("{}","Fingerprint Not Found"))
   }
 
-  fn fingerprint_delete(&mut self, pos: i32) -> Result<(), String> {
+  fn fingerprint_delete(&mut self, _pos: i32) -> Result<(), String> {
     Ok(())
   }
 }

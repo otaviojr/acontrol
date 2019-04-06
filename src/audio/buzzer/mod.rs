@@ -5,6 +5,7 @@ use audio::{Audio};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
+use std::sync::mpsc;
 use std::time::Duration;
 
 use std::io;                                                                                                                                      
@@ -32,8 +33,15 @@ mod buzzer_ioctl {
   nix::ioctl_write_ptr!(play_tone, BUZZER_IOC_MAGIC, BUZZER_IOCTL_PLAY_TONE, libc::c_long);
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum AudioThreadCommand {
+  Stop,
+}
+
 struct BuzzerThreadSafe {
-  driver_fd: Mutex<Option<RawFd>>
+  driver_fd: Mutex<Option<RawFd>>,
+  sound_worker_tx: Mutex<mpsc::Sender<AudioThreadCommand>>,
+  sound_worker_rx: Mutex<mpsc::Receiver<AudioThreadCommand>>,
 }
 
 impl BuzzerThreadSafe {
@@ -80,7 +88,8 @@ pub struct Buzzer {
 
 impl Buzzer {
   pub fn new() -> Self {
-    return Buzzer {sound_worker:  None, devfile: None, buzzer: Arc::new(Mutex::new(BuzzerThreadSafe {driver_fd: Mutex::new(None)}))};
+    let (tx,rx):(mpsc::Sender<AudioThreadCommand>, mpsc::Receiver<AudioThreadCommand>) = mpsc::channel::<AudioThreadCommand>();
+    return Buzzer {sound_worker: None, devfile: None, buzzer: Arc::new(Mutex::new(BuzzerThreadSafe {sound_worker_rx: Mutex::new(rx), sound_worker_tx: Mutex::new(tx), driver_fd: Mutex::new(None)}))};
   }
 }
 
@@ -146,7 +155,7 @@ impl Audio for Buzzer {
   }
 
   fn play_alert(&mut self) -> Result<(), String> {
-   Sounds::play_starwars(self)
+   Sounds::play_bip(self)
   }
 
 

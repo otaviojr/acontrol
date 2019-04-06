@@ -1,7 +1,11 @@
+use std::sync::Arc;
+use std::sync::Mutex;
+
 use std::thread;
+use std::sync::mpsc;
 use std::time::Duration;
 
-use audio::buzzer::{Buzzer, BuzzerThreadSafe};
+use audio::buzzer::{Buzzer, BuzzerThreadSafe, AudioThreadCommand};
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
@@ -113,13 +117,60 @@ impl Sounds {
   pub fn play_sound(buzzer: &mut Buzzer, tones: Vec<Tone>, periods: Vec<i32>) -> Result<(),String> {
     let buzzer_cloned = buzzer.buzzer.clone();
 
+    if(tones.len() != periods.len()){
+      return Err(String::from("tones and periods differs in length."));
+    }
+
+    if let Some(thread) = buzzer.sound_worker.take() {
+
+      // Ask the running thread to exit. 
+      // Message will not be received if it's not running already.
+      if let Ok(ref mut buzzer_locked) = buzzer_cloned.lock(){
+        match buzzer_locked.sound_worker_tx.lock().unwrap().send(AudioThreadCommand::Stop) {
+          Ok(_ret) => {
+
+          },
+          Err(err) => return Err(format!("Error sending message: {:?}", err))
+        }
+      }
+
+      //Wait for the last thread to finish.
+      //Will exit immediately if the thread have already ended.
+      println!("WAITING PREVIOUS SOUND TO LEAVE");
+      let _ret = thread.join();
+      println!("LAST SOUND LEAVE. STARTING NEW THREAD!");
+
+      //zero out unreceived messages.
+      //If thread has already gone, the last exit message will be received by
+      //the new thread. This will prevent that behavior.
+      if let Ok(ref mut buzzer_locked) = buzzer_cloned.lock(){
+        while let Ok(_ret) = buzzer_locked.sound_worker_rx.lock().unwrap().try_recv() {
+
+        }
+      }
+    }
+
     let handle = thread::spawn( move || {
       for (i, tone) in tones.iter().enumerate() {
-        if let Ok(ref mut buzzer_locked) = buzzer_cloned.lock() {
-          if(periods[i] != 0) {
+        if(periods[i] != 0) {
+          if let Ok(ref mut buzzer_locked) = buzzer_cloned.lock() {
             let _ret = (*buzzer_locked).play_tone(*tone, periods[i]);
-          } else {
-            thread::sleep(Duration::from_millis(periods[i] as u64));
+          }
+        } else {
+          thread::sleep(Duration::from_millis(periods[i] as u64));
+        }
+
+        if let Ok(ref mut buzzer_locked) = buzzer_cloned.lock() {
+          match buzzer_locked.sound_worker_rx.lock().unwrap().try_recv() {
+            Ok(msg) => {
+              match msg {
+                AudioThreadCommand::Stop => {
+                  println!("THREAD INTERRUPTED! WILL START A NEW SOUND?");
+                  return Err(String::from("Interrupted"));
+                },
+              }
+            },
+            Err(_) => {},
           }
         }
       };
@@ -132,8 +183,7 @@ impl Sounds {
   }
 
   pub fn play_piratescaribean(buzzer: &mut Buzzer) -> Result<(), String> {
-
-    let tones: Vec<Tone> = vec!(
+    let mut tones: Vec<Tone> = vec!(
       Tone::NOTE_E4, Tone::NOTE_G4, Tone::NOTE_A4, Tone::NOTE_A4,
       Tone::NOTE_NULL,
       Tone::NOTE_A4, Tone::NOTE_B4, Tone::NOTE_C5, Tone::NOTE_C5,
@@ -239,7 +289,7 @@ impl Sounds {
       Tone::NOTE_A4
     );
 
-    let periods: Vec<i32> = vec!(
+    let mut periods: Vec<i32> = vec!(
       125,125,250,125,
       50,
       125,125,250,125,
@@ -345,516 +395,158 @@ impl Sounds {
       500
     );
 
+    tones.truncate(37);
+    periods.truncate(37);
 
-    Sounds::play_sound(buzzer, tones, periods);
-
-    //let buzzer_cloned = buzzer.buzzer.clone();
-
-    //let _handler = thread::spawn( move || {
-      //if let Ok(ref mut buzzer_locked) = buzzer_cloned.lock() {
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 250); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 375);
-        //thread::sleep(Duration::from_millis(50));  
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5,125); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 375);
-        //thread::sleep(Duration::from_millis(50));    
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 125); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F5,250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 250);
-        //thread::sleep(Duration::from_millis(50));  
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4,125); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 250);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 375);
-        //thread::sleep(Duration::from_millis(200));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 250); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);     
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //thread::sleep(Duration::from_millis(50)); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 250); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 375);
-        //thread::sleep(Duration::from_millis(50));  
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5,125); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 375);
-        //thread::sleep(Duration::from_millis(50));    
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 125); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F5, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 250);
-        //thread::sleep(Duration::from_millis(50));  
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4,125); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 250);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 250);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 375);
-        //thread::sleep(Duration::from_millis(200));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 250);
-        //thread::sleep(Duration::from_millis(400));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F5, 250);
-        //thread::sleep(Duration::from_millis(400)); 
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125);  
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 125);
-        //thread::sleep(Duration::from_millis(400));    
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 250);
-        //thread::sleep(Duration::from_millis(400));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 250);
-        //thread::sleep(Duration::from_millis(400));  
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);  
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4,  500);    
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 250);  
-        //thread::sleep(Duration::from_millis(400));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F5, 250);
-        //thread::sleep(Duration::from_millis(400));    
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 125);
-        //thread::sleep(Duration::from_millis(400));  
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 250);
-        //thread::sleep(Duration::from_millis(400));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 250);
-        //thread::sleep(Duration::from_millis(400));  
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);
-        //thread::sleep(Duration::from_millis(50));
-        //let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 500);
-      //};
-    //});
-    Ok(())
+    Sounds::play_sound(buzzer, tones, periods)
   }
 
   pub fn play_harrypotter(buzzer: &mut Buzzer) -> Result<(), String> {
-    let buzzer_cloned = buzzer.buzzer.clone();
 
-    let _handler = thread::spawn( move || {
-      if let Ok(ref mut buzzer_locked) = buzzer_cloned.lock() {
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 333);  
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 500);   
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 166);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_FS5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 666);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B5, 333);   
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A5, 1000);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_FS5, 1000);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 500);   
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 166);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_FS5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_DS5, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 1666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 500);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 166);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_FS5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D6, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_CS6, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C6, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_GS5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C6, 500);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B5, 166);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_AS5, 333); 
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_AS4, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 1666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B5, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B5, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C6, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_AS5, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_FS5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 500);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B5, 166);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_AS5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_AS4, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B5, 1666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B5, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B5, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D6, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_CS6, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C6, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_GS5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C6, 500);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B5, 166);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_AS5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_AS4, 666);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 333);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 1666);    
-      };
-    });
-    Ok(())
+    let tones: Vec<Tone> = vec!(
+      Tone::NOTE_B4, Tone::NOTE_E5, Tone::NOTE_G5, Tone::NOTE_FS5,Tone::NOTE_E5, 
+      Tone::NOTE_B5, Tone::NOTE_A5, Tone::NOTE_FS5,Tone::NOTE_E5, Tone::NOTE_G5, 
+      Tone::NOTE_FS5,Tone::NOTE_DS5,Tone::NOTE_F5, Tone::NOTE_B4, Tone::NOTE_B4, 
+      Tone::NOTE_E5, Tone::NOTE_G5, Tone::NOTE_FS5,Tone::NOTE_E5, Tone::NOTE_B5, 
+      Tone::NOTE_D6, Tone::NOTE_CS6,Tone::NOTE_C6, Tone::NOTE_GS5,Tone::NOTE_C6, 
+      Tone::NOTE_B5, Tone::NOTE_AS5,Tone::NOTE_AS4,Tone::NOTE_G5, Tone::NOTE_E5, 
+      Tone::NOTE_G5, Tone::NOTE_B5, Tone::NOTE_G5, Tone::NOTE_B5, Tone::NOTE_G5, 
+      Tone::NOTE_C6, Tone::NOTE_B5, Tone::NOTE_AS5,Tone::NOTE_FS5,Tone::NOTE_G5, 
+      Tone::NOTE_B5, Tone::NOTE_AS5,Tone::NOTE_AS4,Tone::NOTE_B4, Tone::NOTE_B5, 
+      Tone::NOTE_G5, Tone::NOTE_B5, Tone::NOTE_G5, Tone::NOTE_B5, Tone::NOTE_G5, 
+      Tone::NOTE_D6, Tone::NOTE_CS6,Tone::NOTE_C6, Tone::NOTE_GS5,Tone::NOTE_C6, 
+      Tone::NOTE_B5, Tone::NOTE_AS5,Tone::NOTE_AS4,Tone::NOTE_G5, Tone::NOTE_E5, 
+    );
+
+    let periods: Vec<i32> = vec!(333,500,166,333,666,333,1000,1000,500,166,333,666,
+      333,1666,333,500,166,333,666,333,666,333,666,333,500,166,333,666,333,1666,333,
+      666,333,666,333,666,333,666,333,500,166,333,666,333,1666,333,666,333,666,333,
+      666,333,666,333,500,166,333,666,333,1666,
+    );
+
+    Sounds::play_sound(buzzer, tones, periods)
   }
   
   pub fn play_supermario(buzzer: &mut Buzzer) -> Result<(),String> {
 
-    let buzzer_cloned = buzzer.buzzer.clone();
+    let mut tones: Vec<Tone> = vec!(
+      Tone::NOTE_E5,Tone::NOTE_E5,Tone::NOTE_E5,Tone::NOTE_NULL,Tone::NOTE_C5,Tone::NOTE_E5,
+      Tone::NOTE_NULL,Tone::NOTE_G5,Tone::NOTE_NULL,Tone::NOTE_G4,Tone::NOTE_NULL,Tone::NOTE_C5,
+      Tone::NOTE_NULL,Tone::NOTE_G4,Tone::NOTE_NULL,Tone::NOTE_E4,Tone::NOTE_NULL,Tone::NOTE_A4,
+      Tone::NOTE_NULL,Tone::NOTE_B4,Tone::NOTE_NULL,Tone::NOTE_AS4,Tone::NOTE_A4,Tone::NOTE_NULL,
+      Tone::NOTE_G4,Tone::NOTE_E5,Tone::NOTE_G5,Tone::NOTE_A5,Tone::NOTE_NULL,Tone::NOTE_F5,
+      Tone::NOTE_G5,Tone::NOTE_NULL,Tone::NOTE_E5,Tone::NOTE_NULL,Tone::NOTE_C5,Tone::NOTE_D5,
+      Tone::NOTE_B4,Tone::NOTE_NULL,Tone::NOTE_C5,Tone::NOTE_NULL,Tone::NOTE_G4,Tone::NOTE_NULL,
+      Tone::NOTE_E4,Tone::NOTE_NULL,Tone::NOTE_A4,Tone::NOTE_NULL,Tone::NOTE_B4,Tone::NOTE_NULL,
+      Tone::NOTE_AS4,Tone::NOTE_A4,Tone::NOTE_NULL,Tone::NOTE_G4,Tone::NOTE_E5,Tone::NOTE_G5,
+      Tone::NOTE_A5,Tone::NOTE_NULL,Tone::NOTE_F5,Tone::NOTE_G5,Tone::NOTE_NULL,Tone::NOTE_E5,
+      Tone::NOTE_NULL,Tone::NOTE_C5,Tone::NOTE_D5,Tone::NOTE_B4,Tone::NOTE_NULL,
+    );
 
-    let _handler = thread::spawn( move || {
-      if let Ok(ref mut buzzer_locked) = buzzer_cloned.lock() {
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5,200);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5,200);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5,200);    
-        thread::sleep(Duration::from_millis(200));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5,200);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5,200);
-        thread::sleep(Duration::from_millis(200));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5,200);
-        thread::sleep(Duration::from_millis(680));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4,200);
-        thread::sleep(Duration::from_millis(680));
+    let mut periods: Vec<i32> = vec!(
+      200,200,200,200,200,200,200,200,680,200,680,200,440,200,440,200,
+      440,200,200,200,200,200,200,200,140,140,140,200,200,200,200,200,
+      200,200,200,200,200,440,200,440,200,440,140,440,200,200,200,200,
+      200,200,200,140,140,140,200,200,200,200,200,200,200,200,200,200,
+      440,    
+    );
 
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5,200);
-        thread::sleep(Duration::from_millis(440));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4,200);
-        thread::sleep(Duration::from_millis(440));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E4,200);
-        thread::sleep(Duration::from_millis(440));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4,200);
-        thread::sleep(Duration::from_millis(200));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4,200);
-        thread::sleep(Duration::from_millis(200));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_AS4,200);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4,200);
-        thread::sleep(Duration::from_millis(200));
+    tones.truncate(10);
+    periods.truncate(10);
 
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4,140);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5,140);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5,140);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A5,200);
-        thread::sleep(Duration::from_millis(200));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F5,200);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5,200);    
-        thread::sleep(Duration::from_millis(200));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5,200);
-        thread::sleep(Duration::from_millis(200));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5,200);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5,200);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4,200);
-        thread::sleep(Duration::from_millis(440));
-
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5,200);
-        thread::sleep(Duration::from_millis(440));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4,200);
-        thread::sleep(Duration::from_millis(440));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E4,140);    
-        thread::sleep(Duration::from_millis(440));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4,200);
-        thread::sleep(Duration::from_millis(200));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4,200);
-        thread::sleep(Duration::from_millis(200));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_AS4,200);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4,200);
-        thread::sleep(Duration::from_millis(200));
-
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4,140);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5,140);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5,140);    
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A5,200);
-        thread::sleep(Duration::from_millis(200));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F5,200);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5,200);    
-        thread::sleep(Duration::from_millis(200));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5,200);
-        thread::sleep(Duration::from_millis(200));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5,200);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5,200);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4,200);
-        thread::sleep(Duration::from_millis(440));
-      };
-    });
-
-    Ok(())
-  }
-
-  fn play_starwars_first_session(buzzer_locked: &BuzzerThreadSafe) -> Result<(), String> {
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 500);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 500);    
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 500);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 350);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 150);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 500);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 350);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 150);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 650);
-
-    thread::sleep(Duration::from_millis(500));
-
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 500);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 500);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 500);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F5, 350);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 150);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_GS4, 500);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 350);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 150);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 650);
-
-    thread::sleep(Duration::from_millis(500));
-
-    Ok(())
-  }
-
-  fn play_starwars_second_session(buzzer_locked: &BuzzerThreadSafe) -> Result<(), String> {
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A5, 500);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 300);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 150);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A5, 500);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_GS5, 325);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G5, 175);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_FS5, 125);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F5, 125);    
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_FS5, 250);
-
-    thread::sleep(Duration::from_millis(325));
-
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_AS4, 250);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_DS5, 500);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D5, 325);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_CS5, 175);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_B4, 125);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 250);  
-
-    thread::sleep(Duration::from_millis(350));
-
-    Ok(())
-  }
-
-  fn play_starwars_variant1(buzzer_locked: &BuzzerThreadSafe) -> Result<(), String> {
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 250);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_GS4, 500);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 350);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 125);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 500);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 375);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E5, 650);
-  
-    thread::sleep(Duration::from_millis(500));
-
-    Ok(())
-  }
-
-  fn play_starwars_variant2(buzzer_locked: &BuzzerThreadSafe) -> Result<(), String> {
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 250);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_GS4, 500);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 375);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 500);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 375);  
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C5, 125);
-    let _ret = (*buzzer_locked).play_tone(Tone::NOTE_A4, 650);  
-  
-    thread::sleep(Duration::from_millis(650));
-
-    Ok(())
+    Sounds::play_sound(buzzer, tones, periods)
   }
 
   pub fn play_starwars(buzzer: &mut Buzzer) -> Result<(), String>  {
-    let buzzer_cloned = buzzer.buzzer.clone();
 
-    let _handler = thread::spawn( move || {
-      if let Ok(ref mut buzzer_locked) = buzzer_cloned.lock() {
+    let tones_1s: Vec<Tone> = vec!(
+      Tone::NOTE_A4, Tone::NOTE_A4, Tone::NOTE_A4, Tone::NOTE_F4, 
+      Tone::NOTE_C5, Tone::NOTE_A4, Tone::NOTE_F4, Tone::NOTE_C5, 
+      Tone::NOTE_A4, Tone::NOTE_NULL, Tone::NOTE_E5, Tone::NOTE_E5,
+      Tone::NOTE_E5, Tone::NOTE_F5, Tone::NOTE_C5, Tone::NOTE_GS4, 
+      Tone::NOTE_F4, Tone::NOTE_C5, Tone::NOTE_A4, Tone::NOTE_NULL,
+    );
 
-        let _ret = Sounds::play_starwars_first_session(buzzer_locked);
-        let _ret = Sounds::play_starwars_second_session(buzzer_locked);
+    let periods_1s: Vec<i32> = vec!(
+      500,500,500,350,150,500,350,150,650,500,500,500,500,350,150,500,350,150,650,500,
+    );
 
-        let _ret = Sounds::play_starwars_variant1(buzzer_locked);
-        let _ret = Sounds::play_starwars_second_session(buzzer_locked);
-        let _ret = Sounds::play_starwars_variant2(buzzer_locked);      
-      };
-    });
+    let tones_2s: Vec<Tone> = vec!(
+      Tone::NOTE_A5, Tone::NOTE_A4, Tone::NOTE_A4, Tone::NOTE_A5, Tone::NOTE_GS5, Tone::NOTE_G5, 
+      Tone::NOTE_FS5, Tone::NOTE_F5, Tone::NOTE_FS5, Tone::NOTE_NULL, Tone::NOTE_AS4, Tone::NOTE_DS5, 
+      Tone::NOTE_D5, Tone::NOTE_CS5, Tone::NOTE_C5, Tone::NOTE_B4, Tone::NOTE_C5, Tone::NOTE_NULL,
+    );
 
-    Ok(())
+    let periods_2s: Vec<i32> = vec!(
+      500,300,150,500,325,175,125,125,250,325,250,500,325,175,125,125,250,350,
+    );
+
+    let tones_1v: Vec<Tone> = vec!(
+      Tone::NOTE_F4, Tone::NOTE_GS4, Tone::NOTE_F4, Tone::NOTE_A4, Tone::NOTE_C5, Tone::NOTE_A4, 
+      Tone::NOTE_C5, Tone::NOTE_E5, Tone::NOTE_NULL,
+    );
+
+    let periods_1v: Vec<i32> = vec!(
+      250,500,350,125,500,375,125,650,500,
+    );
+  
+    let tones_2v: Vec<Tone> = vec!(
+      Tone::NOTE_F4, Tone::NOTE_GS4, Tone::NOTE_F4, Tone::NOTE_C5, Tone::NOTE_A4, Tone::NOTE_F4, 
+      Tone::NOTE_C5, Tone::NOTE_A4, Tone::NOTE_NULL,
+    );
+
+    let periods_2v: Vec<i32> = vec!(
+      250,500,375,125,500,375,125,650,650,  
+    );
+
+    let mut tones: Vec<Tone> = vec!();
+    tones.extend(&tones_1s);
+    tones.extend(&tones_2s);
+    tones.extend(&tones_1v);
+    tones.extend(&tones_2s);
+    tones.extend(&tones_2v);
+
+    let mut periods: Vec<i32> = vec!();
+    periods.extend(&periods_1s);
+    periods.extend(&periods_2s);
+    periods.extend(&periods_1v);
+    periods.extend(&periods_2s);
+    periods.extend(&periods_2v);
+
+    tones.truncate(10);
+    periods.truncate(10);
+
+    Sounds::play_sound(buzzer, tones, periods)
   }
 
   pub fn play_doremifa(buzzer: &mut Buzzer) -> Result<(), String> {
-    let buzzer_cloned = buzzer.buzzer.clone();
 
-    let _handler = thread::spawn( move || {
-      if let Ok(ref mut buzzer_locked) = buzzer_cloned.lock() {
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C4, 600);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D4, 600);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E4, 600);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 600);
+    let mut tones: Vec<Tone> = vec!(
+      Tone::NOTE_C4, Tone::NOTE_D4, Tone::NOTE_E4, Tone::NOTE_F4, Tone::NOTE_NULL, Tone::NOTE_F4, Tone::NOTE_NULL, Tone::NOTE_F4, 
+      Tone::NOTE_C4, Tone::NOTE_D4, Tone::NOTE_C4, Tone::NOTE_D4, Tone::NOTE_NULL, Tone::NOTE_D4, Tone::NOTE_NULL, Tone::NOTE_D4, 
+      Tone::NOTE_C4, Tone::NOTE_G4, Tone::NOTE_F4, Tone::NOTE_E4, Tone::NOTE_NULL, Tone::NOTE_E4, Tone::NOTE_NULL, Tone::NOTE_E4, 
+      Tone::NOTE_C4, Tone::NOTE_D4, Tone::NOTE_E4, Tone::NOTE_F4, Tone::NOTE_NULL, Tone::NOTE_F4,  Tone::NOTE_NULL, Tone::NOTE_F4,  
+    );
 
-        thread::sleep(Duration::from_millis(100));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 400);
-        thread::sleep(Duration::from_millis(100));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 400);
+    let mut periods: Vec<i32> = vec!(
+      600,600,600,600,100,400,100,400,600,600,600,600,100,400,100,400,600,600,600,600,100,400,100,400,600,600,600,600,100,400,100,400,
+    );
 
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C4, 600);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D4, 600);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C4, 600);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D4, 600);
+    tones.truncate(8);
+    periods.truncate(8);
 
-        thread::sleep(Duration::from_millis(100));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D4, 400);
-        thread::sleep(Duration::from_millis(100));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D4, 400);
+    Sounds::play_sound(buzzer, tones, periods)
+  }
 
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C4, 600);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_G4, 600);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 600);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E4, 600);
+  pub fn play_bip(buzzer: &mut Buzzer) -> Result<(), String> {
+    let tones: Vec<Tone> = vec!(
+      Tone::NOTE_C4, Tone::NOTE_NULL, Tone::NOTE_D4, Tone::NOTE_NULL, Tone::NOTE_E4, Tone::NOTE_NULL, Tone::NOTE_F4, Tone::NOTE_NULL, 
+    );
 
-        thread::sleep(Duration::from_millis(100));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E4, 400);
-        thread::sleep(Duration::from_millis(100));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E4, 400);
+    let periods: Vec<i32> = vec!(
+      150,150,150,150,150,150,150,150
+    );
 
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_C4, 600);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_D4, 600);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_E4, 600);
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 600);
-
-        thread::sleep(Duration::from_millis(100));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 400);
-        thread::sleep(Duration::from_millis(100));
-        let _ret = (*buzzer_locked).play_tone(Tone::NOTE_F4, 400);
-      };
-    });
-
-    Ok(())
+    Sounds::play_sound(buzzer, tones, periods)
   }
 }

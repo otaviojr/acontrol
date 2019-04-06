@@ -219,7 +219,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                   let _ret = audio.play_error();
                 });
                 let _ret = acontrol_system_get_display_drv(|display|{
-                  let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
+                  let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
                   let _ret = display.wait_animation_ends();
                 });
               },
@@ -243,7 +243,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                   let _ret = audio.play_granted();
                 });
                 let _ret = acontrol_system_get_display_drv(|display|{
-                  let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",3);
+                  let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
                   let _ret = display.wait_animation_ends();
                 });
               }
@@ -305,7 +305,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                               let _ret = audio.play_granted();
                             });
                             let _ret = acontrol_system_get_display_drv(|display|{
-                              let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",3);
+                              let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
                               let _ret = display.wait_animation_ends();
                             });
 
@@ -318,7 +318,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                               let _ret = audio.play_denied();
                             });
                             let _ret = acontrol_system_get_display_drv(|display|{
-                              let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
+                              let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
                               let _ret = display.wait_animation_ends();
                             });
                           }
@@ -330,7 +330,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                             let _ret = audio.play_denied();
                           });
                           let _ret = acontrol_system_get_display_drv(|display|{
-                            let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
+                            let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
                             let _ret = display.wait_animation_ends();
                           });
                         }
@@ -342,7 +342,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                           let _ret = audio.play_denied();
                         });
                         let _ret = acontrol_system_get_display_drv(|display|{
-                          let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
+                          let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
                           let _ret = display.wait_animation_ends();
                         });
                       }
@@ -368,7 +368,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                     let _ret = audio.play_error();
                   });
                   let _ret = acontrol_system_get_display_drv(|display|{
-                    let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
+                    let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
                     let _ret = display.wait_animation_ends();
                   });
                 } else {
@@ -384,7 +384,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                             let _ret = audio.play_error();
                           });
                           let _ret = acontrol_system_get_display_drv(|display|{
-                            let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
+                            let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
                             let _ret = display.wait_animation_ends();
                           });
                         } else {
@@ -393,7 +393,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                             let _ret = audio.play_new();
                           });
                           let _ret = acontrol_system_get_display_drv(|display|{
-                            let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",3);
+                            let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
                             let _ret = display.wait_animation_ends();
                           });
                         }
@@ -416,7 +416,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                     let _ret = audio.play_error();
                   });
                   let _ret = acontrol_system_get_display_drv(|display|{
-                    let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Success, "Done",3);
+                    let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Success, "Done",3);
                     let _ret = display.wait_animation_ends();
                   });
                 } else {
@@ -424,7 +424,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                     let _ret = audio.play_success();
                   });
                   let _ret = acontrol_system_get_display_drv(|display|{
-                    let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",3);
+                    let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
                     let _ret = display.wait_animation_ends();
                   });
                 }
@@ -498,10 +498,20 @@ pub fn acontrol_system_fingerprint_start_enroll(params: HashMap<String,String>) 
   return Err(String::from("Driver not ready to start enrollment"));
 }
 
-pub fn acontrol_system_get_persist_drv<F, T>(f: F) -> T
-  where F: FnOnce(&Option<Mutex<Box<Persist + Send + Sync>>>) -> T, {
-  let mut persist_drv = &*ACONTROL_SYSTEM.persist_drv.lock().unwrap();
-  f(persist_drv)
+pub fn acontrol_system_get_persist_drv<F, T>(f: F) -> Result<(),String>
+  where F: FnOnce(&mut Persist) -> T, {
+
+  match *ACONTROL_SYSTEM.persist_drv.lock().unwrap()  {
+    Some(ref drv) => {
+      let persist = &mut *(*drv.lock().unwrap());
+      f(persist);
+      Ok(())
+    },
+    None => {
+      println!("Ops! Error getting persistence at this time!");
+      Err(String::from("Persistence driver not found"))
+    }
+  }
 }
 
 pub fn acontrol_system_get_display_drv<F, T>(f:F) -> Result<(),String>
@@ -514,6 +524,7 @@ pub fn acontrol_system_get_display_drv<F, T>(f:F) -> Result<(),String>
       Ok(())
     },
     None => {
+      println!("Ops! Error getting display at this time!");
       Err(String::from("Display device not found"))
     }
   }

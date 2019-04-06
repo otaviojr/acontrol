@@ -113,6 +113,7 @@ enum Error {
     NackFingerIsNotPresent = 0x1012
 }
 
+#[allow(dead_code)]
 impl Error {
   fn name(&self) -> &'static str {
     match *self {
@@ -380,7 +381,7 @@ impl Gt521fxThreadSafe {
     let mut response = Response::new();
 
     if let Some(ref mut port) = self.port {
-      (*port).clear(ClearBuffer::All);
+      let _ret = (*port).clear(ClearBuffer::All);
 
       //println!("Sending: {:X?}", data);
 

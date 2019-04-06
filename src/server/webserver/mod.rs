@@ -44,7 +44,7 @@ impl WebServer {
              serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("No body. Or body is not a valid json")} ).unwrap())
           ));
         }
-        Err(err) => {
+        Err(_err) => {
           resp = Some(Response::with((iron::status::BadRequest,
              serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("No body. Or body is not a valid json")} ).unwrap())
           ));
@@ -73,7 +73,7 @@ impl WebServer {
     Ok(final_resp)
   }
 
-  fn nfc_restore(req: &mut Request) -> IronResult<Response> {
+  fn nfc_restore(_req: &mut Request) -> IronResult<Response> {
     system::acontrol_system_set_nfc_state(system::NFCSystemState::RESTORE,None);
 
     let mut resp = Response::with((iron::status::Ok,
@@ -87,30 +87,25 @@ impl WebServer {
     Ok(resp)
   }
 
-  fn nfc_list(req: &mut Request) -> IronResult<Response> {
+  fn nfc_list(_req: &mut Request) -> IronResult<Response> {
     let mut cards: Vec<WebCard> = Vec::new();
     let mut resp: Option<Response> = None;
 
-    system::acontrol_system_get_persist_drv(|ref drv| {
-      match drv {
-        Some(ref persist) => {
-          if let Ok(ret) =  persist.lock().unwrap().nfc_list() {
-            for card in ret {
-              cards.push(WebCard {id: card.id, uuid: card.uuid, name: String::from_utf8(card.name).unwrap()});
-            }
-          } else {
-            resp = Some(Response::with((iron::status::InternalServerError,
-              serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("Error searching cards")} ).unwrap())
-            ));
-          }
-        },
-        None => {
-          resp = Some(Response::with((iron::status::InternalServerError,
-            serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("Persistence driver not found")} ).unwrap())
-          ));
+    if let Err(err) = system::acontrol_system_get_persist_drv(|drv| {
+      if let Ok(ret) =  drv.nfc_list() {
+        for card in ret {
+          cards.push(WebCard {id: card.id, uuid: card.uuid, name: String::from_utf8(card.name).unwrap()});
         }
+      } else {
+        resp = Some(Response::with((iron::status::InternalServerError,
+          serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("Error searching cards")} ).unwrap())
+        ));
       }
-    }); 
+    }) {
+      resp = Some(Response::with((iron::status::InternalServerError,
+        serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: format!("Persistence driver not found: {}", err)} ).unwrap())
+      ));
+    } 
 
     if resp.is_none() {
       resp = Some(Response::with((iron::status::Ok,
@@ -151,7 +146,7 @@ impl WebServer {
              serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("No body. Or body is not a valid json")} ).unwrap())
           ));
         }
-        Err(err) => {
+        Err(_err) => {
           resp = Some(Response::with((iron::status::BadRequest,
              serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: String::from("No body. Or body is not a valid json")} ).unwrap())
           ));

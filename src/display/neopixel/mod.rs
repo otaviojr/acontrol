@@ -107,7 +107,7 @@ impl NeoPixelSpinnerAnimation {
 
 impl NeoPixelBlinkAnimation {
   fn new(red: u8, green: u8, blue: u8, repeat: i32) -> Self {
-    return NeoPixelBlinkAnimation {repeat: repeat*2, red: red, green: green, blue: blue, /*custom: None,*/ infinity: false };
+    return NeoPixelBlinkAnimation {repeat: if repeat <= 0 { 0 } else {repeat*2}, red: red, green: green, blue: blue, /*custom: None,*/ infinity: false };
   }
 
   fn new_loop(red: u8, green: u8, blue: u8) -> Self  {
@@ -279,7 +279,7 @@ impl NeoPixel {
   }
 
   fn animation_blink<F>(&mut self, info: NeoPixelBlinkAnimation, finish: F) -> Result<(), String>
-                                        where F: Fn(bool, &mut NeoPixelBlinkAnimation) -> Result<(i64), String> + Send + Sync + Copy + 'static {
+        where F: Fn(bool, &mut NeoPixelBlinkAnimation) -> Result<(i64), String> + Send + Sync + Copy + 'static {
 
     let interface = self.interface.clone();
 
@@ -301,6 +301,7 @@ impl NeoPixel {
       
         animation_info.repeat -= 1;
       }
+
       if animation_info.repeat >= 0 || animation_info.infinity == true {
         return Ok(true);
       } else {
