@@ -54,7 +54,6 @@ static unsigned long buffer_len;
 
 static struct device* dev;
 static struct dma_chan* dma_chan;
-static struct dma_pool* buz_dma_pool;
 static dma_addr_t dma_addr;
 static struct dma_async_tx_descriptor * dma_desc;
 
@@ -215,7 +214,7 @@ static void buzzer_callback(void * param)
   if(end)
   {
     dma_unmap_single(dev, dma_addr, buffer_len, DMA_TO_DEVICE);
-    dma_addr = NULL;
+    dma_addr = 0;
   }
 
   printk("BUZZER: dma callback finished");
@@ -225,7 +224,7 @@ static int start_dma( void )
 {
   printk("BUZZER(%s): DMA Started", __func__);
 
-  if(dma_addr != NULL){
+  if(dma_addr != 0){
     dma_unmap_single(dev, dma_addr, buffer_len, DMA_TO_DEVICE);
   }
 
@@ -270,7 +269,7 @@ int buzzer_pcm_play_tone(struct buzzer_tone* tone) {
   unsigned int out = 0xFF;
   unsigned long bytes = (PCM_FREQUENCY / tone->freq)/8;
 
-  printk("BUZZER(%s): playing tone, switching after %d bytes\n", __func__, bytes);
+  printk("BUZZER(%s): playing tone, switching after %lu bytes\n", __func__, bytes);
 
   dmaengine_terminate_sync(dma_chan);
 
@@ -284,7 +283,7 @@ int buzzer_pcm_play_tone(struct buzzer_tone* tone) {
   // I have to  work tomorow
   buffer_len = (((PCM_FREQUENCY/1000) * tone->period)/8) *10; 
 
-  printk("BUZZER(%s): Playing tone buffer length: %d", __func__, buffer_len);
+  printk("BUZZER(%s): Playing tone buffer length: %lu", __func__, buffer_len);
 
   buffer = kzalloc(buffer_len, GFP_KERNEL | GFP_ATOMIC);
   if(buffer == NULL) {
@@ -415,13 +414,11 @@ no_dma_config:
   dma_release_channel(dma_chan);
 
 no_dma_request_channel:
-no_dma_pool:
   iounmap(pcmctl_cm_base_addr);
 
 no_remap_pcm_ctl:
   //release_mem_region(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res));
 
-no_pcm_ctl_request_mem:
 no_pcm_ctl_resource:
   iounmap(pcm_base_addr);
 
