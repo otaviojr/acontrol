@@ -39,7 +39,7 @@ pub enum Animation {
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub enum AnimationColor {
-  Orange = 0xA00000,
+  Orange = 0xFF8000,
   Red = 0xFF0000,
   Green = 0x00FF00,
   Blue = 0x0000FF

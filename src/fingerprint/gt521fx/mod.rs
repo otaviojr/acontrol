@@ -20,6 +20,7 @@ pub enum FingerprintDriverState {
   ENROLL3,
   ENROLL1_WAIT,
   ENROLL2_WAIT,
+  ENROLL_ERROR,
 }
 
 #[allow(dead_code)]
@@ -33,6 +34,7 @@ impl FingerprintDriverState {
       FingerprintDriverState::ENROLL3 => "ENROLL3",
       FingerprintDriverState::ENROLL1_WAIT => "ENROLL1_WAIT",
       FingerprintDriverState::ENROLL2_WAIT => "ENROLL2_WAIT",
+      FingerprintDriverState::ENROLL_ERROR => "ENROLL_ERROR",
     }
   }
 
@@ -500,6 +502,7 @@ impl Fingerprint for Gt521fx {
                 FingerprintDriverState::READ => Some(FingerprintState::READING),
                 FingerprintDriverState::ENROLL1 | FingerprintDriverState::ENROLL2 | FingerprintDriverState::ENROLL3 => Some(FingerprintState::WAITING),
                 FingerprintDriverState::ENROLL1_WAIT | FingerprintDriverState::ENROLL2_WAIT => Some(FingerprintState::SUCCESS),
+                FingerprintDriverState::ENROLL_ERROR => Some(FingerprintState::ERROR),
               };
 
               if let Some(ref state) = fingerprint_state {
@@ -627,6 +630,9 @@ impl Fingerprint for Gt521fx {
                     None => {}
                   }
                 },
+                FingerprintDriverState::ENROLL_ERROR => {
+                  state_locked.set(FingerprintDriverState::READ);
+                },
                 FingerprintDriverState::READ => {
                   if let Ok(ref mut gt521fx_locked) = gt521fx.lock() {
                     println!("Checking finger");
@@ -736,6 +742,9 @@ impl Fingerprint for Gt521fx {
 
             } else {
               println!("EnrollStart error: {}", response.parameter);
+              if let Ok(mut state_locked) = state_cloned.lock() {
+               (*state_locked).set(FingerprintDriverState::ENROLL_ERROR);
+              }
             }
           },
           Err(err) => {
