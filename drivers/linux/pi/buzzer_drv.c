@@ -88,7 +88,6 @@ static int dev_release(struct inode* inodep, struct file* filep)
 static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
 {
   long ret = 0;
-  //long value = 0;
   struct buzzer_tone tone;
 
   if (_IOC_TYPE(cmd) != BUZZER_IOC_MAGIC) return -EINVAL;
@@ -109,13 +108,6 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
       }
       break;
 
-  //  case  NEOPIXEL_IOCTL_GET_NUM_LEDS:
-  //    value = neopixel_pwm_get_num_leds();
-  //    if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
-  //      return -EFAULT;
-  //    }
-  //    break;
-
     case BUZZER_IOCTL_PLAY_TONE:
       if(copy_from_user((struct buzzer_tone*)&tone, (struct buzzer_tone*)arg, sizeof(struct buzzer_tone))){
         return -EFAULT;
@@ -124,25 +116,9 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
       buzzer_pcm_play_tone(&tone);
       break;
 
-  //  case NEOPIXEL_IOCTL_SHOW:
-      //printk("NEOPIXEL: show");
-  //    value = neopixel_pwm_show();
-  //    if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
-  //      return -EFAULT;
-  //    }
-  //    break;
-
-  //  case NEOPIXEL_IOCTL_HARDWARE_TEST:
-  //    neopixel_pwm_hardware_test();
-  //    value = 0;
-  //    if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
-  //      return -EFAULT;
-  //    }
-  //    break;
-
-  //  default:
-  //    printk("NEOPIXEL: Unknow ioctl command");
-  //    return -EINVAL;
+    default:
+      printk("BUZZER: Unknow ioctl command");
+      return -EINVAL;
   }
 
   return ret;
@@ -150,6 +126,7 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
 
 static ssize_t dev_write(struct file *filp, const char __user *buf, size_t count, loff_t *pos)
 {
+  //TODO: We are living fine playing tone by tone. Maybe on the next version I improve this.
   return 0;
 }
 

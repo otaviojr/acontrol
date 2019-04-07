@@ -48,7 +48,6 @@ static volatile void* __iomem pcm_base_addr;
 static volatile void* __iomem pcmctl_cm_base_addr;
 
 static uint8_t* buffer = NULL;
-//static uint8_t* dma_buffer = NULL;
 
 static unsigned long buffer_len;
 
