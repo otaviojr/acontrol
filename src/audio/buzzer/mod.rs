@@ -36,10 +36,8 @@ use std::thread;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use std::io;                                                                                                                                      
 use std::fs::OpenOptions;                                                                                                                         
 use std::os::unix::io::{RawFd,AsRawFd};                                                                                                           
-use std::ptr;                                                                                                                                     
 use std::mem;
 
 use audio::buzzer::sounds::{Sounds, Tone};

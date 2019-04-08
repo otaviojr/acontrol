@@ -234,15 +234,11 @@ impl NeoPixel {
     let interface = self.interface.clone();
 
     if let Some(animation) = (*interface.animation.lock().unwrap()).take() {
-      let mut wait = false;
-
       match interface.animation_tx.lock().unwrap().send(NeoPixelThreadCommand::Stop) {
-        Ok(_ret) => { wait = true; },
+        Ok(_ret) => {
+          let _ret = animation.join();
+        },
         Err(err) => return Err(format!("Error sending message: {:?}", err))
-      }
-      
-      if wait == true {
-        let _ret = animation.join();
       }
     }
 

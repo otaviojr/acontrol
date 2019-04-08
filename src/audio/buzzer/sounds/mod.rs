@@ -26,14 +26,10 @@
  *
  */
 
-use std::sync::Arc;
-use std::sync::Mutex;
-
 use std::thread;
-use std::sync::mpsc;
 use std::time::Duration;
 
-use audio::buzzer::{Buzzer, BuzzerThreadSafe, AudioThreadCommand};
+use audio::buzzer::{Buzzer, AudioThreadCommand};
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
@@ -145,7 +141,7 @@ impl Sounds {
   pub fn play_sound(buzzer: &mut Buzzer, tones: Vec<Tone>, periods: Vec<i32>) -> Result<(),String> {
     let buzzer_cloned = buzzer.buzzer.clone();
 
-    if(tones.len() != periods.len()){
+    if tones.len() != periods.len() {
       return Err(String::from("tones and periods differs in length."));
     }
 
@@ -180,7 +176,7 @@ impl Sounds {
 
     let handle = thread::spawn( move || {
       for (i, tone) in tones.iter().enumerate() {
-        if(periods[i] != 0) {
+        if periods[i] != 0 {
           if let Ok(ref mut buzzer_locked) = buzzer_cloned.lock() {
             let _ret = (*buzzer_locked).play_tone(*tone, periods[i]);
           }

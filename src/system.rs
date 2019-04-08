@@ -28,7 +28,7 @@
 use fingerprint::{Fingerprint, FingerprintState, FingerprintData};
 use nfc::{NfcReader};
 use audio::{Audio};
-use persist::{Persist, Card};
+use persist::{Persist};
 use display::{Display, Animation, AnimationType, AnimationColor};
 
 use std::sync::Mutex;
@@ -389,7 +389,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                 next_nfc_system_state = Some(NFCSystemState::WRITE)
               }
               NFCSystemState::WRITE => {
-                if let Err(err) = drv_inner.write_data(&uuid, *NFC_CARD_SIGNATURE_BLOCK, &NFC_CARD_SIGNATURE.as_bytes().to_vec()) {
+                if let Err(_err) = drv_inner.write_data(&uuid, *NFC_CARD_SIGNATURE_BLOCK, &NFC_CARD_SIGNATURE.as_bytes().to_vec()) {
                   eprintln!("No... we really have a problem here. Can't write either.");
                   let _ret = acontrol_system_get_audio_drv(|audio|{
                     let _ret = audio.play_error();
@@ -522,7 +522,6 @@ pub fn acontrol_system_fingerprint_start_enroll(params: HashMap<String,String>) 
       return Err(String::from("Fingerprint device unloaded"));
     }
   }
-  return Err(String::from("Driver not ready to start enrollment"));
 }
 
 pub fn acontrol_system_get_persist_drv<F, T>(f: F) -> Result<(),String>

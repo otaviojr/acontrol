@@ -242,13 +242,13 @@ impl Parser for Response {
     self.device_id = (response_data[3] as u16) << 8;
     self.device_id |= response_data[2] as u16;
 
-    self.parameter = (response_data[7] as u32) << 24;
+    self.parameter  = (response_data[7] as u32) << 24;
     self.parameter |= (response_data[6] as u32) << 16;
     self.parameter |= (response_data[5] as u32) << 8;
-    self.parameter |= (response_data[4] as u32);
+    self.parameter |= response_data[4] as u32;
 
-    self.response = (response_data[9] as u16) << 8;
-    self.response |= (response_data[8] as u16);
+    self.response  = (response_data[9] as u16) << 8;
+    self.response |= response_data[8] as u16;
 
     if self.response != Command::Ack.value() {
       return Ok(false)
@@ -331,15 +331,15 @@ impl Parser for OpenDataPacket {
       return Err(std::io::Error::new(ErrorKind::InvalidData, format!("Invalid checksum 0x{:X} - 0x{:X}", checksum, calc_checksum)));
     }
 
-    self.firmware_version = (response_data[7] as u32) << 24;
+    self.firmware_version  = (response_data[7] as u32) << 24;
     self.firmware_version |= (response_data[6] as u32) << 16;
     self.firmware_version |= (response_data[5] as u32) << 8;
-    self.firmware_version |= (response_data[4] as u32);
+    self.firmware_version |= response_data[4] as u32;
 
-    self.iso_area_max_size = (response_data[11] as u32) << 24;
+    self.iso_area_max_size  = (response_data[11] as u32) << 24;
     self.iso_area_max_size |= (response_data[10] as u32) << 16;
     self.iso_area_max_size |= (response_data[9] as u32) << 8;
-    self.iso_area_max_size |= (response_data[8] as u32);
+    self.iso_area_max_size |= response_data[8] as u32;
 
     for i in 0..15{
       self.device_serial_num[i] = response_data[i+12];
@@ -365,7 +365,7 @@ impl Gt521fxThreadSafe {
         timeout: Duration::from_millis(10000),
     };
 
-    match serialport::open_with_settings("/dev/serial0", &s) {
+    match serialport::open_with_settings(device, &s) {
       Ok(port) => {
         self.port = Some(port);
         Ok(())
@@ -378,7 +378,7 @@ impl Gt521fxThreadSafe {
     let mut ret: u16 = 0;
 
     for i in data {
-      ret += ((*i) as u16);
+      ret += (*i) as u16;
     }
 
     return ret;
@@ -489,12 +489,12 @@ impl Fingerprint for Gt521fx {
 
     let mut open_data = OpenDataPacket::new();
 
-    if let Err(err) = gt521fx_locked.open("/dev/serial0") {
+    if let Err(_err) = gt521fx_locked.open("/dev/serial0") {
       return Err(format!("{}","Error openning serial port."));
     }
 
     match gt521fx_locked.send_command(Command::Open, 0x1, Some(&mut open_data)) {
-      Ok(response) => {
+      Ok(_response) => {
         println!("Fingerprint firmware version = {:X}", open_data.firmware_version);
         println!("Fingerprint serial: {:X?}",open_data.device_serial_num);
         println!("Fingerprint device initialized successfully");
@@ -525,7 +525,7 @@ impl Fingerprint for Gt521fx {
           if let Ok(ref mut state_locked) = state.lock() {
             if let Ok(ref mut expires_locked) = expires.lock() {
 
-              let fingerprint_state = match(**state_locked) {
+              let fingerprint_state = match **state_locked {
                 FingerprintDriverState::READ => Some(FingerprintState::READING),
                 FingerprintDriverState::ENROLL1 | FingerprintDriverState::ENROLL2 | FingerprintDriverState::ENROLL3 => Some(FingerprintState::WAITING),
                 FingerprintDriverState::ENROLL1_WAIT | FingerprintDriverState::ENROLL2_WAIT => Some(FingerprintState::SUCCESS),
@@ -558,7 +558,7 @@ impl Fingerprint for Gt521fx {
                   }
               
                   match result {
-                    Some(Err(err)) => {
+                    Some(Err(_err)) => {
                       println!("Erro checking fingerprint");
                       func(&FingerprintState::ERROR, None);
                       state_locked.set(FingerprintDriverState::READ);
@@ -627,7 +627,7 @@ impl Fingerprint for Gt521fx {
                   }
 
                   match result {
-                    Some(Err(err)) => {
+                    Some(Err(_err)) => {
                       println!("Erro checking fingerprint");
                       func(&FingerprintState::ERROR, None);
                       state_locked.set(FingerprintDriverState::READ);
@@ -666,7 +666,7 @@ impl Fingerprint for Gt521fx {
                     let result = gt521fx_locked.send_command(Command::IsPressFinger, 0x00, None);
 
                     match result {
-                      Err(err) => {
+                      Err(_err) => {
                         println!("Erro checking fingerprint");
                         func(&FingerprintState::ERROR, None);
                       },
@@ -677,7 +677,7 @@ impl Fingerprint for Gt521fx {
                             let result = gt521fx_locked.send_command(Command::CaptureFinger, 0x00, None);
 
                             match result {
-                              Err(err) => {
+                              Err(_err) => {
                                 println!("Erro checking fingerprint");
                                 func(&FingerprintState::ERROR, None);
                               },
@@ -687,7 +687,7 @@ impl Fingerprint for Gt521fx {
                                   let result = gt521fx_locked.send_command(Command::Identify, 0x00, None);
 
                                   match result {
-                                    Err(err) => {
+                                    Err(_err) => {
                                       println!("Error identifying fingerprint!");
                                     },
                                     Ok(ref response) => {
@@ -733,7 +733,7 @@ impl Fingerprint for Gt521fx {
     }
 
     match gt521fx_locked.send_command(Command::Close, 0x0, None) {
-      Ok(response) => {
+      Ok(_response) => {
         println!("Fingerprint device closed successfully");
         Ok(())
       },
@@ -774,7 +774,7 @@ impl Fingerprint for Gt521fx {
               }
             }
           },
-          Err(err) => {
+          Err(_err) => {
           }
         }
       } else {

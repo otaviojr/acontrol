@@ -28,16 +28,12 @@
 use iron::prelude::*;
 use router::Router;
 
-use serde_derive;
-use serde;
 use serde_json;
 
 use system;
 use server::{Server,WebServerDefaultResponse,WebCard,WebServerNfcListResponse};
 
 use std::collections::HashMap;
-
-use persist::Card;
 
 pub struct WebServer {
   host: String,

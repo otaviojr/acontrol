@@ -117,8 +117,6 @@ impl Persist for SQLitePersist {
     } else {
       return Err(format!("{}","Database not connected"));
     }
-
-    Err(format!("{}","Card Not Found"))
   }
   
   fn nfc_find(&mut self, uuid: &Vec<u8>) -> Result<(Card), String> {
@@ -208,8 +206,6 @@ impl Persist for SQLitePersist {
     } else {
       return Err(format!("{}","Database not connected"));
     }
-
-    Err(format!("{}","Fingerprint Not Found"))
   }
 
   fn fingerprint_delete(&mut self, _pos: i32) -> Result<(), String> {
