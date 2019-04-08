@@ -31,6 +31,7 @@ pub mod gt521fx;
 #[allow(dead_code)]
 #[allow(non_camel_case_types)]
 pub enum FingerprintState {
+  IDLE,
   WAITING,
   READING,
   NOT_AUTHORIZED,
@@ -43,6 +44,7 @@ pub enum FingerprintState {
 impl FingerprintState {
   pub fn name(&self) -> &'static str {
     match *self {
+      FingerprintState::IDLE => "IDLE",
       FingerprintState::WAITING => "WAITING",
       FingerprintState::READING => "READING",
       FingerprintState::NOT_AUTHORIZED => "NOT_AUTHORIZED",

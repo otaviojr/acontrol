@@ -223,7 +223,15 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
             println!("Fingerprint Current State Changed To: {}", state.name());
 
             match state {
+              FingerprintState::IDLE => {
+                let _ret = acontrol_system_get_display_drv(|display|{
+                  let _ret = display.clear_and_stop_animations();
+                });
+              },
               FingerprintState::READING => {
+                let _ret = acontrol_system_get_display_drv(|display|{
+                  let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                });
               },
               FingerprintState::WAITING => {
                 let _ret = acontrol_system_get_audio_drv(|audio|{

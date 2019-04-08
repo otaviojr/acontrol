@@ -237,6 +237,13 @@ impl NeoPixel {
       match interface.animation_tx.lock().unwrap().send(NeoPixelThreadCommand::Stop) {
         Ok(_ret) => {
           let _ret = animation.join();
+
+          // If animation thread has already leaved, nobody will receive this message
+          // and it will be pending to the next thread. Clear the queue before
+          // starting another thread.
+          while let Ok(_ret) = interface.animation_rx.lock().unwrap().try_recv() {
+          }
+
         },
         Err(err) => return Err(format!("Error sending message: {:?}", err))
       }
