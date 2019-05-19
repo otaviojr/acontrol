@@ -3176,6 +3176,10 @@ You are welcome to use this library for commercial purposes. For attribution, we
 <classes>
 <class number="0" name="default" width="0" drill="0">
 </class>
+<class number="1" name="5V" width="0.254" drill="0">
+</class>
+<class number="2" name="GND" width="0.254" drill="0">
+</class>
 </classes>
 <parts>
 <part name="J1" library="SparkFun-Connectors" deviceset="RASPBERRYPI-40-PIN-GPIO" device="_PTH_NO_SHROUD" value="RASPBERRYPI-40-PIN-GPIO_PTH_NO_SHROUD"/>
@@ -3300,7 +3304,7 @@ You are welcome to use this library for commercial purposes. For attribution, we
 <busses>
 </busses>
 <nets>
-<net name="5V" class="0">
+<net name="5V" class="1">
 <segment>
 <pinref part="J5" gate="G$1" pin="2"/>
 <wire x1="-38.1" y1="76.2" x2="-22.86" y2="76.2" width="0.1524" layer="91"/>
@@ -3326,7 +3330,7 @@ You are welcome to use this library for commercial purposes. For attribution, we
 <wire x1="-43.18" y1="147.32" x2="-43.18" y2="160.02" width="0.1524" layer="91"/>
 </segment>
 </net>
-<net name="GND" class="0">
+<net name="GND" class="2">
 <segment>
 <pinref part="J5" gate="G$1" pin="1"/>
 <wire x1="-38.1" y1="71.12" x2="-22.86" y2="71.12" width="0.1524" layer="91"/>
