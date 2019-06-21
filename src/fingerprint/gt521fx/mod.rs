@@ -449,6 +449,8 @@ impl Gt521fxThreadSafe {
             println!("Error reading from serial port: {}", err);
           }
         }
+
+        thread::sleep(Duration::from_millis(100));
       }{
         return Err(err);
       }

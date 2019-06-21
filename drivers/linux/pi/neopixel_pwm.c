@@ -75,7 +75,15 @@ static dma_cookie_t dma_cookie;
 
 #define PWM_DMA_DREQ 		5
 
-#define BUS_ADDR_OFFSET		0xC0000000
+// TODO: move this to dts
+// This is necessary to RPi 3. By some reason we have to write
+// directly to the non cached memory. Otherwise, it will freeze
+// let animations.
+//#define BUS_ADDR_OFFSET		0xC0000000
+
+// For RPi Zero W we don't need to write to the non cached memory.
+// It will work fine.
+#define BUS_ADDR_OFFSET		0x00000000
 
 static void pwm_enable( void )
 {
@@ -158,13 +166,19 @@ static int pwm_init( void )
   msleep(100);
 
   //2.5Mhz = 0,45us per bit
-  reg = PWM_CM_CTL_PASSWORD | PWM_CM_DIV_DIVI(200) | PWM_CM_DIV_DIVF(492);
+
+  //I have been using this on Rpi 3.
+  //reg = PWM_CM_CTL_PASSWORD | PWM_CM_DIV_DIVI(200) | PWM_CM_DIV_DIVF(492);
+
+  //This is the final setup for RPi Zero. It should work on RPi 3 too. Needs test.
+  reg = PWM_CM_CTL_PASSWORD | PWM_CM_DIV_DIVI(200) | PWM_CM_DIV_DIVF(1);
   writel(reg, pwmctl_cm_base_addr + PWM_CM_DIV);
 
   msleep(100);
 
   //PLLD - PLLD 500Mhz - MASH 1
-  reg = PWM_CM_CTL_PASSWORD | PWM_CM_CTL_MASH(2) | PWM_CM_CTL_SRC(6);
+  //reg = PWM_CM_CTL_PASSWORD | PWM_CM_CTL_MASH(2) | PWM_CM_CTL_SRC(6);
+  reg = PWM_CM_CTL_PASSWORD | PWM_CM_CTL_MASH(0) | PWM_CM_CTL_SRC(6);
   writel(reg, pwmctl_cm_base_addr + PWM_CM_CTL);
 
   msleep(100);
