@@ -387,6 +387,7 @@ impl Mfrc522ThreadSafe {
       }
 
       if irq & irq_wait != 0 {
+        thread::sleep(Duration::from_millis(100));
         break;
       } else if irq & 0x01 != 0{
         return Err(Error::Timeout);

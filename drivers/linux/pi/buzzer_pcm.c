@@ -266,7 +266,13 @@ int buzzer_pcm_play_tone(struct buzzer_tone* tone) {
 
   unsigned long i;
   unsigned int out = 0xFF;
-  unsigned long bytes = (PCM_FREQUENCY / tone->freq)/8;
+  unsigned long bytes = 0;
+
+  if(tone->freq == 0) {
+    return -1;
+  }
+
+  bytes = (PCM_FREQUENCY / tone->freq)/8;
 
   printk("BUZZER(%s): playing tone, switching after %lu bytes\n", __func__, bytes);
 
