@@ -1,4 +1,4 @@
-Partlist exported from /home/otaviojr/Google Drive/WorkFiles/Projetos/Eletronica/Hardware/EAGLE/acontrol/acontrol.sch at 20/05/19 04:07
+Partlist exported from /home/otaviojr/Google Drive/WorkFiles/Projetos/Eletronica/Hardware/EAGLE/acontrol/acontrol.sch at 30/06/19 21:27
 
 Qty Value                                 Device                                Package          Parts  Description                                                                                                     PROD_ID    VALUE        
 1                                         CONN_08"                              1X08             J6     Multi connection point. Often used as Generic Header-pin footprint for 0.1 inch spaced/style header connections CONN-08438              
