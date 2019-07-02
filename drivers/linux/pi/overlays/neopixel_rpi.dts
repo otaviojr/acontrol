@@ -47,6 +47,7 @@
           dma-names = "neopixel-pwm-dma";
 
           num-leds = <16>;
+          bus-addr-offset = <0x00>;
         };
       };
     };

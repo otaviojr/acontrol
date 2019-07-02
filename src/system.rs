@@ -34,6 +34,8 @@ use display::{Display, Animation, AnimationType, AnimationColor};
 use std::sync::Mutex;
 use std::collections::HashMap;
 
+use std::process::Command;
+
 #[derive(PartialEq)]
 #[allow(dead_code)]
 pub enum NFCSystemState {
@@ -281,6 +283,17 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                   let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
                   let _ret = display.wait_animation_ends();
                 });
+
+                let _ret = acontrol_system_get_display_drv(|display|{
+                  let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                });
+                Command::new("/acontrol/granted")
+                  .arg("-f")
+                  .output()
+                  .expect("failed to execute process");
+                let _ret = acontrol_system_get_display_drv(|display|{
+                  let _ret = display.clear_and_stop_animations();
+                });
               }
               FingerprintState::NOT_AUTHORIZED => {
                 let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -289,6 +302,17 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                 let _ret = acontrol_system_get_display_drv(|display|{
                   let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
                   let _ret = display.wait_animation_ends();
+                });
+
+                let _ret = acontrol_system_get_display_drv(|display|{
+                  let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                });
+                Command::new("/acontrol/denieded")
+                  .arg("-f")
+                  .output()
+                  .expect("failed to execute process");
+                let _ret = acontrol_system_get_display_drv(|display|{
+                  let _ret = display.clear_and_stop_animations();
                 });
               }
             }
@@ -344,8 +368,16 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                               let _ret = display.wait_animation_ends();
                             });
 
-                            //TODO: Access Granted
-
+                            let _ret = acontrol_system_get_display_drv(|display|{
+                              let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                            });
+                            Command::new("/acontrol/granted")
+                              .arg("-f")
+                              .output()
+                              .expect("failed to execute process");
+                            let _ret = acontrol_system_get_display_drv(|display|{
+                              let _ret = display.clear_and_stop_animations();
+                            });
                           } else {
                             println!("Card {:?} not found!", uuid);
 
@@ -355,6 +387,17 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                             let _ret = acontrol_system_get_display_drv(|display|{
                               let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
                               let _ret = display.wait_animation_ends();
+                            });
+
+                            let _ret = acontrol_system_get_display_drv(|display|{
+                              let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                            });
+                            Command::new("/acontrol/denieded")
+                              .arg("-c")
+                              .output()
+                              .expect("failed to execute process");
+                            let _ret = acontrol_system_get_display_drv(|display|{
+                              let _ret = display.clear_and_stop_animations();
                             });
                           }
 

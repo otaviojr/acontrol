@@ -48,6 +48,11 @@ static volatile void* __iomem pwmctl_cm_base_addr;
 
 static unsigned int num_leds = 0;
 
+// This is necessary to RPi 3. By some reason we have to write
+// directly to the non cached memory. Otherwise, it will freeze
+// let animations. The same thing will not happens on RPi Zero
+static unsigned int bus_addr_offset = 0;
+
 static uint8_t* buffer = NULL;
 static uint8_t* dma_buffer = NULL;
 
@@ -74,16 +79,6 @@ static dma_cookie_t dma_cookie;
 #define RESET_BYTES		44
 
 #define PWM_DMA_DREQ 		5
-
-// TODO: move this to dts
-// This is necessary to RPi 3. By some reason we have to write
-// directly to the non cached memory. Otherwise, it will freeze
-// let animations.
-//#define BUS_ADDR_OFFSET		0xC0000000
-
-// For RPi Zero W we don't need to write to the non cached memory.
-// It will work fine.
-#define BUS_ADDR_OFFSET		0x00000000
 
 static void pwm_enable( void )
 {
@@ -269,7 +264,7 @@ static int start_dma( void )
 
   fill_dma_buffer();
 
-  dma_desc = dmaengine_prep_slave_single(dma_chan, dma_addr + BUS_ADDR_OFFSET, buffer_len, DMA_TO_DEVICE, DMA_PREP_INTERRUPT );
+  dma_desc = dmaengine_prep_slave_single(dma_chan, dma_addr + bus_addr_offset, buffer_len, DMA_TO_DEVICE, DMA_PREP_INTERRUPT );
 
   if(dma_desc == NULL)
   {
@@ -432,6 +427,14 @@ int neopixel_pwm_init( struct platform_device *pdev )
     printk("NEOPIXEL: number of leds = %d", num_leds);
   }
 
+  if(of_property_read_u32(np, "bus-addr-offset", &bus_addr_offset) ) {
+    dev_err(dev, "of_property_read_u32\n");
+    ret = -EINVAL;
+    goto no_bus_addr_offset;
+  } else {
+    printk("NEOPIXEL: bus address offset = 0x%x", bus_addr_offset);
+  }
+
   buffer_len = num_leds * BYTES_PER_LED + RESET_BYTES;
   buffer = kzalloc(buffer_len, GFP_KERNEL | GFP_ATOMIC);
   if(buffer == NULL)
@@ -479,6 +482,7 @@ no_dma_pool:
   kfree(buffer);
 
 no_num_leds:
+no_bus_addr_offset:
 no_buffer:
   iounmap(pwmctl_cm_base_addr);
 
