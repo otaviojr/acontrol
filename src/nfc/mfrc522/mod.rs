@@ -742,7 +742,7 @@ impl NfcReader for Mfrc522 {
             break;
           }
 
-          println!("Searching tag...");
+          //println!("Searching tag...");
           ret = match mfrc522_inner.send_req_a() {
             Ok(val) => {
               println!("Card Answer {:?}", val);
@@ -799,13 +799,11 @@ impl NfcReader for Mfrc522 {
           func(uuid, sak);
         }
 
-        if let Err(val) = ret {
-          eprintln!("{}", val);
-        }
+        //if let Err(val) = ret {
+          //eprintln!("{}", val);
+        //}
 
-        //buzzer.lock().unwrap().set_buzz(true);
         thread::sleep(Duration::from_millis(500));
-        //buzzer.lock().unwrap().set_buzz(false);
       }
     });
     Ok(())

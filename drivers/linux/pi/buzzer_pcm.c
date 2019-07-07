@@ -82,7 +82,7 @@ static int pcm_clock_init( void )
   while( ((reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL)) & PCM_CM_CTL_BUSY) != 0)
   {
     msleep(100);
-    printk("Waiting pcm busy bit: 0x%X\n", reg);
+    DEBUG("Waiting pcm busy bit: 0x%X\n", reg);
     if(counter++ == 100){
       printk("Timeout waiting busy bit.\n");
       return -1;
@@ -100,22 +100,22 @@ static int pcm_clock_init( void )
   //PLLD - PLLD 500Mhz - MASH 0
   reg = PCM_CM_CTL_PASSWORD | PCM_CM_CTL_MASH(0) | PCM_CM_CTL_SRC(6);
   writel(reg, pcmctl_cm_base_addr + PCM_CM_CTL);
-  printk("writing PCM_CM_CTL=0x%X",reg);
+  DEBUG("writing PCM_CM_CTL=0x%X",reg);
 
   msleep(100);
 
   reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL);
-  printk("reading PCM_CM_CTL=0x%X", reg);
+  DEBUG("reading PCM_CM_CTL=0x%X", reg);
 
   reg |= PCM_CM_CTL_PASSWORD | PCM_CM_CTL_ENAB;
 
   writel(reg, pcmctl_cm_base_addr + PCM_CM_CTL);
-  printk("writing PCM_CM_CTL=0x%X",reg);
+  DEBUG("writing PCM_CM_CTL=0x%X",reg);
 
   msleep(100);
 
   reg = readl(pcmctl_cm_base_addr + PCM_CM_CTL);
-  printk("reading PCM_CM_CTL=0x%X", reg);
+  DEBUG("reading PCM_CM_CTL=0x%X", reg);
 
   return 0;
 }
@@ -187,25 +187,25 @@ static void buzzer_callback(void * param)
 
   switch (status) {
     case DMA_IN_PROGRESS:
-      printk("BUZZER(%s): Received DMA_IN_PROGRESS\n", __func__);
+      DEBUG("BUZZER(%s): Received DMA_IN_PROGRESS\n", __func__);
       break;
 
     case DMA_PAUSED:
-      printk("BUZZER(%s): Received DMA_PAUSED\n", __func__);
+      DEBUG("BUZZER(%s): Received DMA_PAUSED\n", __func__);
       break;
 
     case DMA_ERROR:
-      printk("BUZZER(%s): Received DMA_ERROR\n", __func__);
+      DEBUG("BUZZER(%s): Received DMA_ERROR\n", __func__);
       end = 1;
       break;
 
     case DMA_COMPLETE:
-      printk("BUZZER(%s): Received DMA_COMPLETE\n", __func__);
+      DEBUG("BUZZER(%s): Received DMA_COMPLETE\n", __func__);
       end = 1;
       break;
 
     default:
-      printk("BUZZER(%s): Received unknown status\n", __func__);
+      DEBUG("BUZZER(%s): Received unknown status\n", __func__);
       end = 1;
       break;
   }
@@ -216,12 +216,12 @@ static void buzzer_callback(void * param)
     dma_addr = 0;
   }
 
-  printk("BUZZER: dma callback finished");
+  DEBUG("BUZZER: dma callback finished");
 }
 
 static int start_dma( void )
 {
-  printk("BUZZER(%s): DMA Started", __func__);
+  DEBUG("BUZZER(%s): DMA Started", __func__);
 
   if(dma_addr != 0){
     dma_unmap_single(dev, dma_addr, buffer_len, DMA_TO_DEVICE);
@@ -234,7 +234,7 @@ static int start_dma( void )
     return -ENOMEM;
   }
 
-  printk("BUZZER(%s): dma_buffer_virt = 0x%x; dma_buffer_phys = 0x%x; dma_buffer_length = %lu", 
+  DEBUG("BUZZER(%s): dma_buffer_virt = 0x%x; dma_buffer_phys = 0x%x; dma_buffer_length = %lu", 
 					__func__, 
 					(unsigned int)buffer, 
 					(unsigned int)dma_addr, 
@@ -274,7 +274,7 @@ int buzzer_pcm_play_tone(struct buzzer_tone* tone) {
 
   bytes = (PCM_FREQUENCY / tone->freq)/8;
 
-  printk("BUZZER(%s): playing tone, switching after %lu bytes\n", __func__, bytes);
+  DEBUG("BUZZER(%s): playing tone, switching after %lu bytes\n", __func__, bytes);
 
   dmaengine_terminate_sync(dma_chan);
 
@@ -288,7 +288,7 @@ int buzzer_pcm_play_tone(struct buzzer_tone* tone) {
   // I have to  work tomorow
   buffer_len = (((PCM_FREQUENCY/1000) * tone->period)/8) *10; 
 
-  printk("BUZZER(%s): Playing tone buffer length: %lu", __func__, buffer_len);
+  DEBUG("BUZZER(%s): Playing tone buffer length: %lu", __func__, buffer_len);
 
   buffer = kzalloc(buffer_len, GFP_KERNEL | GFP_ATOMIC);
   if(buffer == NULL) {
@@ -330,7 +330,7 @@ int buzzer_pcm_load( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_buzzer_resource;
   } else {
-    printk("BUZZER(%s): phys base address 0x%lx - 0x%lx", __func__, (long unsigned int)phys_base_addr->start, (long unsigned int)phys_base_addr->end);
+    DEBUG("BUZZER(%s): phys base address 0x%lx - 0x%lx", __func__, (long unsigned int)phys_base_addr->start, (long unsigned int)phys_base_addr->end);
   }
 
   bus_base_addr = platform_get_resource_byname(pdev, IORESOURCE_MEM, "buzzer-bus-addr");
@@ -339,7 +339,7 @@ int buzzer_pcm_load( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_buzzer_resource;
   } else {
-    printk("BUZZER(%s): bus base address 0x%lx - 0x%lx", __func__, (long unsigned int)bus_base_addr->start, (long unsigned int)bus_base_addr->end);
+    DEBUG("BUZZER(%s): bus base address 0x%lx - 0x%lx", __func__, (long unsigned int)bus_base_addr->start, (long unsigned int)bus_base_addr->end);
   }
 
   pcm_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "buzzer-pcm");
@@ -364,7 +364,7 @@ int buzzer_pcm_load( struct platform_device *pdev )
     ret = -ENOMEM;
     goto no_remap_pcm;
   } else {
-    printk("BUZZER: PCM address remapped");
+    DEBUG("BUZZER: PCM address remapped");
   }
 
   pcmctl_cm_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "buzzer-pcmctl-cm");
@@ -373,7 +373,7 @@ int buzzer_pcm_load( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_pcm_ctl_resource;
   } else {
-    printk("BUZZER: pcmctl clock base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pcmctl_cm_io_res->start, (long unsigned int)phys_base_addr->start + pcmctl_cm_io_res->end);
+    DEBUG("BUZZER: pcmctl clock base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pcmctl_cm_io_res->start, (long unsigned int)phys_base_addr->start + pcmctl_cm_io_res->end);
   }
 
   /*if(!request_mem_region(phys_base_addr->start + pcmctl_cm_io_res->start, resource_size(pcmctl_cm_io_res), "buzzer-pcmctl")) {
@@ -389,7 +389,7 @@ int buzzer_pcm_load( struct platform_device *pdev )
     ret = -ENOMEM;
     goto no_remap_pcm_ctl;
   } else {
-    printk("BUZZER: PCMCTL clock address remapped");
+    DEBUG("BUZZER: PCMCTL clock address remapped");
   }
 
   dma_chan = dma_request_slave_channel(dev, "buzzer-pcm-dma");

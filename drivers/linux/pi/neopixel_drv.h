@@ -39,4 +39,11 @@
     unsigned char blue;
   };
 
+  #define DEV_MODE false
+  #define DEBUG(fmt,...) if(DEV_MODE){\
+    do {\
+      printk(fmt, ##__VA_ARGS__);\
+    } while (0);\
+  }
+
 #endif //__NEOPIXEK_DRV_H__

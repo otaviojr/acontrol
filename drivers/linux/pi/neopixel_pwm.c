@@ -41,6 +41,7 @@
 #include <linux/delay.h>
 #include <linux/kthread.h>
 
+#include "neopixel_drv.h"
 #include "neopixel_pwm.h"
 
 static volatile void* __iomem pwm_base_addr;
@@ -120,18 +121,18 @@ static void pwm_reset( void )
         PWM_CTL_MSEN1;
 
   writel(reg, pwm_base_addr + PWM_CTL);
-  printk("NEOPIXEL: writing PWM CTL REGISTER =  0x%X", reg);
+  DEBUG("NEOPIXEL: writing PWM CTL REGISTER =  0x%X", reg);
 
   reg = readl(pwm_base_addr + PWM_CTL);
-  printk("NEOPIXEL: reading PWM CTL REGISTER =  0x%X", reg);
+  DEBUG("NEOPIXEL: reading PWM CTL REGISTER =  0x%X", reg);
 
   reg = readl(pwm_base_addr + PWM_STA);
-  printk("NEOPIXEL: PWM Status = 0x%X", reg);
+  DEBUG("NEOPIXEL: PWM Status = 0x%X", reg);
 
   writel(0xFFFFFFFF, pwm_base_addr + PWM_STA);
 
   reg = readl(pwm_base_addr + PWM_STA);
-  printk("NEOPIXEL: PWM Status = 0x%X", reg);
+  DEBUG("NEOPIXEL: PWM Status = 0x%X", reg);
 
   reg = PWM_DMAC_ENAB |
         PWM_DMAC_PANIC(9) |
@@ -153,7 +154,7 @@ static int pwm_init( void )
   while( (reg = readl(pwmctl_cm_base_addr + PWM_CM_CTL)) & PWM_CM_CTL_BUSY )
   {
     msleep(100);
-    printk("Waiting busy bit");
+    DEBUG("Waiting busy bit");
   }
 
   pwm_reset();
@@ -180,12 +181,12 @@ static int pwm_init( void )
 
   reg |= PWM_CM_CTL_ENAB;
   writel(reg, pwmctl_cm_base_addr + PWM_CM_CTL);
-  printk("writing PWM_CM_CTL=0x%X",reg);
+  DEBUG("writing PWM_CM_CTL=0x%X",reg);
 
   msleep(100);
 
   reg = readl(pwmctl_cm_base_addr + PWM_CM_CTL);
-  printk("reading PWM_CM_CTL=0x%X",reg);
+  DEBUG("reading PWM_CM_CTL=0x%X",reg);
 
   return 0;
 }
@@ -201,25 +202,25 @@ static void neopixel_callback(void * param)
 
   switch (status) {
     case DMA_IN_PROGRESS:
-      //printk("NEOPIXEL(%s): Received DMA_IN_PROGRESS\n", __func__);
+      DEBUG("NEOPIXEL(%s): Received DMA_IN_PROGRESS\n", __func__);
       break;
 
     case DMA_PAUSED:
-      //printk("NEOPIXEL(%s): Received DMA_PAUSED\n", __func__);
+      DEBUG("NEOPIXEL(%s): Received DMA_PAUSED\n", __func__);
       break;
 
     case DMA_ERROR:
-      //printk("NEOPIXEL(%s): Received DMA_ERROR\n", __func__);
+      DEBUG("NEOPIXEL(%s): Received DMA_ERROR\n", __func__);
       end = 1;
       break;
 
     case DMA_COMPLETE:
-      //printk("NEOPIXEL(%s): Received DMA_COMPLETE\n", __func__);
+      DEBUG("NEOPIXEL(%s): Received DMA_COMPLETE\n", __func__);
       end = 1;
       break;
 
     default:
-      //printk("NEOPIXEL(%s): Received unknown status\n", __func__);
+      DEBUG("NEOPIXEL(%s): Received unknown status\n", __func__);
       end = 1;
       break;
   }
@@ -229,7 +230,7 @@ static void neopixel_callback(void * param)
     dma_pool_free(neo_dma_pool, dma_buffer, dma_addr);
   }
 
-  //printk("NEOPIXEL: dma callback finished");
+  DEBUG("NEOPIXEL: dma callback finished");
 }
 
 static void fill_dma_buffer( void )
@@ -251,7 +252,7 @@ static void fill_dma_buffer( void )
 
 static int start_dma( void )
 {
-  //printk("NEOPIXEL(%s): DMA Started", __func__);
+  DEBUG("NEOPIXEL(%s): DMA Started", __func__);
 
   dma_buffer = dma_pool_alloc(neo_dma_pool, GFP_KERNEL, &dma_addr);
   if(!dma_buffer)
@@ -260,7 +261,7 @@ static int start_dma( void )
     return -ENOMEM;
   }
 
-  //printk("NEOOPIXEL(%s): dma_buffer_virt = 0x%x; dma_buffer_phys = 0x%x; dma_buffer_length = %lu", __func__, (unsigned int)dma_buffer, (unsigned int)dma_addr, buffer_len);
+  DEBUG("NEOOPIXEL(%s): dma_buffer_virt = 0x%x; dma_buffer_phys = 0x%x; dma_buffer_length = %lu", __func__, (unsigned int)dma_buffer, (unsigned int)dma_addr, buffer_len);
 
   fill_dma_buffer();
 
@@ -354,7 +355,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_neopixel_resource;
   } else {
-    printk("NEOPIXEL: phys base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start, (long unsigned int)phys_base_addr->end);
+    DEBUG("NEOPIXEL: phys base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start, (long unsigned int)phys_base_addr->end);
   }
 
   bus_base_addr = platform_get_resource_byname(pdev, IORESOURCE_MEM, "neopixel-bus-base");
@@ -363,7 +364,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_neopixel_resource;
   } else {
-    printk("NEOPIXEL: bus base address 0x%lx - 0x%lx", (long unsigned int)bus_base_addr->start, (long unsigned int)bus_base_addr->end);
+    DEBUG("NEOPIXEL: bus base address 0x%lx - 0x%lx", (long unsigned int)bus_base_addr->start, (long unsigned int)bus_base_addr->end);
   }
 
   pwm_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "neopixel-pwm");
@@ -372,7 +373,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_neopixel_pwm;
   } else {
-    printk("NEOPIXEL: pwm base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pwm_io_res->start, (long unsigned int)phys_base_addr->start + pwm_io_res->end);
+    DEBUG("NEOPIXEL: pwm base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pwm_io_res->start, (long unsigned int)phys_base_addr->start + pwm_io_res->end);
   }
 
   if  (!request_mem_region(phys_base_addr->start + pwm_io_res->start, resource_size(pwm_io_res), "neopixel-pwm")) {
@@ -389,7 +390,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     ret = -ENOMEM;
     goto no_remap_pwm;
   } else {
-    printk("NEOPIXEL: PWM address remapped");
+    DEBUG("NEOPIXEL: PWM address remapped");
   }
 
   pwmctl_cm_io_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "neopixel-pwmctl-cm");
@@ -398,7 +399,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     ret = -ENODEV;
     goto no_pwm_ctl_resource;
   } else {
-    printk("NEOPIXEL: pwmctl clock base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pwmctl_cm_io_res->start, (long unsigned int)phys_base_addr->start + pwmctl_cm_io_res->end);
+    DEBUG("NEOPIXEL: pwmctl clock base address 0x%lx - 0x%lx", (long unsigned int)phys_base_addr->start + pwmctl_cm_io_res->start, (long unsigned int)phys_base_addr->start + pwmctl_cm_io_res->end);
   }
 
   /* SOME PART OF THE KERNEL IS USING THIS AREA. WE WILL USE ANYWAY, BUT, REQUESTING IT WILL FAIL */
@@ -416,7 +417,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     ret = -ENOMEM;
     goto no_remap_pwm_ctl;
   } else {
-    printk("NEOPIXEL: PWMCTL clock address remapped");
+    DEBUG("NEOPIXEL: PWMCTL clock address remapped");
   }
 
   if(of_property_read_u32(np, "num-leds", &num_leds) ) {
@@ -424,7 +425,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     ret = -EINVAL;
     goto no_num_leds;
   } else {
-    printk("NEOPIXEL: number of leds = %d", num_leds);
+    DEBUG("NEOPIXEL: number of leds = %d", num_leds);
   }
 
   if(of_property_read_u32(np, "bus-addr-offset", &bus_addr_offset) ) {
@@ -432,7 +433,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     ret = -EINVAL;
     goto no_bus_addr_offset;
   } else {
-    printk("NEOPIXEL: bus address offset = 0x%x", bus_addr_offset);
+    DEBUG("NEOPIXEL: bus address offset = 0x%x", bus_addr_offset);
   }
 
   buffer_len = num_leds * BYTES_PER_LED + RESET_BYTES;
@@ -443,7 +444,7 @@ int neopixel_pwm_init( struct platform_device *pdev )
     goto no_buffer;
   }
 
-  printk("NEOOPIXEL(%s): buffer_virt = 0x%x; buffer_length = %lu", __func__, (unsigned int)buffer, buffer_len);
+  DEBUG("NEOOPIXEL(%s): buffer_virt = 0x%x; buffer_length = %lu", __func__, (unsigned int)buffer, buffer_len);
 
   neo_dma_pool =  dma_pool_create("neopixel_dma", dev, buffer_len, 32, 4096);
   if(!neo_dma_pool){
@@ -552,7 +553,7 @@ static void color_wipe(uint8_t wait, uint8_t red, uint8_t green, uint8_t blue) {
 static int hardware_test(void* args)
 {
   int stage = 0;
-  printk(KERN_INFO "NEOPIXEL: Hardware test started \n");
+  DEBUG(KERN_INFO "NEOPIXEL: Hardware test started \n");
   while(!kthread_should_stop())
   {
     set_current_state(TASK_RUNNING);
