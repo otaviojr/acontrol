@@ -38,8 +38,8 @@
 
 #include <linux/delay.h>		// sleep functions
 
-#include "neopixel_ioctl.h"
 #include "neopixel_drv.h"
+#include "neopixel_ioctl.h"
 #include "neopixel_pwm.h"
 
 static char* module_version = "0.0.1";
@@ -78,13 +78,13 @@ static struct device *char_device_object;
 
 static int dev_open(struct inode* inodep, struct file* filep)
 {
-  printk("NEOPIXEL: Device openned");
+  DEBUG("NEOPIXEL: Device openned");
   return 0;
 }
 
 static int dev_release(struct inode* inodep, struct file* filep)
 {
-  printk("NEOPIXEL: Device released");
+  DEBUG("NEOPIXEL: Device released");
   return 0;
 }
 
@@ -123,12 +123,10 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
       if(copy_from_user((struct neopixel_pixel*)&pixel, (struct neopixel_pixel*)arg, sizeof(struct neopixel_pixel))){
         return -EFAULT;
       }
-      //printk("NEOPIXEL: set_pixel: %lu,%d,%d,%d", pixel.pixel, pixel.red, pixel.green, pixel.blue);
       neopixel_pwm_set_pixel(pixel.pixel, pixel.red, pixel.green, pixel.blue);
       break;
 
     case NEOPIXEL_IOCTL_SHOW:
-      //printk("NEOPIXEL: show");
       value = neopixel_pwm_show();
       if(copy_to_user((long*)arg, (long*)&value, sizeof(long))){
         return -EFAULT;
@@ -156,7 +154,7 @@ static int bcm2835_neopixel_probe(struct platform_device *pdev)
   int ret = 0;
   int result = 0;
 
-  printk("NEOPIXEL: probe entered");
+  DEBUG("NEOPIXEL: probe entered");
 
   device_class = class_create(THIS_MODULE, "neopixel");
   if(IS_ERR(device_class)) {
@@ -205,7 +203,7 @@ no_class_create:
 
 static int bcm2835_neopixel_remove(struct platform_device *pdev)
 {
-  printk("NEOPIXEL: remove entered");
+  DEBUG("NEOPIXEL: remove entered");
 
   neopixel_pwm_unload();
 

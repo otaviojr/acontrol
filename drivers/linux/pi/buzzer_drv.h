@@ -37,4 +37,11 @@
     unsigned long period;
   };
 
+  #define DEV_MODE false  
+  #define DEBUG(fmt,...) if(DEV_MODE){\
+    do {\
+      printk(fmt, ##__VA_ARGS__);\
+    } while (0);\
+  }
+
 #endif //__BUZZER_DRV_H__

@@ -561,7 +561,7 @@ impl Fingerprint for Gt521fx {
                 sec = (expires.elapsed().as_secs() as f64) + (expires.elapsed().subsec_nanos() as f64 / 1000_000_000.0);
               }
 
-              println!("Current State Time: {}", sec);
+              //println!("Current State Time: {}", sec);
 
               if sec > 120.0 {
                 state_locked.set(FingerprintDriverState::IDLE);
@@ -684,7 +684,7 @@ impl Fingerprint for Gt521fx {
                 },
                 FingerprintDriverState::IDLE => {
                   if let Ok(ref mut gt521fx_locked) = gt521fx.lock() {
-                    println!("Checking finger touch pin");
+                    //println!("Checking finger touch pin");
                     if let Some(pin) = gt521fx_locked.pin {
                       let _ret = pin.with_exported(|| {
                         let _ret = pin.set_direction(Direction::In);

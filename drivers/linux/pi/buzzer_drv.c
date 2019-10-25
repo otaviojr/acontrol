@@ -75,13 +75,13 @@ static struct device *char_device_object;
 
 static int dev_open(struct inode* inodep, struct file* filep)
 {
-  printk("BUZZER: Device openned");
+  DEBUG("BUZZER: Device openned");
   return 0;
 }
 
 static int dev_release(struct inode* inodep, struct file* filep)
 {
-  printk("BUZZER: Device released");
+  DEBUG("BUZZER: Device released");
   return 0;
 }
 
@@ -112,7 +112,7 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
       if(copy_from_user((struct buzzer_tone*)&tone, (struct buzzer_tone*)arg, sizeof(struct buzzer_tone))){
         return -EFAULT;
       }
-      printk("BUZZER: play_tone: %lu,%lu", tone.freq, tone.period);
+      DEBUG("BUZZER: play_tone: %lu,%lu", tone.freq, tone.period);
       buzzer_pcm_play_tone(&tone);
       break;
 
@@ -135,7 +135,7 @@ static int bcm2835_buzzer_probe(struct platform_device *pdev)
   int ret = 0;
   int result = 0;
 
-  printk("BUZZER: probe entered");
+  DEBUG("BUZZER: probe entered");
 
   device_class = class_create(THIS_MODULE, "buzzer");
   if(IS_ERR(device_class)) {
@@ -193,7 +193,7 @@ no_class_create:
 
 static int bcm2835_buzzer_remove(struct platform_device *pdev)
 {
-  printk("BUZZER: remove entered");
+  DEBUG("BUZZER: remove entered");
 
   buzzer_pcm_unload();
 
