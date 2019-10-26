@@ -59,7 +59,7 @@ pub trait Persist {
   fn fingerprint_delete(&mut self, pos: i32) -> Result<(), String>;
 }
 
-pub fn persist_by_name(name: &str) -> Option<Box<Persist+Sync+Send>> {
+pub fn persist_by_name(name: &str) -> Option<Box<dyn Persist+Sync+Send>> {
     match name {
       "sqlite" => return Some(Box::new(sqlite_persist::SQLitePersist::new())),
       _ => return None

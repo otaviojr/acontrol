@@ -45,8 +45,8 @@ mod neopixel_ioctl {
   const NEOPIXEL_IOCTL_GET_VERSION: u8 = 1;
   const NEOPIXEL_IOCTL_GET_NUM_LEDS: u8 = 2;
   const NEOPIXEL_IOCTL_SET_PIXEL: u8 = 3;
-  const NEOPIXEL_IOCTL_SHOW: u8 = 4;  
-  const NEOPIXEL_IOCTL_HARDWARE_TEST: u8 = 5;  
+  const NEOPIXEL_IOCTL_SHOW: u8 = 4;
+  const NEOPIXEL_IOCTL_HARDWARE_TEST: u8 = 5;
 
   #[repr(C)]
   pub struct Pixel {
@@ -153,7 +153,7 @@ impl NeoPixelInterface {
     }
 
     let mut ret: i32 = 0;
-    
+
     unsafe {
       if let Some(ref driver_fd) = self.get_driver_fd(){
         if let Err(err) = neopixel_ioctl::get_num_leds(*driver_fd, &mut ret){
@@ -293,7 +293,7 @@ impl NeoPixel {
 
           if next == false  {
             let _ret = interface.clear();
-            break; 
+            break;
           }
 
 	        thread::sleep(Duration::from_millis(wait));
@@ -326,9 +326,9 @@ impl NeoPixel {
           }
           let _ret = interface.set_pixel(pixel_info);
         }
-      
+
         let _ret = interface.show();
-      
+
         animation_info.repeat -= 1;
       }
 
@@ -381,7 +381,7 @@ impl NeoPixel {
           let pixel_info = neopixel_ioctl::Pixel { pixel: pixel, red: 0, green: 0, blue: 0};
           let _ret = interface.set_pixel(pixel_info);
           pixel += 1;
-          if pixel >= num_leds { pixel -= num_leds} 
+          if pixel >= num_leds { pixel -= num_leds}
         }
 
         let _ret = interface.show();
@@ -411,10 +411,10 @@ impl NeoPixel {
         }
       }
 
-      if animation_info.direction == NeoPixelAnimationDirection::Normal && 
+      if animation_info.direction == NeoPixelAnimationDirection::Normal &&
            animation_info.current_pixel >= interface.get_num_leds().unwrap() &&
            animation_info.start.elapsed().as_secs() > animation_info.dismiss {
-        
+
         animation_info.direction = NeoPixelAnimationDirection::Backwards;
         animation_info.current_pixel = interface.get_num_leds().unwrap() - 1;
         animation_info.red = 0;
@@ -429,7 +429,7 @@ impl NeoPixel {
       }
       return Ok(true);
     };
-    
+
     self.run_animation(animation_fn, Box::new(info), finish)
   }
 
@@ -439,7 +439,7 @@ impl NeoPixel {
   }
 
   fn test_hardware(&mut self) -> Result<(), String> {
-    
+
     let now = Instant::now();
     let dismiss = 5;
 
@@ -481,7 +481,7 @@ impl Display for NeoPixel {
     println!("NeoPixel driver version {} found!", String::from_utf8(version.to_vec()).unwrap());
 
     let _ret = self.test_hardware();
- 
+
     Ok(())
   }
 
