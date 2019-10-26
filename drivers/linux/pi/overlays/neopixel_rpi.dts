@@ -27,7 +27,7 @@
 
         #address-cells = <0x1>;
         #size-cells = <0x1>;
-        neopixel@0x20000000 {
+        neopixel@20000000 {
           compatible = "bcm2835-neopixel";
 
           #address-cells = <0x1>;

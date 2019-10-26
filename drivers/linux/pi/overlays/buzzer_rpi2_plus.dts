@@ -20,7 +20,7 @@
 
         #address-cells = <0x1>;
         #size-cells = <0x1>;
-        buzzer@0x3F000000 {
+        buzzer@3F000000 {
           compatible = "bcm2835-buzzer";
 
           #address-cells = <0x1>;
