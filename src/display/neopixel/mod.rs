@@ -317,7 +317,7 @@ impl NeoPixel {
 
       if let Ok(num_leds) = interface.get_num_leds() {
         for pixel in 0..num_leds {
-          let mut pixel_info: neopixel_ioctl::Pixel;
+          let pixel_info: neopixel_ioctl::Pixel;
 
           if animation_info.repeat%2 != 0 {
             pixel_info = neopixel_ioctl::Pixel { pixel: pixel, red: animation_info.red, green: animation_info.green, blue: animation_info.blue};
