@@ -491,7 +491,7 @@ impl Display for NeoPixel {
 
     match animation {
       Animation::MaterialSpinner => {
-        let mut animation_info = NeoPixelSpinnerAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8);
+        let animation_info = NeoPixelSpinnerAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8);
         self.animation_spinner(animation_info, move |_next: bool, _params: &mut NeoPixelSpinnerAnimation| {
 
           if now.elapsed().as_secs() > dismiss && dismiss > 0 { return Ok(-1) }
@@ -500,21 +500,21 @@ impl Display for NeoPixel {
         })
       },
       Animation::Wipe => {
-        let mut animation_info = NeoPixelWipeAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8, dismiss);
+        let animation_info = NeoPixelWipeAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8, dismiss);
 
         self.animation_color_wipe(animation_info, |_next: bool, _params:&mut NeoPixelWipeAnimation| {
           Ok(100)
         })
       },
       Animation::Blink  => {
-        let mut animation_info = NeoPixelBlinkAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8, dismiss as i32);
+        let animation_info = NeoPixelBlinkAnimation::new(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8, dismiss as i32);
 
         self.animation_blink(animation_info, move |_next: bool, _params: &mut NeoPixelBlinkAnimation| {
           Ok(500)
         })
       },
       Animation::BlinkLoop  => {
-        let mut animation_info = NeoPixelBlinkAnimation::new_loop(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8);
+        let animation_info = NeoPixelBlinkAnimation::new_loop(((color.value() >> 16) & 0xFF) as u8, ((color.value() >> 8) & 0xFF) as u8 , (color.value() & 0xFF) as u8);
 
         self.animation_blink(animation_info, move |_next: bool, params: &mut NeoPixelBlinkAnimation| {
           if dismiss > 0 && now.elapsed().as_secs() > dismiss  && params.repeat%2 != 0 { return Ok(-1) }
