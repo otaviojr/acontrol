@@ -85,7 +85,7 @@ impl Persist for SQLitePersist {
   fn nfc_add(&mut self, uuid: &Vec<u8>, name: &Vec<u8>)-> Result<(), String> {
     if let Some(ref conn) = self.conn {
       if let Err(err) = conn.execute("INSERT INTO cards (uuid, name) VALUES (?1,?2)",
-          &[uuid as &ToSql, name as &ToSql],
+          &[uuid as &dyn ToSql, name as &dyn ToSql],
       ) {
         return Err(format!("Error inserting card to the database: {}", err));
       }
@@ -96,7 +96,7 @@ impl Persist for SQLitePersist {
 
   fn nfc_list(&mut self) -> Result<Vec<Card>, String> {
 
-    let mut ret: Vec<Card> = Vec::new();   
+    let mut ret: Vec<Card> = Vec::new();
 
     if let Some(ref conn) = self.conn {
       let mut stmt = conn
@@ -118,7 +118,7 @@ impl Persist for SQLitePersist {
       return Err(format!("{}","Database not connected"));
     }
   }
-  
+
   fn nfc_find(&mut self, uuid: &Vec<u8>) -> Result<(Card), String> {
 
     if let Some(ref conn) = self.conn {
@@ -127,7 +127,7 @@ impl Persist for SQLitePersist {
         .unwrap();
 
       let card_iter = stmt
-        .query_map(&[uuid as &ToSql], |row| Card {
+        .query_map(&[uuid as &dyn ToSql], |row| Card {
             id: row.get(0),
             uuid: row.get(1),
             name: row.get(2),
@@ -150,7 +150,7 @@ impl Persist for SQLitePersist {
   fn fingerprint_add(&mut self, pos: i32, name: &Vec<u8>) -> Result<(), String> {
     if let Some(ref conn) = self.conn {
       if let Err(err) = conn.execute("INSERT INTO fingerprint (pos, name) VALUES (?1,?2)",
-          &[&pos, name as &ToSql],
+          &[&pos, name as &dyn ToSql],
       ) {
         return Err(format!("Error inserting fingerprint to the database: {}", err));
       }
@@ -185,7 +185,7 @@ impl Persist for SQLitePersist {
 
   fn fingerprint_list(&mut self) -> Result<Vec<Fingerprint>, String> {
 
-    let mut ret: Vec<Fingerprint> = Vec::new();   
+    let mut ret: Vec<Fingerprint> = Vec::new();
 
     if let Some(ref conn) = self.conn {
       let mut stmt = conn

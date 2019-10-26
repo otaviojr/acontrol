@@ -92,7 +92,7 @@ impl WebServer {
     final_resp.headers.set(iron::headers::ContentType(
       iron::mime::Mime(iron::mime::TopLevel::Application, iron::mime::SubLevel::Json, vec![])
     ));
-    
+
     Ok(final_resp)
   }
 
@@ -128,7 +128,7 @@ impl WebServer {
       resp = Some(Response::with((iron::status::InternalServerError,
         serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: format!("Persistence driver not found: {}", err)} ).unwrap())
       ));
-    } 
+    }
 
     if resp.is_none() {
       resp = Some(Response::with((iron::status::Ok,
@@ -209,18 +209,18 @@ impl WebServer {
     final_resp.headers.set(iron::headers::ContentType(
       iron::mime::Mime(iron::mime::TopLevel::Application, iron::mime::SubLevel::Json, vec![])
     ));
-    
+
     Ok(final_resp)
   }
 }
 
 impl Server for WebServer {
-  fn port(&mut self, port: u32) -> Box<&mut Server> {
+  fn port(&mut self, port: u32) -> Box<&mut dyn Server> {
     self.port = port;
     return Box::new(self);
   }
 
-  fn host(&mut self, host: &str) -> Box<&mut Server> {
+  fn host(&mut self, host: &str) -> Box<&mut dyn Server> {
     self.host = host.to_string();
     return Box::new(self);
   }

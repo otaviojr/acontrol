@@ -348,13 +348,13 @@ impl Parser for OpenDataPacket {
     for i in 0..15{
       self.device_serial_num[i] = response_data[i+12];
     }
-    
+
     Ok(true)
   }
 }
 
 pub struct Gt521fxThreadSafe {
-  port: Option<Box<SerialPort>>,
+  port: Option<Box<dyn SerialPort>>,
   pin: Option<Pin>
 }
 
@@ -397,7 +397,7 @@ impl Gt521fxThreadSafe {
     return ret;
   }
 
-  fn send_command(&mut self, command: Command, parameter: u32, parser: Option<&mut Parser>) -> Result<Response, std::io::Error> {
+  fn send_command(&mut self, command: Command, parameter: u32, parser: Option<&mut dyn Parser>) -> Result<Response, std::io::Error> {
     let mut data: Vec<u8>= Vec::new();
 
     data.push(0x55);
@@ -466,7 +466,7 @@ impl Gt521fxThreadSafe {
         return Err(err);
       }
 
-      //println!("Received: {:X?}", buf);    
+      //println!("Received: {:X?}", buf);
 
       if let Some(parser) = parser {
         if let Err(err) = parser.parser(&mut buf) {
@@ -576,7 +576,7 @@ impl Fingerprint for Gt521fx {
                     println!("Checking finger");
                     result = Some(gt521fx_locked.send_command(Command::CaptureFinger, 0x01, None));
                   }
-              
+
                   match result {
                     Some(Err(_err)) => {
                       println!("Erro checking fingerprint");

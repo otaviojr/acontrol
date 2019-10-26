@@ -47,11 +47,11 @@ pub enum NFCSystemState {
 }
 
 struct AControlSystem {
-  fingerprint_drv: Mutex<Option<Mutex<Box<Fingerprint + Send + Sync>>>>,
-  nfc_drv: Mutex<Option<Mutex<Box<NfcReader + Send + Sync>>>>,
-  audio_drv: Mutex<Option<Mutex<Box<Audio + Send + Sync>>>>,
-  persist_drv:  Mutex<Option<Mutex<Box<Persist + Send + Sync>>>>,
-  display_drv: Mutex<Option<Mutex<Box<Display + Send + Sync>>>>,
+  fingerprint_drv: Mutex<Option<Mutex<Box<dyn Fingerprint + Send + Sync>>>>,
+  nfc_drv: Mutex<Option<Mutex<Box<dyn NfcReader + Send + Sync>>>>,
+  audio_drv: Mutex<Option<Mutex<Box<dyn Audio + Send + Sync>>>>,
+  persist_drv:  Mutex<Option<Mutex<Box<dyn Persist + Send + Sync>>>>,
+  display_drv: Mutex<Option<Mutex<Box<dyn Display + Send + Sync>>>>,
   nfc_state: Mutex<NFCSystemState>,
   nfc_state_params: Mutex<HashMap<String,String>>,
   fingerprint_data: Mutex<FingerprintData>,
@@ -63,8 +63,8 @@ impl AControlSystem {
 
 lazy_static!{
   static ref ACONTROL_SYSTEM: AControlSystem = AControlSystem {
-    fingerprint_drv: Mutex::new(None), 
-    nfc_drv: Mutex::new(None), 
+    fingerprint_drv: Mutex::new(None),
+    nfc_drv: Mutex::new(None),
     audio_drv: Mutex::new(None),
     persist_drv:  Mutex::new(None),
     display_drv: Mutex::new(None),
@@ -150,12 +150,12 @@ pub fn  acontrol_system_set_mifare_keys(key_a: &Vec<u8>, key_b: &Vec<u8>) -> boo
   }
 }
 
-pub fn acontrol_system_init(params: &HashMap<String,String>, 
-				fingerprint_drv: Box<Fingerprint+Sync+Send>, 
-				nfc_drv: Box<NfcReader+Sync+Send>, 
-				audio_drv: Box<Audio+Sync+Send>,
-				persist_drv: Box<Persist+Sync+Send>,
-        display_drv: Box<Display+Sync+Send>) -> bool {
+pub fn acontrol_system_init(params: &HashMap<String,String>,
+				fingerprint_drv: Box<dyn Fingerprint+Sync+Send>,
+				nfc_drv: Box<dyn NfcReader+Sync+Send>,
+				audio_drv: Box<dyn Audio+Sync+Send>,
+				persist_drv: Box<dyn Persist+Sync+Send>,
+        display_drv: Box<dyn Display+Sync+Send>) -> bool {
 
   let asystem = &ACONTROL_SYSTEM;
   unsafe {
@@ -211,7 +211,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
   match *asystem.fingerprint_drv.lock().unwrap() {
     Some(ref drv) => {
       let mut drv_inner = drv.lock().unwrap();
-      
+
       if let Err(err) = drv_inner.init() {
         eprintln!("Error initializing fingerprint device (=> {})", err);
         return false;
@@ -371,7 +371,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                   Some(ref mut drv) => {
                     match drv_inner.read_data(&uuid,*NFC_CARD_SIGNATURE_BLOCK,0) {
                       Ok(ref val) => {
-                        if String::from_utf8(val.to_vec()).unwrap() == 
+                        if String::from_utf8(val.to_vec()).unwrap() ==
                            String::from_utf8(NFC_CARD_SIGNATURE.as_bytes().to_vec()).unwrap() {
 
                           if let Ok(card) = drv.lock().unwrap().nfc_find(&uuid) {
@@ -616,7 +616,7 @@ pub fn acontrol_system_fingerprint_start_enroll(params: HashMap<String,String>) 
 
       let pos = (&params[&String::from("pos")]).parse::<u16>().unwrap();
       println!("Adding a fingerprint at pos {} to {}", pos, &params[&String::from("name")]);
-     
+
       if let Ok(ref mut data_locked) = (*ACONTROL_SYSTEM).fingerprint_data.lock() {
 
         //*ACONTROL_SYSTEM.fingerprint_data.lock().unwrap() = FingerprintData::new(pos, &params[&String::from("name")]);
@@ -638,7 +638,7 @@ pub fn acontrol_system_fingerprint_start_enroll(params: HashMap<String,String>) 
 }
 
 pub fn acontrol_system_get_persist_drv<F, T>(f: F) -> Result<(),String>
-  where F: FnOnce(&mut Persist) -> T, {
+  where F: FnOnce(&mut dyn Persist) -> T, {
 
   match *ACONTROL_SYSTEM.persist_drv.lock().unwrap()  {
     Some(ref drv) => {
@@ -654,7 +654,7 @@ pub fn acontrol_system_get_persist_drv<F, T>(f: F) -> Result<(),String>
 }
 
 pub fn acontrol_system_get_display_drv<F, T>(f:F) -> Result<(),String>
-  where F: FnOnce(&mut Display) -> T {
+  where F: FnOnce(&mut dyn Display) -> T {
 
   match *ACONTROL_SYSTEM.display_drv.lock().unwrap()  {
     Some(ref drv) => {
@@ -670,7 +670,7 @@ pub fn acontrol_system_get_display_drv<F, T>(f:F) -> Result<(),String>
 }
 
 pub fn acontrol_system_get_audio_drv<F, T>(f:F) -> Result<(),String>
-  where F: FnOnce(&mut Audio) -> T {
+  where F: FnOnce(&mut dyn Audio) -> T {
 
   match *ACONTROL_SYSTEM.audio_drv.lock().unwrap()  {
     Some(ref drv) => {

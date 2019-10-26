@@ -83,7 +83,7 @@ pub trait Fingerprint {
   fn start_enroll(&mut self, data: &FingerprintData) -> bool;
 }
 
-pub fn fingerprint_by_name(name: &str) -> Option<Box<Fingerprint+Sync+Send>> {
+pub fn fingerprint_by_name(name: &str) -> Option<Box<dyn Fingerprint+Sync+Send>> {
     match name {
       "gt521fx" => return Some(Box::new(gt521fx::Gt521fx::new())),
       _ => return None

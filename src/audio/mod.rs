@@ -39,7 +39,7 @@ pub trait Audio {
   fn signature(&self) -> String;
 }
 
-pub fn audio_by_name(name: &str) -> Option<Box<Audio+Sync+Send>> {
+pub fn audio_by_name(name: &str) -> Option<Box<dyn Audio+Sync+Send>> {
     match name {
       "buzzer" => return Some(Box::new(buzzer::Buzzer::new())),
       _ => return None
