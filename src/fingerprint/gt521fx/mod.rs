@@ -362,7 +362,7 @@ impl Gt521fxThreadSafe {
   pub fn open(&mut self, device: &str) -> Result<(),serialport::Error> {
 
     let s = SerialPortSettings {
-        baud_rate: 9600,
+        baud_rate: BaudRate::Baud9600,
         data_bits: DataBits::Eight,
         flow_control: FlowControl::None,
         parity: Parity::None,
