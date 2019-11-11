@@ -254,7 +254,7 @@ struct Frame {
 }
 
 impl Frame {
-    fn from_buffer(data: &[u8]) -> Result<Frame,std::io::Error>{
+    fn from_vec(data: &Vec<u8>) -> Result<Frame,std::io::Error>{
         let len = data.len() as u8 + 1;
 
         if len > 0xfe {
@@ -276,14 +276,18 @@ impl Frame {
         b.push(len);
         b.push(lcs);
         b.push(FrameDirection::FromHost.value()); // direction
-        b.extend_from_slice(data);
+        b.extend(data);
         b.push(dcs);
         b.push(0x00); // postamble
 
         Ok(Frame {buffer: b})
     }
 
-    fn frameType(&self) -> FrameType {
+    fn from_buffer(data: &[u8]) -> Result<Frame,std::io::Error>{
+        Frame::from_vec(&data.to_vec())
+    }
+
+    fn frame_type(&self) -> FrameType {
         if self.buffer.len() < 5 {
             return FrameType::Unknown;
         }
@@ -299,6 +303,13 @@ impl Frame {
         }
 
         return FrameType::Normal;
+    }
+
+    fn data(&self) -> Result<Vec<u8>, std::io::Error> {
+        match self.frame_type() {
+            FrameType::Normal => Ok(self.buffer[6..self.buffer.len()-2].to_vec()),
+            _ => Err(std::io::Error::new(std::io::ErrorKind::Other, "Frame has no data"))
+        }
     }
 }
 
@@ -384,12 +395,41 @@ impl Pn532ThreadSafe {
     })
   }
 
-  fn command(&mut self, command: Command) -> Result<(), std::io::Error> {
-    Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
+  fn command(&mut self, command: Command, data: Option<&[u8]>) -> Result<Frame, std::io::Error> {
+    let mut buffer = vec![command as u8];
+    if let Some(data) = data {
+        buffer.extend_from_slice(data);
+    }
+
+    match Frame::from_vec(&buffer) {
+        Ok(frame) => {
+            try!(self.write_frame(frame));
+            match self.read_frame_timeout(Duration::from_millis(1000)) {
+                Ok(frame) => {
+                    if frame.frame_type().is_ack() {
+                        if let Ok(frame) = self.read_frame_timeout(Duration::from_millis(1000)) {
+                            return Ok(frame);
+                        } else {
+                            return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
+                        }
+                    } else {
+                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Ack not received"));
+                    }
+                },
+                Err(err) => Err(err)
+            }
+        },
+        Err(err) => Err(err)
+    }
   }
 
-  fn version(&mut self) -> Result<u8, std::io::Error>{
-    Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
+  fn version(&mut self) -> Result<Vec<u8>, std::io::Error>{
+    match self.command(Command::GetFirmwareVersion, Option::None) {
+        Ok(frame) => {
+            Ok(try!(frame.data()))
+        },
+        Err(err) => Err(err)
+    }
   }
 
   fn flush_fifo(&mut self) -> Result<(),std::io::Error>{
@@ -484,13 +524,13 @@ impl NfcReader for Pn532 {
     for _i in 0..10 {
       thread::sleep(Duration::from_millis(50));
       if let Ok(version) = pn532.lock().unwrap().version() {
-        println!("NFC hardware version: 0x{:X}", version);
-        if version == 0x91 || version == 0x92 {
+        println!("NFC hardware version: 0x{:?}", version);
+        //if version == 0x91 || version == 0x92 {
           pn532_init = true;
-          break;
-        } else {
-          println!("{}(=>0x{:X})", "NFC Hardware with an invalid version", version);
-        }
+        //  break;
+        //} else {
+        //  println!("{}(=>0x{:X})", "NFC Hardware with an invalid version", version);
+        //}
       }
     }
 
