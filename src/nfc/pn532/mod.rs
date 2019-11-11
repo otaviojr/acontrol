@@ -104,6 +104,50 @@ impl FrameDirection {
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
+enum FrameType {
+    Normal              = 0x01,
+    Extended            = 0x02,
+    Ack                 = 0x03,
+    NAck                = 0x04,
+    Error               = 0x05,
+    Unknown             = 0xff,
+}
+
+#[allow(dead_code)]
+impl FrameType {
+  fn name(&self) -> &'static str {
+    match *self {
+      FrameType::Normal =>              "Normal",
+      FrameType::Extended =>            "Extended",
+      FrameType::Ack =>                 "Ack",
+      FrameType::NAck =>                "NAck",
+      FrameType::Error =>               "Error",
+      FrameType::Unknown =>             "Unknown",
+    }
+  }
+
+  fn value(&self) -> u8 {
+    let value = *self as u8;
+    value
+  }
+
+  fn is_ack(&self) -> bool {
+      match *self {
+          FrameType::Ack => true,
+          _ => false,
+      }
+  }
+
+  fn is_error(&self) -> bool {
+      match *self {
+          FrameType::Error => true,
+          _ => false,
+      }
+  }
+}
+
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
 enum Command {
     Diagnose	             = 0x00,
     GetFirmwareVersion	     = 0x02,
@@ -205,6 +249,59 @@ impl Error {
   }
 }
 
+struct Frame {
+    buffer: Vec<u8>
+}
+
+impl Frame {
+    fn from_buffer(data: &[u8]) -> Result<Frame,std::io::Error>{
+        let len = data.len() as u8 + 1;
+
+        if len > 0xfe {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid buffer length"));
+        }
+
+        let lcs = (0x100 - len as u16) as u8;
+
+        let mut dcs = FrameDirection::FromHost.value();
+        for b in data {
+            dcs += b;
+        }
+        dcs = (0x100 - (dcs & 0xff) as u16) as u8;
+
+        let mut b = vec![
+            0x00, // preamble
+            0x00, 0xff,  // start
+        ];
+        b.push(len);
+        b.push(lcs);
+        b.push(FrameDirection::FromHost.value()); // direction
+        b.extend_from_slice(data);
+        b.push(dcs);
+        b.push(0x00); // postamble
+
+        Ok(Frame {buffer: b})
+    }
+
+    fn frameType(&self) -> FrameType {
+        if self.buffer.len() < 5 {
+            return FrameType::Unknown;
+        }
+
+        if self.buffer[3] == 0x00 && self.buffer[4] == 0xFF {
+            return FrameType::Ack;
+        } else if self.buffer[3] == 0xFF && self.buffer[4] == 0x00 {
+            return FrameType::NAck;
+        } else if self.buffer[3] == 0xFF && self.buffer[4] == 0xFF {
+            return FrameType::Extended;
+        } else if self.buffer[3] == 0x01 && self.buffer[4] == 0xFF {
+            return FrameType::Error;
+        }
+
+        return FrameType::Normal;
+    }
+}
+
 struct Pn532ThreadSafe {
   spidev: Option<Spidev>,
   ss: Option<Pin>,
@@ -226,69 +323,65 @@ impl Pn532ThreadSafe {
     result
   }
 
-  fn read_frame(&mut self) -> Result<Vec<u8>, std::io::Error> {
+  fn read_frame(&mut self) -> Result<Frame, std::io::Error> {
     let mut rx_buf = [0u8; 256];
-    let mut tx_buf = vec![ SpiCommand::ReadData.value() ];
+    let mut tx_buf = vec![ SpiCommand::ReadStatus.value() ];
 
-    //TODO: Finish this
-    self.with_ss(|ref mut pn| {
+    let status = self.with_ss(|ref mut pn| {
       if  let Some(ref mut spidev) = pn.spidev {
         {
           let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
           try!(spidev.transfer(&mut transfer));
-        }
 
-        for i in 1..rx_buf.len() {
-          buffer[i-1] = rx_buf[i];
+          if rx_buf[0] > 0 {
+              return Ok(());
+          }
+          return Err(std::io::Error::new(std::io::ErrorKind::Other, "No data"))
         }
-
-        return Ok(buffer);
       }
-      Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
-    })
+      Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI dev not found"))
+    });
 
-    Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
+    if let Err(error) = status {
+        return Err(error);
+    }
+
+    self.with_ss(|ref mut pn| {
+      if  let Some(ref mut spidev) = pn.spidev {
+        {
+            try!(spidev.write(&[SpiCommand::ReadData.value()]));
+            try!(spidev.read(&mut rx_buf));
+            return Ok(Frame { buffer: rx_buf.to_vec() });
+        }
+      }
+      Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI dev not found"))
+    })
   }
 
-  fn write_frame(&mut self, buffer: &[u8]) -> Result<(), std::io::Error>{
+  fn read_frame_timeout(&mut self, timeout: Duration) -> Result<Frame,std::io::Error> {
+      let now = Instant::now();
+      loop {
+          if now.elapsed() > timeout {
+              return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "timeout"));
+          }
 
-    let len = buffer.len() as u8 + 1;
+          if let Ok(ret) = self.read_frame() {
+              return Ok(ret);
+          }
 
-    if len > 0xfe {
-        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid buffer length"));
-    }
+          thread::sleep(Duration::from_millis(1));
+      }
+  }
 
-    let lcs = (0x100 - len as u16) as u8;
-
-    let mut dcs = FrameDirection::FromHost.value();
-    for b in buffer {
-        dcs += b;
-    }
-    dcs = (0x100 - (dcs & 0xff) as u16) as u8;
-
-    let mut b = vec![
-        0x00, // preamble
-        0x00, 0xff,  // start
-    ];
-    b.push(len);
-    b.push(lcs);
-    b.push(FrameDirection::FromHost.value()); // direction
-    b.extend_from_slice(buffer);
-    b.push(dcs);
-    b.push(0x00); // postamble
-
+  fn write_frame(&mut self, frame: Frame) -> Result<(), std::io::Error>{
     self.with_ss(|ref mut pn| {
       if let Some(ref mut spidev) = pn.spidev {
         try!(spidev.write(&[SpiCommand::WriteData.value()]));
-        try!(spidev.write(buffer));
+        try!(spidev.write(&frame.buffer));
         return Ok(());
       }
       Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI device not found."))
     })
-  }
-
-  fn write_many(&mut self, reg: Register, buffer: &[u8]) -> Result<(), std::io::Error>{
-    Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
   }
 
   fn command(&mut self, command: Command) -> Result<(), std::io::Error> {
