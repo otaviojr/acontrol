@@ -26,31 +26,7 @@
  *
  */
 pub mod mfrc522;
-
-#[derive(Clone, Copy)]
-#[allow(dead_code)]
-pub enum PICC {
-  REQIDL	= 0x26,
-  REQALL	= 0x52,
-  ANTICOLL1	= 0x93,
-  ANTICOLL2	= 0x95,
-  ANTICOLL3	= 0x97,
-  AUTH1A	= 0x60,
-  AUTH1B	= 0x61,
-  READ		= 0x30,
-  WRITE		= 0xA0,
-  DECREMENT	= 0xC0,
-  INCREMENT	= 0xC1,
-  RESTORE	= 0xC2,
-  TRANSFER	= 0xB0,
-  HALT		= 0x50
-}
-
-impl PICC {
-  fn value(&self) -> u8 {
-    return (*self) as u8;
-  }
-}
+pub mod pn532;
 
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
@@ -81,19 +57,10 @@ pub trait NfcReader {
   fn signature(&self) -> String;
 }
 
-pub trait MiFare {
-  fn send_req_a(&mut self) -> Result<Vec<u8>, String>;
-  fn select(&mut self, cascade: u8, uuid: &Vec<u8>) -> Result<Vec<u8>, String>;
-  fn anticoll(&mut self, cascade: u8, uuid: &Vec<u8>) -> Result<Vec<u8>, String>;
-  fn auth(&mut self, auth_mode: u8, addr: u8, uuid: &Vec<u8>, key: MifareAuthKey) -> Result<(), String>;
-  fn read_data(&mut self, addr: u8) -> Result<Vec<u8>, String>;
-  fn write_data(&mut self, addr: u8, data: &Vec<u8>) -> Result<(), String>;
-  fn write_sec(&mut self, uuid: &Vec<u8>, mode: WriteSecMode) -> Result<(), String>;
-}
-
 pub fn nfcreader_by_name(name: &str) -> Option<Box<dyn NfcReader+Sync+Send>> {
     match name {
       "mfrc522" => return Some(Box::new(mfrc522::Mfrc522::new())),
+      "pn532" => return Some(Box::new(pn532::Pn532::new())),
       _ => return None
     }
 }

@@ -25,7 +25,7 @@
  * THE SOFTWARE.
  *
  */
-use nfc::{NfcReader, MiFare, PICC, MifareAuthKey, WriteSecMode};
+use nfc::{NfcReader, MifareAuthKey, WriteSecMode};
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -37,6 +37,31 @@ use std::time::{Duration,Instant};
 use std::io::prelude::*;
 use spidev::{Spidev, SpidevOptions, SpidevTransfer, SPI_MODE_0};
 use sysfs_gpio::{Direction, Pin};
+
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+pub enum PICC {
+  REQIDL	= 0x26,
+  REQALL	= 0x52,
+  ANTICOLL1	= 0x93,
+  ANTICOLL2	= 0x95,
+  ANTICOLL3	= 0x97,
+  AUTH1A	= 0x60,
+  AUTH1B	= 0x61,
+  READ		= 0x30,
+  WRITE		= 0xA0,
+  DECREMENT	= 0xC0,
+  INCREMENT	= 0xC1,
+  RESTORE	= 0xC2,
+  TRANSFER	= 0xB0,
+  HALT		= 0x50
+}
+
+impl PICC {
+  fn value(&self) -> u8 {
+    return (*self) as u8;
+  }
+}
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
@@ -172,6 +197,16 @@ impl Error {
   }
 }
 
+pub trait MiFare {
+  fn send_req_a(&mut self) -> Result<Vec<u8>, String>;
+  fn select(&mut self, cascade: u8, uuid: &Vec<u8>) -> Result<Vec<u8>, String>;
+  fn anticoll(&mut self, cascade: u8, uuid: &Vec<u8>) -> Result<Vec<u8>, String>;
+  fn auth(&mut self, auth_mode: u8, addr: u8, uuid: &Vec<u8>, key: MifareAuthKey) -> Result<(), String>;
+  fn read_data(&mut self, addr: u8) -> Result<Vec<u8>, String>;
+  fn write_data(&mut self, addr: u8, data: &Vec<u8>) -> Result<(), String>;
+  fn write_sec(&mut self, uuid: &Vec<u8>, mode: WriteSecMode) -> Result<(), String>;
+}
+
 #[allow(dead_code)]
 struct Mfrc522ThreadSafe {
   spidev: Option<Spidev>,
@@ -215,7 +250,7 @@ impl Mfrc522ThreadSafe {
     self.with_ss(|ref mut mfrc| {
       if  let Some(ref mut spidev) = mfrc.spidev {
         {
-	  let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
+          let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
           try!(spidev.transfer(&mut transfer));
         }
 
@@ -293,7 +328,7 @@ impl Mfrc522ThreadSafe {
     try!(self.write_many(Register::FifoData, data));
     //calc crc command
     try!(self.command(Command::CalcCRC));
-    
+
     let now = Instant::now();
     loop {
       let sec = (now.elapsed().as_secs() as f64) + (now.elapsed().subsec_nanos() as f64 / 1000_000_000.0);
@@ -416,7 +451,7 @@ impl Mfrc522ThreadSafe {
   fn initialize(&mut self) -> Result<(), std::io::Error> {
     // soft reset
     try!(self.command(Command::SoftReset));
-    
+
     // check the power down flag and wait until reset finish
     let now = Instant::now();
     loop {
@@ -433,7 +468,7 @@ impl Mfrc522ThreadSafe {
     try!(self.write(Register::Demod, 0x4d | (1 << 4) ));
     try!(self.write(Register::TMode, 0x0 | (1 << 7) | 0b10 ));
     try!(self.write(Register::TPrescaler, 165));
-    
+
     // 5ms timeout
     try!(self.write(Register::ReloadL, 50));
 
@@ -476,7 +511,7 @@ impl MiFare for Mfrc522ThreadSafe {
   fn select(&mut self, cascade: u8, uuid: &Vec<u8>) -> Result<Vec<u8>, String> {
     let mut tx_buf = vec![cascade,0x70];
     let mut serial: u8 = 0;
-    
+
     for i in uuid {
       tx_buf.push(*i);
       serial ^= *i;
@@ -586,7 +621,7 @@ impl MiFare for Mfrc522ThreadSafe {
     }) {
       return Err(format!("NFC MiFare crc calc error  at address {}", addr));
     }
-    
+
     match self.transceive(&tx_buf, 0) {
       Ok(val) => {
         let buf: Vec<u8> = val[..16].to_vec();
@@ -602,7 +637,7 @@ impl MiFare for Mfrc522ThreadSafe {
 
         Ok(buf)
       },
-      Err(ref mut err) => Err(format!("{} {} => {}","NFC MiFare error reading address {}", addr, err.name()))    
+      Err(ref mut err) => Err(format!("{} {} => {}","NFC MiFare error reading address {}", addr, err.name()))
     }
   }
 
@@ -653,12 +688,12 @@ pub struct Mfrc522 {
 
 impl Mfrc522 {
   pub fn new() -> Self {
-    return Mfrc522 {mfrc522: Arc::new(Mutex::new(Mfrc522ThreadSafe 
+    return Mfrc522 {mfrc522: Arc::new(Mutex::new(Mfrc522ThreadSafe
       {
-        spidev: None, 
-        ss: None, 
-        mifare_key_a: vec![0xff,0xff,0xff,0xff,0xff,0xff], 
-        mifare_key_b: vec![0x00,0x00,0x00,0x00,0x00,0x00], 
+        spidev: None,
+        ss: None,
+        mifare_key_a: vec![0xff,0xff,0xff,0xff,0xff,0xff],
+        mifare_key_b: vec![0x00,0x00,0x00,0x00,0x00,0x00],
         mifare_access_bits: vec![0xff,0x07,0x80,0x69]
       }
     ))};
@@ -704,7 +739,7 @@ impl NfcReader for Mfrc522 {
         println!("NFC hardware version: 0x{:X}", version);
         if version == 0x91 || version == 0x92 {
           mfrc522_init = true;
-          break;          
+          break;
         } else {
           println!("{}(=>0x{:X})", "NFC Hardware with an invalid version", version);
         }
@@ -726,7 +761,7 @@ impl NfcReader for Mfrc522 {
 
   fn find_tag(&mut self, func: fn(Vec<u8>, Vec<u8>) -> bool) -> Result<(),String> {
     let mfrc522 = self.mfrc522.clone();
-    
+
     let _handler = thread::spawn(move || {
       loop {
         let ret: Result<(), String>;
@@ -758,7 +793,7 @@ impl NfcReader for Mfrc522 {
                         ret1 = match mfrc522_inner.anticoll(PICC::ANTICOLL2.value(), &uuid){
                           Ok(val) => {
                             println!("ANTICOLL CASCADE 2 value: {:?}", val);
-                            if val[0] == 0x88 { complete = false; uuid.extend_from_slice(&val[1..val.len()-1]); } else { complete = true; uuid.extend_from_slice(&val[..val.len()-1]); }                          
+                            if val[0] == 0x88 { complete = false; uuid.extend_from_slice(&val[1..val.len()-1]); } else { complete = true; uuid.extend_from_slice(&val[..val.len()-1]); }
                             let ret: Result<(), String> = match mfrc522_inner.select(PICC::ANTICOLL2.value(),&uuid) {
                               Ok(val) => {
                                 let ret2:Result<(),String>;
@@ -844,7 +879,7 @@ impl NfcReader for Mfrc522 {
   fn read_data(&mut self, uuid: &Vec<u8>, addr: u8, blocks: u8) -> Result<(Vec<u8>), String> {
     let mfrc522 = self.mfrc522.clone();
     let mut mfrc522_inner = mfrc522.lock().unwrap();
-    
+
     println!("{}","read_data: reached");
 
     let mut cur_addr:u8 = addr;
@@ -893,7 +928,7 @@ impl NfcReader for Mfrc522 {
 
       match mfrc522_inner.auth(PICC::AUTH1A.value(), cur_addr, uuid, MifareAuthKey::CustomKeyA) {
         Ok(_val) => {
-          
+
           packet.clear();
 
           if buffer.len() == 0 { break; }
