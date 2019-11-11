@@ -388,14 +388,6 @@ impl Pn532ThreadSafe {
     Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
   }
 
-  fn set_bit_mask(&mut self, reg: Register, mask: u8) -> Result<(),std::io::Error> {
-    Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
-  }
-
-  fn clear_bit_mask(&mut self, reg: Register, mask: u8) -> Result<(), std::io::Error> {
-    Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
-  }
-
   fn version(&mut self) -> Result<u8, std::io::Error>{
     Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
   }
