@@ -275,7 +275,7 @@ impl Frame {
         ];
         b.push(len);
         b.push(lcs);
-        b.push(FrameDirection::FromHost.value()); // direction
+        b.push(FrameDirection::FromHost as u8); // direction
         b.extend(data);
         b.push(dcs);
         b.push(0x00); // postamble
@@ -336,18 +336,18 @@ impl Pn532ThreadSafe {
 
   fn read_frame(&mut self) -> Result<Frame, std::io::Error> {
     let mut rx_buf = [0u8; 256];
-    let mut tx_buf = vec![ SpiCommand::ReadStatus.value() ];
 
     let status = self.with_ss(|ref mut pn| {
       if  let Some(ref mut spidev) = pn.spidev {
         {
-          let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
-          try!(spidev.transfer(&mut transfer));
+            try!(spidev.write(&[SpiCommand::ReadStatus as u8]));
+            try!(spidev.read(&mut rx_buf));
 
-          if rx_buf[0] > 0 {
-              return Ok(());
-          }
-          return Err(std::io::Error::new(std::io::ErrorKind::Other, "No data"))
+            if rx_buf[0] > 0 {
+                return Ok(());
+            }
+
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("No data: {}", rx_buf[0])))
         }
       }
       Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI dev not found"))
@@ -360,7 +360,7 @@ impl Pn532ThreadSafe {
     self.with_ss(|ref mut pn| {
       if  let Some(ref mut spidev) = pn.spidev {
         {
-            try!(spidev.write(&[SpiCommand::ReadData.value()]));
+            try!(spidev.write(&[SpiCommand::ReadData as u8]));
             try!(spidev.read(&mut rx_buf));
             return Ok(Frame { buffer: rx_buf.to_vec() });
         }
@@ -376,8 +376,11 @@ impl Pn532ThreadSafe {
               return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "timeout"));
           }
 
-          if let Ok(ret) = self.read_frame() {
-              return Ok(ret);
+          match self.read_frame() {
+              Ok(ret) => {
+                  return Ok(ret);
+              },
+              Err(err) => println!("read_frame_timeout error: {}", err)
           }
 
           thread::sleep(Duration::from_millis(1));
@@ -387,7 +390,8 @@ impl Pn532ThreadSafe {
   fn write_frame(&mut self, frame: Frame) -> Result<(), std::io::Error>{
     self.with_ss(|ref mut pn| {
       if let Some(ref mut spidev) = pn.spidev {
-        try!(spidev.write(&[SpiCommand::WriteData.value()]));
+        println!("writing to spi: {:?}", &frame.buffer);
+        try!(spidev.write(&[SpiCommand::WriteData as u8]));
         try!(spidev.write(&frame.buffer));
         return Ok(());
       }
@@ -413,7 +417,7 @@ impl Pn532ThreadSafe {
                             return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
                         }
                     } else {
-                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Ack not received"));
+                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Not an ack frame"));
                     }
                 },
                 Err(err) => Err(err)
@@ -523,15 +527,18 @@ impl NfcReader for Pn532 {
 
     for _i in 0..10 {
       thread::sleep(Duration::from_millis(50));
-      if let Ok(version) = pn532.lock().unwrap().version() {
-        println!("NFC hardware version: 0x{:?}", version);
-        //if version == 0x91 || version == 0x92 {
-          pn532_init = true;
-        //  break;
-        //} else {
-        //  println!("{}(=>0x{:X})", "NFC Hardware with an invalid version", version);
-        //}
-      }
+      match pn532.lock().unwrap().version() {
+          Ok(version) => {
+              println!("NFC hardware version: 0x{:?}", version);
+              //if version == 0x91 || version == 0x92 {
+                pn532_init = true;
+              //  break;
+              //} else {
+              //  println!("{}(=>0x{:X})", "NFC Hardware with an invalid version", version);
+              //}
+          },
+          Err(err) => println!("NFC hardware version error: {}", err)
+      };
     }
 
     if !pn532_init{
