@@ -263,7 +263,7 @@ impl Frame {
 
         let lcs = (0x100 - len as u16) as u8;
 
-        let mut dcs = FrameDirection::FromHost.value();
+        let mut dcs = FrameDirection::FromHost as u8;
         for b in data {
             dcs += b;
         }
@@ -334,20 +334,27 @@ impl Pn532ThreadSafe {
     result
   }
 
-  fn read_frame(&mut self) -> Result<Frame, std::io::Error> {
-    let mut rx_buf = [0u8; 256];
+  fn wake_up(&mut self) -> Result<(),std::io::Error> {
+      self.with_ss(|ref mut pn| {
+          thread::sleep(Duration::from_millis(1000));
+          Ok(())
+      })
+  }
 
+  fn read_frame(&mut self) -> Result<Frame, std::io::Error> {
     let status = self.with_ss(|ref mut pn| {
       if  let Some(ref mut spidev) = pn.spidev {
         {
-            try!(spidev.write(&[SpiCommand::ReadStatus as u8]));
-            try!(spidev.read(&mut rx_buf));
+            let tx_buf = [SpiCommand::ReadStatus as u8, 0];
+            let mut rx_buf = [0u8; 2];
+            let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
+            try!(spidev.transfer(&mut transfer));
 
             if rx_buf[0] > 0 {
                 return Ok(());
             }
 
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("No data: {}", rx_buf[0])))
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("No data: {}", rx_buf[1])))
         }
       }
       Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI dev not found"))
@@ -360,8 +367,10 @@ impl Pn532ThreadSafe {
     self.with_ss(|ref mut pn| {
       if  let Some(ref mut spidev) = pn.spidev {
         {
-            try!(spidev.write(&[SpiCommand::ReadData as u8]));
-            try!(spidev.read(&mut rx_buf));
+            let tx_buf = [SpiCommand::ReadData as u8; 256];
+            let mut rx_buf = [0u8; 256];
+            let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
+            try!(spidev.transfer(&mut transfer));
             return Ok(Frame { buffer: rx_buf.to_vec() });
         }
       }
@@ -390,16 +399,17 @@ impl Pn532ThreadSafe {
   fn write_frame(&mut self, frame: Frame) -> Result<(), std::io::Error>{
     self.with_ss(|ref mut pn| {
       if let Some(ref mut spidev) = pn.spidev {
-        println!("writing to spi: {:?}", &frame.buffer);
-        try!(spidev.write(&[SpiCommand::WriteData as u8]));
-        try!(spidev.write(&frame.buffer));
+        let mut b = vec![SpiCommand::WriteData as u8];
+        b.extend(&frame.buffer);
+        println!("writing to spi: {:?}", &b);
+        try!(spidev.write(&b));
         return Ok(());
       }
       Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI device not found."))
     })
   }
 
-  fn command(&mut self, command: Command, data: Option<&[u8]>) -> Result<Frame, std::io::Error> {
+  fn command(&mut self, command: Command, data: Option<&[u8]>) -> Result<(), std::io::Error> {
     let mut buffer = vec![command as u8];
     if let Some(data) = data {
         buffer.extend_from_slice(data);
@@ -411,13 +421,9 @@ impl Pn532ThreadSafe {
             match self.read_frame_timeout(Duration::from_millis(1000)) {
                 Ok(frame) => {
                     if frame.frame_type().is_ack() {
-                        if let Ok(frame) = self.read_frame_timeout(Duration::from_millis(1000)) {
-                            return Ok(frame);
-                        } else {
-                            return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
-                        }
+                        return Ok(());
                     } else {
-                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Not an ack frame"));
+                        return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Not an ack frame: {:?}", &frame.buffer)));
                     }
                 },
                 Err(err) => Err(err)
@@ -427,10 +433,24 @@ impl Pn532ThreadSafe {
     }
   }
 
+  fn setup(&mut self) -> Result<(), std::io::Error>{
+      self.wake_up();
+      match self.command(Command::SAMConfiguration, Some(&[0x01])) {
+          Ok(_) => {
+              Ok(())
+          },
+          Err(err) => Err(err)
+      }
+  }
+
   fn version(&mut self) -> Result<Vec<u8>, std::io::Error>{
     match self.command(Command::GetFirmwareVersion, Option::None) {
-        Ok(frame) => {
-            Ok(try!(frame.data()))
+        Ok(_) => {
+            if let Ok(frame) = self.read_frame_timeout(Duration::from_millis(1000)) {
+                return Ok(try!(frame.data()));
+            }
+
+            return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
         },
         Err(err) => Err(err)
     }
@@ -524,6 +544,13 @@ impl NfcReader for Pn532 {
     pn532.lock().unwrap().ss = Some(pin);
 
     let mut pn532_init = false;
+
+    match pn532.lock().unwrap().setup() {
+        Ok(_) => {
+            println!("NFC hardware initialized");
+        },
+        Err(err) => println!("NFC hardware setup error: {}", err)
+    };
 
     for _i in 0..10 {
       thread::sleep(Duration::from_millis(50));
