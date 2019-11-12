@@ -328,6 +328,7 @@ impl Pn532ThreadSafe {
     F: FnOnce(&mut Self) -> T,
   {
     self.ss.unwrap().set_value(0).unwrap();
+    thread::sleep(Duration::from_millis(2));
     let result = f(self);
     self.ss.unwrap().set_value(1).unwrap();
 
@@ -519,7 +520,7 @@ impl NfcReader for Pn532 {
       Ok(mut spidev) => {
         let options = SpidevOptions::new()
           .bits_per_word(8)
-          .max_speed_hz(20_000)
+          .max_speed_hz(2000000)
           .mode(SPI_MODE_0)
           .build();
 
