@@ -278,13 +278,16 @@ impl Frame {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid buffer length"));
         }
 
-        let lcs = (0x100 - len as u16) as u8;
+        //let lcs = (0x100 - len as u16) as u8;
+        let lcs = !len + 1;
 
         let mut dcs = FrameDirection::FromHost as u8;
         for b in data {
             dcs += b;
         }
-        dcs = (0x100 - (dcs & 0xff) as u16) as u8;
+
+        //dcs = (0x100 - (dcs & 0xff) as u16) as u8;
+        dcs = !dcs + 1;
 
         let mut b = vec![
             0x00, // preamble
@@ -385,7 +388,7 @@ impl Pn532ThreadSafe {
                 try!(spidev.transfer(&mut transfer));
             }
         } else {
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI dev not found"))
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI dev not found"));
         }
 
         try!(pn.reverse_bits(&mut rx_buf));
@@ -445,9 +448,9 @@ impl Pn532ThreadSafe {
         let mut b = vec![SpiCommand::WriteData as u8];
         b.extend(&frame.buffer);
 
+        println!("writing to spi (original): {:X?}", &b);
         try!(pn.reverse_bits(&mut b));
-
-        println!("writing to spi: {:X?}", &b);
+        println!("writing to spi (reversed): {:X?}", &b);
 
         if let Some(ref mut spidev) = pn.spidev {
             try!(spidev.write(&b));
