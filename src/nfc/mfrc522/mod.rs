@@ -35,7 +35,7 @@ use std::thread;
 use std::time::{Duration,Instant};
 
 use std::io::prelude::*;
-use spidev::{Spidev, SpidevOptions, SpidevTransfer, SPI_MODE_0};
+use spidev::{Spidev, SpidevOptions, SpidevTransfer, SpiModeFlags};
 use sysfs_gpio::{Direction, Pin};
 
 #[derive(Clone, Copy)]
@@ -708,7 +708,7 @@ impl NfcReader for Mfrc522 {
         let options = SpidevOptions::new()
           .bits_per_word(8)
           .max_speed_hz(20_000)
-          .mode(SPI_MODE_0)
+          .mode(SpiModeFlags::SPI_MODE_0)
           .build();
 
         if let Err(err) = spidev.configure(&options) {
