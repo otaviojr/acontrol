@@ -376,7 +376,7 @@ impl Pn532ThreadSafe {
     let status = self.with_ss(|ref mut pn| {
 
         let mut tx_buf = [SpiCommand::ReadStatus as u8, 0];
-        let mut rx_buf = [0u8; 2];
+        let mut rx_buf = [0; 2];
 
         try!(pn.reverse_bits(&mut tx_buf));
 
@@ -570,7 +570,7 @@ impl NfcReader for Pn532 {
       Ok(mut spidev) => {
         let options = SpidevOptions::new()
           .bits_per_word(8)
-          .max_speed_hz(20_000)
+          .max_speed_hz(1000000)
           .mode(SpiModeFlags::SPI_MODE_0)
           .build();
 
