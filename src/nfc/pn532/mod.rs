@@ -279,7 +279,7 @@ impl Frame {
         }
 
         //let lcs = (0x100 - len as u16) as u8;
-        let lcs = !len + 1;
+        let lcs = !len+1;
 
         let mut dcs = FrameDirection::FromHost as u8;
         for b in data {
@@ -287,7 +287,7 @@ impl Frame {
         }
 
         //dcs = (0x100 - (dcs & 0xff) as u16) as u8;
-        dcs = !dcs + 1;
+        dcs = !dcs+1;
 
         let mut b = vec![
             0x00, // preamble
@@ -378,7 +378,7 @@ impl Pn532ThreadSafe {
     let status = self.with_ss(|ref mut pn| {
 
         let mut tx_buf = [SpiCommand::ReadStatus as u8, 0];
-        let mut rx_buf = [0u8; 2];
+        let mut rx_buf = [0; 2];
 
         try!(pn.reverse_bits(&mut tx_buf));
 
@@ -572,7 +572,7 @@ impl NfcReader for Pn532 {
       Ok(mut spidev) => {
         let options = SpidevOptions::new()
           .bits_per_word(8)
-          .max_speed_hz(20_000)
+          .max_speed_hz(1000000)
           .mode(SpiModeFlags::SPI_MODE_0)
           .build();
 
