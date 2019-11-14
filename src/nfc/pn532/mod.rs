@@ -278,7 +278,6 @@ impl Frame {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid buffer length"));
         }
 
-        //let lcs = (0x100 - len as u16) as u8;
         let lcs = !len + 1;
 
         let mut dcs = FrameDirection::FromHost as u8;
@@ -286,7 +285,6 @@ impl Frame {
             dcs += b;
         }
 
-        //dcs = (0x100 - (dcs & 0xff) as u16) as u8;
         dcs = !dcs + 1;
 
         let mut b = vec![
