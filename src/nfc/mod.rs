@@ -26,7 +26,7 @@
  *
  */
 pub mod mfrc522;
-pub mod pn532;
+pub mod pn532_spi;
 
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
@@ -60,7 +60,7 @@ pub trait NfcReader {
 pub fn nfcreader_by_name(name: &str) -> Option<Box<dyn NfcReader+Sync+Send>> {
     match name {
       "mfrc522" => return Some(Box::new(mfrc522::Mfrc522::new())),
-      "pn532" => return Some(Box::new(pn532::Pn532::new())),
+      "pn532_spi" => return Some(Box::new(pn532_spi::Pn532Spi::new())),
       _ => return None
     }
 }

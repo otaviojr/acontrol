@@ -8,7 +8,7 @@ use std::thread;
 use std::time::{Duration,Instant};
 
 use std::io::prelude::*;
-use spidev::{Spidev, SpidevOptions, SpidevTransfer, SpiModeFlags};
+use spidev::{Spidev, SpidevOptions, SpidevTransfer, SPI_MODE_0};
 use sysfs_gpio::{Direction, Pin};
 
 const BITREVERSETABLE256:[u8;256] = [0x00, 0x80, 0x40, 0xC0, 0x20, 0xA0, 0x60, 0xE0, 0x10, 0x90, 0x50, 0xD0, 0x30, 0xB0, 0x70, 0xF0,
@@ -27,51 +27,6 @@ const BITREVERSETABLE256:[u8;256] = [0x00, 0x80, 0x40, 0xC0, 0x20, 0xA0, 0x60, 0
                                      0x0B, 0x8B, 0x4B, 0xCB, 0x2B, 0xAB, 0x6B, 0xEB, 0x1B, 0x9B, 0x5B, 0xDB, 0x3B, 0xBB, 0x7B, 0xFB,
                                      0x07, 0x87, 0x47, 0xC7, 0x27, 0xA7, 0x67, 0xE7, 0x17, 0x97, 0x57, 0xD7, 0x37, 0xB7, 0x77, 0xF7,
                                      0x0F, 0x8F, 0x4F, 0xCF, 0x2F, 0xAF, 0x6F, 0xEF, 0x1F, 0x9F, 0x5F, 0xDF, 0x3F, 0xBF, 0x7F, 0xFF];
-
-#[derive(Clone, Copy)]
-#[allow(dead_code)]
-enum Register {
-    BitFraming =  0x0d,
-    Coll =        0x0e,
-    ComIEn =      0x02,
-    ComIrq =      0x04,
-    Command =     0x01,
-    CrcResultH =  0x21,
-    CrcResultL =  0x22,
-    Demod =       0x19,
-    DivIrq =      0x05,
-    Error =       0x06,
-    FifoData =    0x09,
-    FifoLevel =   0x0a,
-    ModWidth =    0x24,
-    Mode =        0x11,
-    ReloadH =     0x2c,
-    ReloadL =     0x2d,
-    RxMode =      0x13,
-    Status1 =     0x07,
-    Status2 =     0x08,
-    TCountValH =  0x2e,
-    TCountValL =  0x2f,
-    TMode =       0x2a,
-    TPrescaler =  0x2b,
-    TxAsk =       0x15,
-    TxControl =   0x14,
-    TxMode =      0x12,
-    Version =     0x37,
-}
-
-const R: u8 = 1 << 7;
-const W: u8 = 0 << 7;
-
-impl Register {
-    fn read(&self) -> u8 {
-        ((*self as u8) << 1) | R
-    }
-
-    fn write(&self) -> u8 {
-        ((*self as u8) << 1) | W
-    }
-}
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
@@ -373,12 +328,12 @@ impl Pn532ThreadSafe {
   }
 
   fn read_frame(&mut self) -> Result<Frame, std::io::Error> {
-    let status = self.with_ss(|ref mut pn| {
+    let mut tx_buf = [SpiCommand::ReadStatus as u8, 0];
+    let mut rx_buf = [0 ; 2];
 
-        let mut tx_buf = [SpiCommand::ReadStatus as u8, 0];
-        let mut rx_buf = [0; 2];
+    try!(self.reverse_bits(&mut tx_buf));
 
-        try!(pn.reverse_bits(&mut tx_buf));
+    try!(self.with_ss(|ref mut pn| {
 
         if  let Some(ref mut spidev) = pn.spidev {
             {
@@ -391,23 +346,19 @@ impl Pn532ThreadSafe {
 
         try!(pn.reverse_bits(&mut rx_buf));
 
-        if rx_buf[1] > 0 {
-            return Ok(());
+        if rx_buf[1] == 0 {
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("No data: 0x{:X} 0x{:X}", rx_buf[0], rx_buf[1])));
         }
 
-        return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("No data: {}", rx_buf[1])));
-    });
+        Ok(())
+    }));
 
-    if let Err(error) = status {
-        return Err(error);
-    }
+    let mut tx_buf = [SpiCommand::ReadData as u8];
+    let mut rx_buf = [0 ; 256];
 
-    self.with_ss(|ref mut pn| {
-        let mut tx_buf = [SpiCommand::ReadData as u8];
-        let mut rx_buf = [0u8; 256];
+    try!(self.reverse_bits(&mut tx_buf));
 
-        try!(pn.reverse_bits(&mut tx_buf));
-
+    try!(self.with_ss(|ref mut pn| {
         if  let Some(ref mut spidev) = pn.spidev {
             {
                 try!(spidev.write(&tx_buf));
@@ -417,17 +368,19 @@ impl Pn532ThreadSafe {
             return Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI dev not found"));
         }
 
-        try!(pn.reverse_bits(&mut rx_buf));
+        Ok(())
+    }));
 
-        Ok(Frame { buffer: rx_buf.to_vec() })
-    })
+    try!(self.reverse_bits(&mut rx_buf));
+
+    Ok(Frame { buffer: rx_buf.to_vec() })
   }
 
   fn read_frame_timeout(&mut self, timeout: Duration) -> Result<Frame,std::io::Error> {
       let now = Instant::now();
       loop {
           if now.elapsed() > timeout {
-              return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "timeout"));
+              return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
           }
 
           match self.read_frame() {
@@ -442,16 +395,21 @@ impl Pn532ThreadSafe {
   }
 
   fn write_frame(&mut self, frame: Frame) -> Result<(), std::io::Error> {
+
+    let mut tx_buf = vec![SpiCommand::WriteData as u8];
+    tx_buf.extend(&frame.buffer);
+
+    //let mut rx_buf = vec![0 ; tx_buf.len()];
+
+    println!("writing to spi (original): {:X?}", &tx_buf);
+    try!(self.reverse_bits(&mut tx_buf));
+    println!("writing to spi (reversed): {:X?}", &tx_buf);
+
     self.with_ss(|ref mut pn| {
-        let mut b = vec![SpiCommand::WriteData as u8];
-        b.extend(&frame.buffer);
-
-        println!("writing to spi (original): {:X?}", &b);
-        try!(pn.reverse_bits(&mut b));
-        println!("writing to spi (reversed): {:X?}", &b);
-
         if let Some(ref mut spidev) = pn.spidev {
-            try!(spidev.write(&b));
+            //let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
+            //try!(spidev.transfer(&mut transfer));
+            try!(spidev.write(&tx_buf));
         } else {
             return Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI device not found."));
         }
@@ -545,13 +503,13 @@ static MIFARE_DEFAULT_KEY_A:       &'static [u8] = &[0xff,0xff,0xff,0xff,0xff,0x
 static MIFARE_DEFAULT_KEY_B:       &'static [u8] = &[0x00,0x00,0x00,0x00,0x00,0x00];
 static MIFARE_DEFAULT_ACCESS_BITS: &'static [u8] = &[0xff,0x07,0x80,0x00];
 
-pub struct Pn532 {
+pub struct Pn532Spi {
   pn532: Arc<Mutex<Pn532ThreadSafe>>
 }
 
-impl Pn532 {
+impl Pn532Spi {
   pub fn new() -> Self {
-    return Pn532 {pn532: Arc::new(Mutex::new(Pn532ThreadSafe
+    return Pn532Spi {pn532: Arc::new(Mutex::new(Pn532ThreadSafe
       {
         spidev: None,
         ss: None,
@@ -563,25 +521,35 @@ impl Pn532 {
   }
 }
 
-impl NfcReader for Pn532 {
+impl NfcReader for Pn532Spi {
   fn init(&mut self) -> Result<(), String> {
     let pn532 = self.pn532.clone();
-    pn532.lock().unwrap().spidev = match Spidev::open("/dev/spidev0.0") {
+    let spidev = match Spidev::open("/dev/spidev0.0") {
       Ok(mut spidev) => {
         let options = SpidevOptions::new()
           .bits_per_word(8)
-          .max_speed_hz(1000000)
-          .mode(SpiModeFlags::SPI_MODE_0)
+          .max_speed_hz(500_000)
+          .mode(SPI_MODE_0)
           .build();
 
         if let Err(err) = spidev.configure(&options) {
-          return Err(format!("{}: {}","Error  spi port",err));
+          return Err(format!("{}: {}","Error spi port",err));
         }
 
-        Some(spidev)
+        Ok(spidev)
       },
-      Err(err) => return Err(format!("{} - {}", String::from("Error initializing spi port"), err)),
+      Err(err) => Err(format!("{} - {}", String::from("Error initializing spi port"), err)),
     };
+
+    match spidev {
+        Ok(spidev) => {
+            pn532.lock().unwrap().spidev = Some(spidev);
+        },
+        Err(err) => {
+            pn532.lock().unwrap().spidev = None;
+            return Err(err);
+        }
+    }
 
     let pin = Pin::new(17);
     if let Err(err) = pin.export() {
@@ -675,5 +643,5 @@ impl NfcReader for Pn532 {
   }
 }
 
-unsafe impl Send for Pn532 {}
-unsafe impl Sync for Pn532 {}
+unsafe impl Send for Pn532Spi {}
+unsafe impl Sync for Pn532Spi {}
