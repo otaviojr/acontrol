@@ -221,6 +221,30 @@ impl Error {
   }
 }
 
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+enum ResponseSize {
+    Ack,
+    Frame,
+}
+
+impl ResponseSize {
+
+    fn name(&self) -> &'static str {
+        match *self {
+            ResponseSize::Ack =>      "Ack",
+            ResponseSize::Frame =>    "Frame",
+        }
+    }
+
+    fn size(&self, len: usize) -> usize {
+        match *self {
+            ResponseSize::Ack =>      0x07 + len,
+            ResponseSize::Frame =>    0x08 + len,
+        }
+    }
+}
+
 struct Frame {
     buffer: Vec<u8>
 }
@@ -261,17 +285,27 @@ impl Frame {
     }
 
     fn frame_type(&self) -> FrameType {
+
+        //println!("Check type: {:X?}", &self.buffer);
+
         if self.buffer.len() < 5 {
             return FrameType::Unknown;
         }
 
-        if self.buffer[3] == 0x00 && self.buffer[4] == 0xFF {
+        //SPI send the first byte as 0x01(DataWrite) before write
+        //This is a SPI only feature
+        if self.buffer[0] != 0x01 {
+            return FrameType::Unknown;
+        }
+
+        //SPI - 4 and 5 because SPI adds a byte on start
+        if self.buffer[4] == 0x00 && self.buffer[5] == 0xFF {
             return FrameType::Ack;
-        } else if self.buffer[3] == 0xFF && self.buffer[4] == 0x00 {
+        } else if self.buffer[4] == 0xFF && self.buffer[5] == 0x00 {
             return FrameType::NAck;
-        } else if self.buffer[3] == 0xFF && self.buffer[4] == 0xFF {
+        } else if self.buffer[4] == 0xFF && self.buffer[5] == 0xFF {
             return FrameType::Extended;
-        } else if self.buffer[3] == 0x01 && self.buffer[4] == 0xFF {
+        } else if self.buffer[4] == 0x01 && self.buffer[5] == 0xFF {
             return FrameType::Error;
         }
 
@@ -279,6 +313,7 @@ impl Frame {
     }
 
     fn data(&self) -> Result<Vec<u8>, std::io::Error> {
+        //println!("Check for data: {:X?}", &self.buffer);
         match self.frame_type() {
             FrameType::Normal => Ok(self.buffer[6..self.buffer.len()-2].to_vec()),
             _ => Err(std::io::Error::new(std::io::ErrorKind::Other, "Frame has no data"))
@@ -327,7 +362,7 @@ impl Pn532ThreadSafe {
       Ok(true)
   }
 
-  fn read_frame(&mut self) -> Result<Frame, std::io::Error> {
+  fn read_frame(&mut self, len: Option<usize>) -> Result<Frame, std::io::Error> {
     let mut tx_buf = [SpiCommand::ReadStatus as u8, 0];
     let mut rx_buf = [0 ; 2];
 
@@ -353,16 +388,21 @@ impl Pn532ThreadSafe {
         Ok(())
     }));
 
-    let mut tx_buf = [SpiCommand::ReadData as u8];
-    let mut rx_buf = [0 ; 256];
+    let mut l = 256;
+    if let Some(len) = len {
+        l = len;
+    }
+
+    let mut tx_buf = vec![SpiCommand::ReadData as u8; l];
+    let mut rx_buf = vec![0 ; l];
 
     try!(self.reverse_bits(&mut tx_buf));
 
     try!(self.with_ss(|ref mut pn| {
         if  let Some(ref mut spidev) = pn.spidev {
             {
-                try!(spidev.write(&tx_buf));
-                try!(spidev.read(&mut rx_buf));
+                let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
+                try!(spidev.transfer(&mut transfer));
             }
         } else {
             return Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI dev not found"));
@@ -376,14 +416,14 @@ impl Pn532ThreadSafe {
     Ok(Frame { buffer: rx_buf.to_vec() })
   }
 
-  fn read_frame_timeout(&mut self, timeout: Duration) -> Result<Frame,std::io::Error> {
+  fn read_frame_timeout(&mut self, len: Option<usize>, timeout: Duration) -> Result<Frame,std::io::Error> {
       let now = Instant::now();
       loop {
           if now.elapsed() > timeout {
               return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
           }
 
-          match self.read_frame() {
+          match self.read_frame(len) {
               Ok(ret) => {
                   return Ok(ret);
               },
@@ -399,16 +439,10 @@ impl Pn532ThreadSafe {
     let mut tx_buf = vec![SpiCommand::WriteData as u8];
     tx_buf.extend(&frame.buffer);
 
-    //let mut rx_buf = vec![0 ; tx_buf.len()];
-
-    println!("writing to spi (original): {:X?}", &tx_buf);
     try!(self.reverse_bits(&mut tx_buf));
-    println!("writing to spi (reversed): {:X?}", &tx_buf);
 
     self.with_ss(|ref mut pn| {
         if let Some(ref mut spidev) = pn.spidev {
-            //let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
-            //try!(spidev.transfer(&mut transfer));
             try!(spidev.write(&tx_buf));
         } else {
             return Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI device not found."));
@@ -427,7 +461,7 @@ impl Pn532ThreadSafe {
     match Frame::from_vec(&buffer) {
         Ok(frame) => {
             try!(self.write_frame(frame));
-            match self.read_frame_timeout(Duration::from_millis(1000)) {
+            match self.read_frame_timeout(Some(ResponseSize::Ack.size(0)),Duration::from_millis(1000)) {
                 Ok(frame) => {
                     if frame.frame_type().is_ack() {
                         return Ok(());
@@ -442,11 +476,15 @@ impl Pn532ThreadSafe {
     }
   }
 
-  fn setup(&mut self) -> Result<(), std::io::Error>{
-      self.wake_up();
+  fn setup(&mut self) -> Result<Vec<u8>, std::io::Error>{
+      try!(self.wake_up());
       match self.command(Command::SAMConfiguration, Some(&[0x01])) {
           Ok(_) => {
-              Ok(())
+              if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(2)), Duration::from_millis(1000)) {
+                  return Ok(try!(frame.data()));
+              }
+
+              return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
           },
           Err(err) => Err(err)
       }
@@ -455,8 +493,8 @@ impl Pn532ThreadSafe {
   fn version(&mut self) -> Result<Vec<u8>, std::io::Error>{
     match self.command(Command::GetFirmwareVersion, Option::None) {
         Ok(_) => {
-            if let Ok(frame) = self.read_frame_timeout(Duration::from_millis(1000)) {
-                return Ok(try!(frame.data()));
+            if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(6)), Duration::from_millis(1000)) {
+                return Ok(try!(frame.data())[3..5].to_vec());
             }
 
             return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
@@ -488,7 +526,7 @@ impl Pn532ThreadSafe {
   }
 
   fn initialize(&mut self) -> Result<(), std::io::Error> {
-    Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
+    Ok(())
   }
 
   fn reset(&mut self) -> Result<(), String> {
@@ -575,13 +613,9 @@ impl NfcReader for Pn532Spi {
       thread::sleep(Duration::from_millis(50));
       match pn532.lock().unwrap().version() {
           Ok(version) => {
-              println!("NFC hardware version: 0x{:?}", version);
-              //if version == 0x91 || version == 0x92 {
-                pn532_init = true;
-              //  break;
-              //} else {
-              //  println!("{}(=>0x{:X})", "NFC Hardware with an invalid version", version);
-              //}
+              println!("NFC hardware version: {}.{}", version[0], version[1]);
+              pn532_init = true;
+              break;
           },
           Err(err) => println!("NFC hardware version error: {}", err)
       };
