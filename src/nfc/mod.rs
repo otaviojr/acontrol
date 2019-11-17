@@ -30,6 +30,32 @@ pub mod pn532_spi;
 
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
+pub enum CardType{
+  Mifare,
+  FelicaA,
+  FelicaB,
+  Jewel
+}
+
+#[allow(dead_code)]
+impl CardType {
+  fn value(&mut self) -> u8 {
+    let value = *self as u8;
+    value
+  }
+
+  fn name(&mut self) -> &str {
+    match *self {
+      CardType::Mifare => "Mifare",
+      CardType::FelicaA => "FelicaA",
+      CardType::FelicaB => "FelicaB",
+      CardType::Jewel => "Jewel",
+    }
+  }
+}
+
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub enum MifareAuthKey {
   DefaultKeyA,
   DefaultKeyB,
@@ -47,7 +73,7 @@ pub enum WriteSecMode {
 pub trait NfcReader {
   fn init(&mut self) -> Result<(), String>;
   fn unload(&mut self) -> Result<(), String>;
-  fn find_tag(&mut self, func: fn(Vec<u8>,Vec<u8>) -> bool) -> Result<(), String>;
+  fn find_tag(&mut self, func: fn(CardType, Vec<u8>) -> bool) -> Result<(), String>;
   fn set_auth_keys(&mut self, key_a: &Vec<u8>, key_b: &Vec<u8>) -> Result<(), String>;
   fn set_auth_bits(&mut self, access_bits: Vec<u8>) -> Result<(), String>;
   fn format(&mut self, uuid: &Vec<u8>) -> Result<(), String>;

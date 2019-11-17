@@ -25,7 +25,7 @@
  * THE SOFTWARE.
  *
  */
-use nfc::{NfcReader, MifareAuthKey, WriteSecMode};
+use nfc::{NfcReader, MifareAuthKey, WriteSecMode, CardType};
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -759,14 +759,13 @@ impl NfcReader for Mfrc522 {
     Ok(())
   }
 
-  fn find_tag(&mut self, func: fn(Vec<u8>, Vec<u8>) -> bool) -> Result<(),String> {
+  fn find_tag(&mut self, func: fn(CardType, Vec<u8>) -> bool) -> Result<(),String> {
     let mfrc522 = self.mfrc522.clone();
 
     let _handler = thread::spawn(move || {
       loop {
         let ret: Result<(), String>;
         let mut uuid:Vec<u8> = Vec::new();
-        let mut sak:Vec<u8> = Vec::new();
         let mut complete:bool;
 
         {
@@ -801,7 +800,6 @@ impl NfcReader for Mfrc522 {
                                 if complete == false {
                                   ret2 = Err(format!("{}","Tripple byte card not implemented yet!"));
                                 } else {
-                                  sak = val;
                                   ret2 = Ok(());
                                 }
                                 ret2
@@ -813,7 +811,6 @@ impl NfcReader for Mfrc522 {
                           Err(ref mut err) => Err(format!("ANTICOLL 2 => {}", err))
                         };
                       } else {
-                        sak = val;
                         ret1 = Ok(());
                       }
                       ret1
@@ -831,7 +828,7 @@ impl NfcReader for Mfrc522 {
         };
 
         if let Ok(_val) = ret {
-          func(uuid, sak);
+          func(CardType::Mifare, uuid);
         }
 
         //if let Err(val) = ret {

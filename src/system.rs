@@ -26,7 +26,7 @@
  *
  */
 use fingerprint::{Fingerprint, FingerprintState, FingerprintData};
-use nfc::{NfcReader};
+use nfc::{NfcReader, CardType};
 use audio::{Audio};
 use persist::{Persist};
 use display::{Display, Animation, AnimationType, AnimationColor};
@@ -354,7 +354,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
         return false;
       }
 
-      drv_inner.find_tag(|uuid, sak|{
+      drv_inner.find_tag(|card_type, uuid|{
 
         match *ACONTROL_SYSTEM.nfc_drv.lock().unwrap() {
 
@@ -363,7 +363,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
             let mut next_nfc_system_state: Option<NFCSystemState> = None;
             let mut drv_inner = drv.lock().unwrap();
 
-            println!("Card Found: UUID={:?}, SAK={:?}", uuid,sak);
+            println!("Card Found: UUID={:?}", uuid);
 
             match *ACONTROL_SYSTEM.nfc_state.lock().unwrap() {
               NFCSystemState::READ => {

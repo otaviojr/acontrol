@@ -1,4 +1,4 @@
-use nfc::{NfcReader, MifareAuthKey, WriteSecMode};
+use nfc::{NfcReader, MifareAuthKey, WriteSecMode, CardType};
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -261,7 +261,7 @@ impl Frame {
 
         let mut dcs = FrameDirection::FromHost as u8;
         for b in data {
-            dcs += b;
+            dcs = dcs.wrapping_add(*b);
         }
 
         dcs = !dcs + 1;
@@ -423,11 +423,8 @@ impl Pn532ThreadSafe {
               return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
           }
 
-          match self.read_frame(len) {
-              Ok(ret) => {
-                  return Ok(ret);
-              },
-              Err(err) => println!("read_frame_timeout error: {}", err)
+          if let Ok(ret) = self.read_frame(len) {
+              return Ok(ret);
           }
 
           thread::sleep(Duration::from_millis(1));
@@ -469,7 +466,7 @@ impl Pn532ThreadSafe {
                         return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Not an ack frame: {:?}", &frame.buffer)));
                     }
                 },
-                Err(err) => Err(err)
+                Err(err) => Err(std::io::Error::new(err.kind(), format!("Ack frame error: {}", err)))
             }
         },
         Err(err) => Err(err)
@@ -490,7 +487,7 @@ impl Pn532ThreadSafe {
       }
   }
 
-  fn version(&mut self) -> Result<Vec<u8>, std::io::Error>{
+  fn version(&mut self) -> Result<Vec<u8>, std::io::Error> {
     match self.command(Command::GetFirmwareVersion, Option::None) {
         Ok(_) => {
             if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(6)), Duration::from_millis(1000)) {
@@ -501,6 +498,27 @@ impl Pn532ThreadSafe {
         },
         Err(err) => Err(err)
     }
+  }
+
+  fn read_passive_target(&mut self, card_type: CardType) -> Result<Vec<u8>, std::io::Error> {
+
+      let freq:u8 = match card_type {
+          CardType::Mifare => 0x00,
+          CardType::FelicaA => 0x01,
+          CardType::FelicaB => 0x02,
+          CardType::Jewel => 0x04,
+      };
+
+      match self.command(Command::InListPassiveTarget, Some(&[0x01, freq])) {
+          Ok(_) => {
+              if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(17)), Duration::from_millis(1000)) {
+                  return Ok(try!(frame.data()));
+              }
+
+              return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
+          },
+          Err(err) => Err(std::io::Error::new(err.kind(), format!("Command Error: {}",err)))
+      }
   }
 
   fn flush_fifo(&mut self) -> Result<(),std::io::Error>{
@@ -634,8 +652,29 @@ impl NfcReader for Pn532Spi {
     Ok(())
   }
 
-  fn find_tag(&mut self, func: fn(Vec<u8>, Vec<u8>) -> bool) -> Result<(),String> {
-    Err(String::from("Not Implement"))
+  fn find_tag(&mut self, func: fn(CardType, Vec<u8>) -> bool) -> Result<(),String> {
+    let pn532 = self.pn532.clone();
+
+    let _handler = thread::spawn(move || {
+        loop {
+            let ret: Result<(), String>;
+            let mut uuid:Vec<u8> = Vec::new();
+
+            {
+                let mut pn532_inner = pn532.lock().unwrap();
+
+                match pn532_inner.read_passive_target(CardType::Mifare) {
+                    Ok(uuid) => {
+                        func(CardType::Mifare, uuid);
+                    },
+                    Err(err) => println!("No Card Found: {}", err),
+                };
+
+                thread::sleep(Duration::from_millis(500));
+            }
+        }
+    });
+    Ok(())
   }
 
   fn set_auth_keys(&mut self, key_a: &Vec<u8>, key_b: &Vec<u8>) -> Result<(), String> {
