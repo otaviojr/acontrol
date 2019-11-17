@@ -198,6 +198,12 @@ impl Command {
     let value = *self as u8;
     value
   }
+
+  fn response(&self) -> u8 {
+      let value = *self as u8;
+      value+1
+  }
+
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -317,6 +323,13 @@ impl Frame {
         match self.frame_type() {
             FrameType::Normal => Ok(self.buffer[6..self.buffer.len()-2].to_vec()),
             _ => Err(std::io::Error::new(std::io::ErrorKind::Other, "Frame has no data"))
+        }
+    }
+
+    fn responseByte(&self) -> Result<u8,std::io::Error> {
+        match self.frame_type() {
+            FrameType::Normal => Ok(self.buffer[7]),
+            _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Frame has no data"))
         }
     }
 }
@@ -478,7 +491,11 @@ impl Pn532ThreadSafe {
       match self.command(Command::SAMConfiguration, Some(&[0x01])) {
           Ok(_) => {
               if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(2)), Duration::from_millis(1000)) {
-                  return Ok(try!(frame.data()));
+                  if try!(frame.responseByte()) == Command::SAMConfiguration.response() {
+                      return Ok(try!(frame.data()));
+                  } else {
+                      return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
+                  }
               }
 
               return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
@@ -491,7 +508,11 @@ impl Pn532ThreadSafe {
     match self.command(Command::GetFirmwareVersion, Option::None) {
         Ok(_) => {
             if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(6)), Duration::from_millis(1000)) {
-                return Ok(try!(frame.data())[3..5].to_vec());
+                if try!(frame.responseByte()) == Command::GetFirmwareVersion.response() {
+                    return Ok(try!(frame.data())[3..5].to_vec());
+                } else {
+                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
+                }
             }
 
             return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
@@ -509,10 +530,14 @@ impl Pn532ThreadSafe {
           CardType::Jewel => 0x04,
       };
 
-      match self.command(Command::InListPassiveTarget, Some(&[0x01, freq])) {
+      match self.command(Command::InListPassiveTarget, Some(&[0x02, freq])) {
           Ok(_) => {
-              if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(17)), Duration::from_millis(1000)) {
-                  return Ok(try!(frame.data()));
+              if let Ok(frame) = self.read_frame_timeout(None, Duration::from_millis(1000)) {
+                  if try!(frame.responseByte()) == Command::InListPassiveTarget.response() {
+                      return Ok(try!(frame.data()));
+                  } else {
+                      return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
+                  }
               }
 
               return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
@@ -667,7 +692,12 @@ impl NfcReader for Pn532Spi {
                     Ok(uuid) => {
                         func(CardType::Mifare, uuid);
                     },
-                    Err(err) => println!("No Card Found: {}", err),
+                    Err(err) => {
+                        match err.kind() {
+                            std::io::ErrorKind::TimedOut => {/*No card found*/},
+                            _ => println!("Card Detection Error: {}", err)
+                        }
+                    },
                 };
 
                 thread::sleep(Duration::from_millis(500));
