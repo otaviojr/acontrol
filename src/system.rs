@@ -363,7 +363,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
             let mut next_nfc_system_state: Option<NFCSystemState> = None;
             let mut drv_inner = drv.lock().unwrap();
 
-            println!("Card Found: UUID={:?}", uuid);
+            println!("Card Found: UUID={:X?}", uuid);
 
             match *ACONTROL_SYSTEM.nfc_state.lock().unwrap() {
               NFCSystemState::READ => {
