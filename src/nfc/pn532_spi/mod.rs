@@ -1,5 +1,6 @@
 use nfc::{NfcReader, MifareAuthKey, WriteSecMode, CardType};
 
+use std::ops::Shl;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -534,7 +535,29 @@ impl Pn532ThreadSafe {
           Ok(_) => {
               if let Ok(frame) = self.read_frame_timeout(None, Duration::from_millis(1000)) {
                   if try!(frame.responseByte()) == Command::InListPassiveTarget.response() {
-                      return Ok(try!(frame.data()));
+
+                      let data = try!(frame.data());
+                      let devices = data[2];
+
+                      if devices > 0 {
+                          let tg = data[3];
+                          let sens_res:u16 = ((data[5] as u16).wrapping_shl(8) | data[4] as u16) as u16;
+                          let sel_res = data[6];
+                          let id_len = data[7];
+                          let id = &data[8..id_len as usize];
+                          let ats_len = data[ (8+id_len) as usize];
+                          let ats = &data[(8+id_len) as usize..ats_len as usize];
+
+                          println!("tg=0x{:X}",tg);
+                          println!("sens_res=0x{:X}",sens_res);
+                          println!("sel_res=0x{:X}",sel_res);
+                          println!("id_len=0x{:X}",id_len);
+                          println!("id=0x{:X?}",id.to_vec());
+                          println!("ats_len=0x{:X}",ats_len);
+                          println!("ats=0x{:X?}",ats.to_vec());
+                      }
+
+                      return Ok(data);
                   } else {
                       return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
                   }
