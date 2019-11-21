@@ -1,4 +1,4 @@
-use nfc::{NfcReader, MifareAuthKey, WriteSecMode, CardType};
+use nfc::{NfcReader, WriteSecMode, CardType};
 
 use std::ops::Shl;
 use std::collections::VecDeque;
@@ -50,6 +50,31 @@ impl SpiCommand {
   fn value(&self) -> u8 {
     let value = *self as u8;
     value
+  }
+}
+
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+pub enum PICC {
+  REQIDL	= 0x26,
+  REQALL	= 0x52,
+  ANTICOLL1	= 0x93,
+  ANTICOLL2	= 0x95,
+  ANTICOLL3	= 0x97,
+  AUTH1A	= 0x60,
+  AUTH1B	= 0x61,
+  READ		= 0x30,
+  WRITE		= 0xA0,
+  DECREMENT	= 0xC0,
+  INCREMENT	= 0xC1,
+  RESTORE	= 0xC2,
+  TRANSFER	= 0xB0,
+  HALT		= 0x50
+}
+
+impl PICC {
+  fn value(&self) -> u8 {
+    return (*self) as u8;
   }
 }
 
@@ -204,7 +229,15 @@ impl Command {
       let value = *self as u8;
       value+1
   }
+}
 
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub enum MifareAuthKey {
+  DefaultKeyA,
+  DefaultKeyB,
+  CustomKeyA,
+  CustomKeyB
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -540,24 +573,25 @@ impl Pn532ThreadSafe {
                       let devices = data[2];
 
                       if devices > 0 {
-                          let tg = data[3];
-                          let sens_res:u16 = ((data[5] as u16).wrapping_shl(8) | data[4] as u16) as u16;
-                          let sel_res = data[6];
+                          //let tg = data[3];
+                          //let sens_res:u16 = ((data[5] as u16).wrapping_shl(8) | data[4] as u16) as u16;
+                          //let sel_res = data[6];
                           let id_len = data[7];
-                          let id = &data[8..id_len as usize];
-                          let ats_len = data[ (8+id_len) as usize];
-                          let ats = &data[(8+id_len) as usize..ats_len as usize];
+                          let id = &data[8..(8+id_len) as usize];
+                          //let ats_len = data[ (8+id_len) as usize];
+                          //let ats = &data[(8+id_len+1) as usize..(8+id_len+ats_len) as usize];
 
-                          println!("tg=0x{:X}",tg);
-                          println!("sens_res=0x{:X}",sens_res);
-                          println!("sel_res=0x{:X}",sel_res);
+                          //println!("tg=0x{:X}",tg);
+                          //println!("sens_res=0x{:X}",sens_res);
+                          //println!("sel_res=0x{:X}",sel_res);
                           println!("id_len=0x{:X}",id_len);
                           println!("id=0x{:X?}",id.to_vec());
-                          println!("ats_len=0x{:X}",ats_len);
-                          println!("ats=0x{:X?}",ats.to_vec());
-                      }
+                          //println!("ats_len=0x{:X}",ats_len);
+                          //println!("ats=0x{:X?}",ats.to_vec());
 
-                      return Ok(data);
+                          return Ok(id.to_vec());
+                      }
+                      return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "No Target Detected"));
                   } else {
                       return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
                   }
@@ -569,26 +603,80 @@ impl Pn532ThreadSafe {
       }
   }
 
-  fn flush_fifo(&mut self) -> Result<(),std::io::Error>{
-    Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
+  fn auth(&mut self, auth_mode: u8, addr: u8, uuid: &Vec<u8>, key: MifareAuthKey) -> Result<(), std::io::Error> {
+    let mut tx_buf = vec![0x01, auth_mode, addr];
+    match key {
+      MifareAuthKey::DefaultKeyA => tx_buf.extend(MIFARE_DEFAULT_KEY_A),
+      MifareAuthKey::DefaultKeyB => tx_buf.extend(MIFARE_DEFAULT_KEY_B),
+      MifareAuthKey::CustomKeyA => tx_buf.extend(&self.mifare_key_a),
+      MifareAuthKey::CustomKeyB => tx_buf.extend(&self.mifare_key_b)
+    }
+    tx_buf.extend(uuid);
+
+    match self.command(Command::InDataExchange , Some(&tx_buf)) {
+        Ok(_) => {
+            if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(1)), Duration::from_millis(1000)) {
+                if try!(frame.responseByte()) == Command::InDataExchange.response() {
+                    let data = try!(frame.data());
+                    if data[1] == 0x00 {
+                        return Ok(());
+                    }
+                } else {
+                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
+                }
+            }
+            return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
+        },
+        Err(err) => Err(std::io::Error::new(err.kind(), format!("Command Error: {}",err)))
+    }
   }
 
-  fn calc_crc(&mut self, data: &[u8]) -> Result<[u8;2], std::io::Error> {
-    Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
+  fn read(&mut self, addr: u8) -> Result<(Vec<u8>), std::io::Error> {
+      let mut tx_buf = vec![0x01, PICC::READ as u8, addr];
+
+      match self.command(Command::InDataExchange, Some(&tx_buf)) {
+        Ok(_) => {
+            if let Ok(frame) = self.read_frame_timeout(None, Duration::from_millis(1000)) {
+                if try!(frame.responseByte()) == Command::InDataExchange.response() {
+                    let data = try!(frame.data());
+                    if data[1] == 0x00 {
+                        return Ok(data);
+                    }
+                } else {
+                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
+                }
+            }
+            return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
+        },
+        Err(err) => Err(std::io::Error::new(err.kind(), format!("Command Error: {}",err)))
+      }
   }
 
-  fn transceive<'a>(&mut self, tx_buffer: &[u8], bits: u8) -> Result<Vec<u8>, Error>{
-    //self.send(Command::Transceive, tx_buffer, bits)
-    Err(Error::SPI)
-  }
+  fn write(&mut self, addr: u8, data: &Vec<u8>) -> Result<(), std::io::Error> {
+    let mut tx_buf = vec![0x01, PICC::WRITE as u8, addr];
 
-  fn authent<'a>(&mut self, tx_buffer: &[u8], bits: u8) -> Result<Vec<u8>, Error>{
-    //self.send(Command::MFAuthent, tx_buffer, bits)
-    Err(Error::SPI)
-  }
+    if data.len() < 16 {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid buffer length"));
+    }
 
-  fn send<'a>(&mut self, command: Command, tx_buffer: &[u8], bits: u8) -> Result<Vec<u8>, Error>{
-    Err(Error::SPI)
+    tx_buf.extend_from_slice(data);
+
+    match self.command(Command::InDataExchange, Some(&tx_buf)) {
+      Ok(_) => {
+        if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(1)), Duration::from_millis(1000)) {
+          if try!(frame.responseByte()) == Command::InDataExchange.response() {
+              let data = try!(frame.data());
+              if data[1] == 0x00 {
+                  return Ok(());
+              }
+          } else {
+              return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
+          }
+        }
+        return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "TimedOut"));
+      },
+      Err(err) => Err(std::io::Error::new(err.kind(), format!("Command Error: {}",err)))
+    }
   }
 
   fn initialize(&mut self) -> Result<(), std::io::Error> {
@@ -753,7 +841,34 @@ impl NfcReader for Pn532Spi {
   }
 
   fn read_data(&mut self, uuid: &Vec<u8>, addr: u8, blocks: u8) -> Result<(Vec<u8>), String> {
-    Err(String::from("Not Implement"))
+      let pn532 = self.pn532.clone();
+      let mut pn532_inner = pn532.lock().unwrap();
+
+      println!("{}","read_data: reached");
+
+      let mut cur_addr:u8 = addr;
+      let mut buffer: Vec<u8> = Vec::new();
+
+      loop {
+
+        if cur_addr+1 % 4 == 0 { cur_addr += 1; }
+
+        match pn532_inner.auth(PICC::AUTH1A as u8, cur_addr, uuid, MifareAuthKey::CustomKeyA) {
+          Ok(_) => {
+            match pn532_inner.read(cur_addr) {
+              Ok(val) => {
+                buffer.extend(val);
+              },
+              Err(err) => return Err(format!("{}",err)),
+            }
+
+            if cur_addr < addr+blocks { cur_addr+=1; } else { break; }
+          },
+          Err(err) => return Err(format!("{}",err))
+        }
+      }
+
+      Ok(buffer)
   }
 
   fn write_data(&mut self, uuid: &Vec<u8>, addr: u8, data: &Vec<u8>) -> Result<(u8), String> {

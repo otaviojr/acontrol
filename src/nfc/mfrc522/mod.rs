@@ -25,7 +25,7 @@
  * THE SOFTWARE.
  *
  */
-use nfc::{NfcReader, MifareAuthKey, WriteSecMode, CardType};
+use nfc::{NfcReader, WriteSecMode, CardType};
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -144,6 +144,15 @@ impl Command {
     let value = *self as u8;
     value
   }
+}
+
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub enum MifareAuthKey {
+  DefaultKeyA,
+  DefaultKeyB,
+  CustomKeyA,
+  CustomKeyB
 }
 
 #[derive(Debug, Clone, Copy)]

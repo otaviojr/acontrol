@@ -56,15 +56,6 @@ impl CardType {
 
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
-pub enum MifareAuthKey {
-  DefaultKeyA,
-  DefaultKeyB,
-  CustomKeyA,
-  CustomKeyB
-}
-
-#[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
 pub enum WriteSecMode {
   Format,
   Restore
