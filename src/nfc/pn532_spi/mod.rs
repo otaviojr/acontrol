@@ -802,12 +802,6 @@ impl Pn532ThreadSafe {
   fn initialize(&mut self) -> Result<(), std::io::Error> {
     Ok(())
   }
-
-  /*
-  fn reset(&mut self) -> Result<(), String> {
-    Err(String::from("Not Implement"))
-  }
-  */
 }
 
 unsafe impl Send for Pn532ThreadSafe {}
