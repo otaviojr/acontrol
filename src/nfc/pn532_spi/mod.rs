@@ -1,6 +1,6 @@
 use nfc::{NfcReader, WriteSecMode, CardType};
 
-use std::ops::Shl;
+use std::mem::transmute;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -11,6 +11,10 @@ use std::time::{Duration,Instant};
 use std::io::prelude::*;
 use spidev::{Spidev, SpidevOptions, SpidevTransfer, SPI_MODE_0};
 use sysfs_gpio::{Direction, Pin};
+
+static MIFARE_DEFAULT_KEY_A:       &'static [u8] = &[0xff,0xff,0xff,0xff,0xff,0xff];
+static MIFARE_DEFAULT_KEY_B:       &'static [u8] = &[0x00,0x00,0x00,0x00,0x00,0x00];
+static MIFARE_DEFAULT_ACCESS_BITS: &'static [u8] = &[0xff,0x07,0x80,0x00];
 
 const BITREVERSETABLE256:[u8;256] = [0x00, 0x80, 0x40, 0xC0, 0x20, 0xA0, 0x60, 0xE0, 0x10, 0x90, 0x50, 0xD0, 0x30, 0xB0, 0x70, 0xF0,
                                      0x08, 0x88, 0x48, 0xC8, 0x28, 0xA8, 0x68, 0xE8, 0x18, 0x98, 0x58, 0xD8, 0x38, 0xB8, 0x78, 0xF8,
@@ -240,25 +244,81 @@ pub enum MifareAuthKey {
   CustomKeyB
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
+#[repr(u8)]
 enum Error {
-  /// SPI Error
-  SPI			        = 0x11,
+  Success               = 0x00,
+  TimedOut              = 0x01,
+  Crc                   = 0x02,
+  Parity                = 0x03,
+  Select                = 0x04,
+  Framing               = 0x05,
+  BitCollision          = 0x06,
+  Buffer                = 0x07,
+  Overflow              = 0x09,
+  NotSwitched           = 0x0A,
+  RFProtocol            = 0x0B,
+  Temperature           = 0x0D,
+  BufferOverflow        = 0x0E,
+  InvalidParameter      = 0x10,
+  InvalidCommand        = 0x12,
+  InvalidFormat         = 0x13,
+  InvalidAuth           = 0x14,
+  UidCheck              = 0x23,
+  InvalidDeviceState    = 0x25,
+  OperationNotAllowed   = 0x26,
+  CommandOutOfContext   = 0x27,
+  Released              = 0x29,
+  InvalidUid            = 0x2A,
+  CardDisappeared       = 0x2B,
+  MismatchInitiator     = 0x2C,
+  OverCurrent           = 0x2D,
+  NadMissing            = 0x2E,
+  GenericError          = 0x99,
 }
 
 #[allow(dead_code)]
 impl Error {
-  fn value(&mut self) -> u8 {
-    let value = *self as u8;
-    value
-  }
-
-  fn name(&mut self) -> &str {
+  fn name(&self) -> &str {
     match *self {
-      Error::SPI => "SPI",
+      Error::Success                => "Success",
+      Error::TimedOut               => "TimedOut",
+      Error::Crc                    => "Crc",
+      Error::Parity                 => "Parity",
+      Error::Select                 => "Select",
+      Error::Framing                => "Framing",
+      Error::BitCollision           => "BitCollision",
+      Error::Buffer                 => "Buffer",
+      Error::Overflow               => "Overflow",
+      Error::NotSwitched            => "NotSwitched",
+      Error::RFProtocol             => "RFProtocol",
+      Error::Temperature            => "Temperature",
+      Error::BufferOverflow         => "BufferOverflow",
+      Error::InvalidParameter       => "InvalidParameter",
+      Error::InvalidCommand         => "InvalidCommand",
+      Error::InvalidFormat          => "InvalidFormat",
+      Error::InvalidAuth            => "InvalidAuth",
+      Error::UidCheck               => "UidCheck",
+      Error::InvalidDeviceState     => "InvalidDeviceState",
+      Error::OperationNotAllowed    => "OperationNotAllowed",
+      Error::CommandOutOfContext    => "CommandOutOfContext",
+      Error::Released               => "Released",
+      Error::InvalidUid             => "InvalidUid",
+      Error::CardDisappeared        => "CardDisappeared",
+      Error::MismatchInitiator      => "MismatchInitiator",
+      Error::OverCurrent            => "OverCurrent",
+      Error::NadMissing             => "NadMissing",
+      Error::GenericError           => "GenericError",
     }
   }
+}
+
+impl From<u8> for Error {
+    fn from(t:u8) -> Error {
+        assert!(Error::Success as u8 <= t && t <= Error::GenericError as u8);
+        unsafe { transmute(t) }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -268,8 +328,8 @@ enum ResponseSize {
     Frame,
 }
 
+#[allow(dead_code)]
 impl ResponseSize {
-
     fn name(&self) -> &'static str {
         match *self {
             ResponseSize::Ack =>      "Ack",
@@ -285,10 +345,12 @@ impl ResponseSize {
     }
 }
 
+#[allow(dead_code)]
 struct Frame {
     buffer: Vec<u8>
 }
 
+#[allow(dead_code)]
 impl Frame {
     fn from_vec(data: &Vec<u8>) -> Result<Frame,std::io::Error>{
         let len = data.len() as u8 + 1;
@@ -360,7 +422,7 @@ impl Frame {
         }
     }
 
-    fn responseByte(&self) -> Result<u8,std::io::Error> {
+    fn response_byte(&self) -> Result<u8,std::io::Error> {
         match self.frame_type() {
             FrameType::Normal => Ok(self.buffer[7]),
             _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Frame has no data"))
@@ -368,12 +430,13 @@ impl Frame {
     }
 }
 
+#[allow(dead_code)]
 struct Pn532ThreadSafe {
   spidev: Option<Spidev>,
   ss: Option<Pin>,
-  mifare_key_a: Vec<u8>,
-  mifare_key_b: Vec<u8>,
-  mifare_access_bits: Vec<u8>
+  key_a: Vec<u8>,
+  key_b: Vec<u8>,
+  access_bits: Vec<u8>
 }
 
 impl Pn532ThreadSafe {
@@ -391,7 +454,7 @@ impl Pn532ThreadSafe {
   }
 
   fn wake_up(&mut self) -> Result<(),std::io::Error> {
-      self.with_ss(|ref mut pn| {
+      self.with_ss(|ref mut _pn| {
           thread::sleep(Duration::from_millis(1000));
           Ok(())
       })
@@ -525,7 +588,7 @@ impl Pn532ThreadSafe {
       match self.command(Command::SAMConfiguration, Some(&[0x01])) {
           Ok(_) => {
               if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(2)), Duration::from_millis(1000)) {
-                  if try!(frame.responseByte()) == Command::SAMConfiguration.response() {
+                  if try!(frame.response_byte()) == Command::SAMConfiguration.response() {
                       return Ok(try!(frame.data()));
                   } else {
                       return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
@@ -542,7 +605,7 @@ impl Pn532ThreadSafe {
     match self.command(Command::GetFirmwareVersion, Option::None) {
         Ok(_) => {
             if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(6)), Duration::from_millis(1000)) {
-                if try!(frame.responseByte()) == Command::GetFirmwareVersion.response() {
+                if try!(frame.response_byte()) == Command::GetFirmwareVersion.response() {
                     return Ok(try!(frame.data())[3..5].to_vec());
                 } else {
                     return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
@@ -567,7 +630,7 @@ impl Pn532ThreadSafe {
       match self.command(Command::InListPassiveTarget, Some(&[0x02, freq])) {
           Ok(_) => {
               if let Ok(frame) = self.read_frame_timeout(None, Duration::from_millis(1000)) {
-                  if try!(frame.responseByte()) == Command::InListPassiveTarget.response() {
+                  if try!(frame.response_byte()) == Command::InListPassiveTarget.response() {
 
                       let data = try!(frame.data());
                       let devices = data[2];
@@ -608,18 +671,24 @@ impl Pn532ThreadSafe {
     match key {
       MifareAuthKey::DefaultKeyA => tx_buf.extend(MIFARE_DEFAULT_KEY_A),
       MifareAuthKey::DefaultKeyB => tx_buf.extend(MIFARE_DEFAULT_KEY_B),
-      MifareAuthKey::CustomKeyA => tx_buf.extend(&self.mifare_key_a),
-      MifareAuthKey::CustomKeyB => tx_buf.extend(&self.mifare_key_b)
+      MifareAuthKey::CustomKeyA => tx_buf.extend(&self.key_a),
+      MifareAuthKey::CustomKeyB => tx_buf.extend(&self.key_b)
     }
     tx_buf.extend(uuid);
 
     match self.command(Command::InDataExchange , Some(&tx_buf)) {
         Ok(_) => {
-            if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(1)), Duration::from_millis(1000)) {
-                if try!(frame.responseByte()) == Command::InDataExchange.response() {
+            if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(3)), Duration::from_millis(1000)) {
+                if try!(frame.response_byte()) == Command::InDataExchange.response() {
                     let data = try!(frame.data());
-                    if data[1] == 0x00 {
+                    println!("Auth received response: {:X?}", data);
+
+                    let status:Error = Error::from(data[2]);
+
+                    if status == Error::Success {
                         return Ok(());
+                    } else {
+                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Status Error (0x{:X}) = {}", status as u8, &status.name())));
                     }
                 } else {
                     return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
@@ -632,15 +701,21 @@ impl Pn532ThreadSafe {
   }
 
   fn read(&mut self, addr: u8) -> Result<(Vec<u8>), std::io::Error> {
-      let mut tx_buf = vec![0x01, PICC::READ as u8, addr];
+      let tx_buf = vec![0x01, PICC::READ as u8, addr];
 
       match self.command(Command::InDataExchange, Some(&tx_buf)) {
         Ok(_) => {
-            if let Ok(frame) = self.read_frame_timeout(None, Duration::from_millis(1000)) {
-                if try!(frame.responseByte()) == Command::InDataExchange.response() {
+            if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(19)), Duration::from_millis(1000)) {
+                if try!(frame.response_byte()) == Command::InDataExchange.response() {
                     let data = try!(frame.data());
-                    if data[1] == 0x00 {
-                        return Ok(data);
+                    println!("Read received response: {:X?}", data);
+
+                    let status:Error = Error::from(data[2]);
+
+                    if status == Error::Success {
+                        return Ok(data[3..19].to_vec());
+                    } else {
+                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Status Error (0x{:X}) = {}", status as u8, &status.name())));
                     }
                 } else {
                     return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
@@ -663,11 +738,18 @@ impl Pn532ThreadSafe {
 
     match self.command(Command::InDataExchange, Some(&tx_buf)) {
       Ok(_) => {
-        if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(1)), Duration::from_millis(1000)) {
-          if try!(frame.responseByte()) == Command::InDataExchange.response() {
+        if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(3)), Duration::from_millis(1000)) {
+          if try!(frame.response_byte()) == Command::InDataExchange.response() {
               let data = try!(frame.data());
-              if data[1] == 0x00 {
+
+              println!("Write received response: {:X?}", data);
+
+              let status:Error = Error::from(data[2]);
+
+              if status == Error::Success {
                   return Ok(());
+              } else {
+                  return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Status Error (0x{:X}) = {}", status as u8, &status.name())));
               }
           } else {
               return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
@@ -679,21 +761,57 @@ impl Pn532ThreadSafe {
     }
   }
 
+  fn write_sec(&mut self, uuid: &Vec<u8>, mode: WriteSecMode) -> Result<(), std::io::Error> {
+    println!("{}","write_sec: reached");
+
+    let mut addr:u8 = 3;
+    let mut packet:Vec<u8> = Vec::new();
+    let key:MifareAuthKey;
+
+    match mode {
+      WriteSecMode::Format => {
+        packet.extend(&self.key_a);
+        packet.extend(MIFARE_DEFAULT_ACCESS_BITS);
+        packet.extend(&self.key_b);
+        key = MifareAuthKey::DefaultKeyA;
+      },
+      WriteSecMode::Restore => {
+        packet.extend(MIFARE_DEFAULT_KEY_A);
+        packet.extend(MIFARE_DEFAULT_ACCESS_BITS);
+        packet.extend(MIFARE_DEFAULT_KEY_B);
+        key = MifareAuthKey::CustomKeyA;
+      }
+    }
+
+    loop {
+      match self.auth(PICC::AUTH1A.value(), addr, uuid, key) {
+        Ok(_val) => {
+          if let Err(err) = self.write(addr, &packet) {
+            return Err(err);
+          }
+
+          if addr < 62 { addr+=4; } else { break; }
+        },
+        Err(err) => return Err(err)
+      }
+    }
+    Ok(())
+  }
+
+
   fn initialize(&mut self) -> Result<(), std::io::Error> {
     Ok(())
   }
 
+  /*
   fn reset(&mut self) -> Result<(), String> {
     Err(String::from("Not Implement"))
   }
+  */
 }
 
 unsafe impl Send for Pn532ThreadSafe {}
 unsafe impl Sync for Pn532ThreadSafe {}
-
-static MIFARE_DEFAULT_KEY_A:       &'static [u8] = &[0xff,0xff,0xff,0xff,0xff,0xff];
-static MIFARE_DEFAULT_KEY_B:       &'static [u8] = &[0x00,0x00,0x00,0x00,0x00,0x00];
-static MIFARE_DEFAULT_ACCESS_BITS: &'static [u8] = &[0xff,0x07,0x80,0x00];
 
 pub struct Pn532Spi {
   pn532: Arc<Mutex<Pn532ThreadSafe>>
@@ -705,9 +823,9 @@ impl Pn532Spi {
       {
         spidev: None,
         ss: None,
-        mifare_key_a: vec![0xff,0xff,0xff,0xff,0xff,0xff],
-        mifare_key_b: vec![0x00,0x00,0x00,0x00,0x00,0x00],
-        mifare_access_bits: vec![0xff,0x07,0x80,0x69]
+        key_a: vec![0xff,0xff,0xff,0xff,0xff,0xff],
+        key_b: vec![0x00,0x00,0x00,0x00,0x00,0x00],
+        access_bits: vec![0xff,0x07,0x80,0x69]
       }
     ))};
   }
@@ -793,15 +911,14 @@ impl NfcReader for Pn532Spi {
 
     let _handler = thread::spawn(move || {
         loop {
-            let ret: Result<(), String>;
-            let mut uuid:Vec<u8> = Vec::new();
+            let mut uuid:Option<Vec<u8>> = None;
 
             {
                 let mut pn532_inner = pn532.lock().unwrap();
 
                 match pn532_inner.read_passive_target(CardType::Mifare) {
-                    Ok(uuid) => {
-                        func(CardType::Mifare, uuid);
+                    Ok(value) => {
+                        uuid = Some(value);
                     },
                     Err(err) => {
                         match err.kind() {
@@ -810,9 +927,13 @@ impl NfcReader for Pn532Spi {
                         }
                     },
                 };
-
-                thread::sleep(Duration::from_millis(500));
             }
+
+            if let Some(uuid) = uuid {
+                func(CardType::Mifare, uuid);
+            }
+
+            thread::sleep(Duration::from_millis(500));
         }
     });
     Ok(())
@@ -822,8 +943,8 @@ impl NfcReader for Pn532Spi {
     let pn532 = self.pn532.clone();
     let mut pn532_inner = pn532.lock().unwrap();
 
-    pn532_inner.mifare_key_a = key_a.to_vec();
-    pn532_inner.mifare_key_b = key_b.to_vec();
+    pn532_inner.key_a = key_a.to_vec();
+    pn532_inner.key_b = key_b.to_vec();
 
     Ok(())
   }
@@ -833,11 +954,27 @@ impl NfcReader for Pn532Spi {
   }
 
   fn format(&mut self, uuid: &Vec<u8>) -> Result<(), String> {
-    Err(String::from("Not Implement"))
+      let pn532 = self.pn532.clone();
+      let mut pn532_inner = pn532.lock().unwrap();
+
+      println!("{}","format: reached");
+
+      match pn532_inner.write_sec(uuid, WriteSecMode::Format) {
+          Ok(_) => Ok(()),
+          Err(err) => Err(format!("{}",err))
+      }
   }
 
   fn restore(&mut self, uuid: &Vec<u8>) -> Result<(), String> {
-    Err(String::from("Not Implement"))
+      let pn532 = self.pn532.clone();
+      let mut pn532_inner = pn532.lock().unwrap();
+
+      println!("{}","format: reached");
+
+      match pn532_inner.write_sec(uuid, WriteSecMode::Restore) {
+          Ok(_) => Ok(()),
+          Err(err) => Err(format!("{}",err))
+      }
   }
 
   fn read_data(&mut self, uuid: &Vec<u8>, addr: u8, blocks: u8) -> Result<(Vec<u8>), String> {
@@ -872,11 +1009,57 @@ impl NfcReader for Pn532Spi {
   }
 
   fn write_data(&mut self, uuid: &Vec<u8>, addr: u8, data: &Vec<u8>) -> Result<(u8), String> {
-    Err(String::from("Not Implement"))
+      let pn532 = self.pn532.clone();
+      let mut pn532_inner = pn532.lock().unwrap();
+
+      println!("{}","write_data: reached");
+
+      let mut cur_addr:u8 = addr;
+      let mut buffer:VecDeque<u8> = VecDeque::new();
+      let mut packet:Vec<u8> = Vec::new();
+
+      buffer.extend(data);
+
+      loop {
+
+        if cur_addr+1 % 4 == 0 { cur_addr += 1; }
+
+        match pn532_inner.auth(PICC::AUTH1A.value(), cur_addr, uuid, MifareAuthKey::CustomKeyA) {
+          Ok(_val) => {
+
+            packet.clear();
+
+            if buffer.len() == 0 { break; }
+
+            loop {
+                match buffer.pop_front(){
+                  Some(val) => packet.push(val),
+                  None => packet.push(0),
+                }
+                if packet.len() >= 16 { break  };
+            }
+
+            if let Err(err) = pn532_inner.write(cur_addr, &packet) {
+              return Err(format!("{}",err));
+            }
+
+            if cur_addr < 62 { cur_addr+=1; } else { break; }
+          },
+          Err(err) => return Err(format!("{}",err))
+        }
+      }
+
+      Ok(cur_addr - addr)
   }
 
   fn unload(&mut self) -> Result<(), String>{
-    Err(String::from("Not Implement"))
+      println!("NFC driver unloading");
+      let pn532 = self.pn532.clone();
+      let pin = pn532.lock().unwrap().ss.unwrap();
+      if let Err(err) = pin.unexport() {
+        return Err(format!("{}(=>{})", "NFC driver error",err));
+      }
+      Ok(())
   }
 
   fn signature(&self) -> String {
