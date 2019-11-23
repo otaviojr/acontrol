@@ -821,38 +821,35 @@ impl Fingerprint for Gt521fx {
     let state_cloned = self.state.clone();
     let expires_cloned = self.expires.clone();
 
-    if let Ok(mut gt521fx_locked) = gt521fx.lock() {
+    if let Ok(mut state_locked) = state_cloned.lock() {
+        if let Ok(mut expires_locked) = expires_cloned.lock(){
+            if let Ok(mut gt521fx_locked) = gt521fx.lock() {
 
-      if let Some(pos)  = data.pos {
-        match gt521fx_locked.send_command(Command::EnrollStart, u32::from(pos), None){
-          Ok(response) => {
-            if response.response == Command::Ack.value() {
+              if let Some(pos)  = data.pos {
+                match gt521fx_locked.send_command(Command::EnrollStart, u32::from(pos), None){
+                  Ok(response) => {
+                    if response.response == Command::Ack.value() {
 
-              if let Err(err) = gt521fx_locked.send_command(Command::CmosLed, 0x1, None) {
-                println!("Error turning on fingerprint led: {}", err);
+                      if let Err(err) = gt521fx_locked.send_command(Command::CmosLed, 0x1, None) {
+                        println!("Error turning on fingerprint led: {}", err);
+                      } else {
+                        (*expires_locked) = Some(Instant::now());
+                        (*state_locked).set(FingerprintDriverState::ENROLL1);
+                      }
+
+                    } else {
+                        println!("EnrollStart error: {}", response.parameter);
+                        (*state_locked).set(FingerprintDriverState::ENROLL_ERROR);
+                    }
+                  },
+                  Err(_err) => {
+                      return false;
+                  }
+                }
               } else {
-                if let Ok(mut state_locked) = state_cloned.lock() {
-                  (*state_locked).set(FingerprintDriverState::ENROLL1);
-                }
-
-                if let Ok(mut expires_locked) = expires_cloned.lock(){
-                  (*expires_locked) = Some(Instant::now());
-                }
+                return false;
               }
-
-            } else {
-              println!("EnrollStart error: {}", response.parameter);
-              if let Ok(mut state_locked) = state_cloned.lock() {
-               (*state_locked).set(FingerprintDriverState::ENROLL_ERROR);
-              }
-            }
-          },
-          Err(_err) => {
-              return false;
           }
-        }
-      } else {
-        return false;
       }
     }
 
