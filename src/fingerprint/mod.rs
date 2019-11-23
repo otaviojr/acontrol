@@ -80,6 +80,7 @@ pub trait Fingerprint {
   fn wait_for_finger(&mut self, func: fn(state: &FingerprintState, value: Option<&str>) -> bool) -> Result<(),String>;
   fn unload(&mut self) -> Result<(), String>;
   fn signature(&self) -> String;
+  fn delete_all(&mut self) -> bool;
   fn start_enroll(&mut self, data: &FingerprintData) -> bool;
 }
 

@@ -362,7 +362,7 @@ impl Gt521fxThreadSafe {
   pub fn open(&mut self, device: &str) -> Result<(),serialport::Error> {
 
     let s = SerialPortSettings {
-        baud_rate: BaudRate::Baud9600,
+        baud_rate: 9600,
         data_bits: DataBits::Eight,
         flow_control: FlowControl::None,
         parity: Parity::None,
@@ -680,7 +680,7 @@ impl Fingerprint for Gt521fx {
                 },
                 FingerprintDriverState::ENROLL_ERROR => {
                   state_locked.set(FingerprintDriverState::IDLE);
-                  (**expires_locked) = Some(Instant::now());
+                  (**expires_locked) = None;
                 },
                 FingerprintDriverState::IDLE => {
                   if let Ok(ref mut gt521fx_locked) = gt521fx.lock() {
@@ -797,6 +797,24 @@ impl Fingerprint for Gt521fx {
     return String::from("gt521fx Fingerprint Module");
   }
 
+  fn delete_all(&mut self) -> bool {
+      let gt521fx = self.gt521fx.clone();
+      if let Ok(mut gt521fx_locked) = gt521fx.lock() {
+          match gt521fx_locked.send_command(Command::DeleteAll, 0, None){
+            Ok(response) => {
+              if response.response == Command::Ack.value() {
+                  return true;
+              } else {
+                println!("Delete error: {}", response.parameter);
+              }
+            },
+            Err(_err) => {
+            }
+          }
+      }
+      return false;
+  }
+
   fn start_enroll(&mut self, data: &FingerprintData) -> bool {
     println!("start enroll");
     let gt521fx = self.gt521fx.clone();
@@ -830,6 +848,7 @@ impl Fingerprint for Gt521fx {
             }
           },
           Err(_err) => {
+              return false;
           }
         }
       } else {

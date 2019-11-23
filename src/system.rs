@@ -612,6 +612,24 @@ pub fn acontrol_system_set_nfc_state(state: NFCSystemState, params: Option<HashM
   }
 }
 
+pub fn acontrol_system_fingerprint_delete_all(_params: HashMap<String,String>) -> Result<(), String>{
+    println!("System Delete All");
+    match *ACONTROL_SYSTEM.fingerprint_drv.lock().unwrap() {
+      Some(ref drv) => {
+        let mut drv_inner = drv.lock().unwrap();
+
+        if !drv_inner.delete_all() {
+            return Err(String::from("Error deleting all fingerprints"));
+        }
+
+        return Ok(());
+      },
+      None => {
+        return Err(String::from("Fingerprint device unloaded"));
+      }
+    }
+}
+
 pub fn acontrol_system_fingerprint_start_enroll(params: HashMap<String,String>) -> Result<(), String>{
   println!("System Start Enroll");
   match *ACONTROL_SYSTEM.fingerprint_drv.lock().unwrap() {

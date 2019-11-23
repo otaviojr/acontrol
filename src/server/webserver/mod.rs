@@ -145,6 +145,27 @@ impl WebServer {
     Ok(resp_final)
   }
 
+  fn fingerprint_delete_all(_req: &mut Request) -> IronResult<Response> {
+      let params: HashMap<String,String> = HashMap::new();
+
+      println!("Calling system fingerprint delete all");
+
+      let mut resp: Response = match system::acontrol_system_fingerprint_delete_all(params) {
+        Ok(_) => Response::with((iron::status::Ok,
+             serde_json::to_string(&WebServerDefaultResponse {ret: true, msg: String::from("Ok")} ).unwrap())
+          ),
+        Err(err) => Response::with((iron::status::Ok,
+             serde_json::to_string(&WebServerDefaultResponse {ret: false, msg: err} ).unwrap())
+          )
+      };
+
+      resp.headers.set(iron::headers::ContentType(
+        iron::mime::Mime(iron::mime::TopLevel::Application, iron::mime::SubLevel::Json, vec![])
+      ));
+
+      Ok(resp)
+  }
+
   fn fingerprint_start_enroll(req: &mut Request) -> IronResult<Response> {
 
     let mut params: HashMap<String,String> = HashMap::new();
@@ -238,6 +259,7 @@ impl Server for WebServer {
     router.get("/nfc/card/restore", WebServer::nfc_restore, "nfc_restore");
 
     router.post("/fingerprint/enroll",WebServer::fingerprint_start_enroll, "fingerprint_start_enroll");
+    router.get("/fingerprint/delete_all",WebServer::fingerprint_delete_all, "fingerprint_delete_all");
 
     let chain = Chain::new(router);
 
