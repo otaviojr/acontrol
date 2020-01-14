@@ -354,7 +354,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
         return false;
       }
 
-      drv_inner.find_tag(|uuid, sak|{
+      drv_inner.find_tag(|_card_type, uuid|{
 
         match *ACONTROL_SYSTEM.nfc_drv.lock().unwrap() {
 
@@ -363,7 +363,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
             let mut next_nfc_system_state: Option<NFCSystemState> = None;
             let mut drv_inner = drv.lock().unwrap();
 
-            println!("Card Found: UUID={:?}, SAK={:?}", uuid,sak);
+            println!("Card Found: UUID={:X?}", uuid);
 
             match *ACONTROL_SYSTEM.nfc_state.lock().unwrap() {
               NFCSystemState::READ => {
@@ -371,91 +371,95 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                   Some(ref mut drv) => {
                     match drv_inner.read_data(&uuid,*NFC_CARD_SIGNATURE_BLOCK,0) {
                       Ok(ref val) => {
-                        if String::from_utf8(val.to_vec()).unwrap() ==
-                           String::from_utf8(NFC_CARD_SIGNATURE.as_bytes().to_vec()).unwrap() {
+                        if let Ok(value) = String::from_utf8(val.to_vec()) {
+                            if value ==
+                               String::from_utf8(NFC_CARD_SIGNATURE.as_bytes().to_vec()).unwrap() {
 
-                          if let Ok(card) = drv.lock().unwrap().nfc_find(&uuid) {
-                            println!("Card {:?} from {} authorized!", uuid, String::from_utf8(card.name).unwrap());
+                              if let Ok(card) = drv.lock().unwrap().nfc_find(&uuid) {
+                                println!("Card {:?} from {} authorized!", uuid, String::from_utf8(card.name).unwrap());
 
-                            let process = thread::spawn( move || {
-                              Command::new("/acontrol/granted")
-                                .arg("-c")
-                                .output()
-                                .expect("failed to execute process");
-                            });
+                                let process = thread::spawn( move || {
+                                  Command::new("/acontrol/granted")
+                                    .arg("-c")
+                                    .output()
+                                    .expect("failed to execute process");
+                                });
 
-                            let _ret = acontrol_system_get_audio_drv(|audio|{
-                              let _ret = audio.play_granted();
-                            });
-                            let _ret = acontrol_system_get_display_drv(|display|{
-                              let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
-                              let _ret = display.wait_animation_ends();
-                            });
+                                let _ret = acontrol_system_get_audio_drv(|audio|{
+                                  let _ret = audio.play_granted();
+                                });
+                                let _ret = acontrol_system_get_display_drv(|display|{
+                                  let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
+                                  let _ret = display.wait_animation_ends();
+                                });
 
-                            let _ret = acontrol_system_get_display_drv(|display|{
-                              let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
-                            });
+                                let _ret = acontrol_system_get_display_drv(|display|{
+                                  let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                                });
 
-                            let _ret = process.join();
+                                let _ret = process.join();
 
-                            let _ret = acontrol_system_get_display_drv(|display|{
-                              let _ret = display.clear_and_stop_animations();
-                            });
-                          } else {
-                            println!("Card {:?} not found!", uuid);
+                                let _ret = acontrol_system_get_display_drv(|display|{
+                                  let _ret = display.clear_and_stop_animations();
+                                });
+                              } else {
+                                println!("Card {:?} not found!", uuid);
 
-                            let process = thread::spawn( move || {
-                              Command::new("/acontrol/denieded")
-                                .arg("-c")
-                                .output()
-                                .expect("failed to execute process");
-                            });
+                                let process = thread::spawn( move || {
+                                  Command::new("/acontrol/denieded")
+                                    .arg("-c")
+                                    .output()
+                                    .expect("failed to execute process");
+                                });
 
-                            let _ret = acontrol_system_get_audio_drv(|audio|{
-                              let _ret = audio.play_denied();
-                            });
-                            let _ret = acontrol_system_get_display_drv(|display|{
-                              let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
-                              let _ret = display.wait_animation_ends();
-                            });
+                                let _ret = acontrol_system_get_audio_drv(|audio|{
+                                  let _ret = audio.play_denied();
+                                });
+                                let _ret = acontrol_system_get_display_drv(|display|{
+                                  let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
+                                  let _ret = display.wait_animation_ends();
+                                });
 
-                            let _ret = acontrol_system_get_display_drv(|display|{
-                              let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
-                            });
+                                let _ret = acontrol_system_get_display_drv(|display|{
+                                  let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                                });
 
-                            let _ret = process.join();
+                                let _ret = process.join();
 
-                            let _ret = acontrol_system_get_display_drv(|display|{
-                              let _ret = display.clear_and_stop_animations();
-                            });
-                          }
+                                let _ret = acontrol_system_get_display_drv(|display|{
+                                  let _ret = display.clear_and_stop_animations();
+                                });
+                              }
+                            } else {
+                              println!("Invalid card signature: {:?} - {:?}",val, NFC_CARD_SIGNATURE.as_bytes().to_vec());
+
+                              let process = thread::spawn( move || {
+                                Command::new("/acontrol/denieded")
+                                  .arg("-c")
+                                  .output()
+                                  .expect("failed to execute process");
+                              });
+
+                              let _ret = acontrol_system_get_audio_drv(|audio|{
+                                let _ret = audio.play_denied();
+                              });
+                              let _ret = acontrol_system_get_display_drv(|display|{
+                                let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
+                                let _ret = display.wait_animation_ends();
+                              });
+
+                              let _ret = acontrol_system_get_display_drv(|display|{
+                                let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                              });
+
+                              let _ret = process.join();
+
+                              let _ret = acontrol_system_get_display_drv(|display|{
+                                let _ret = display.clear_and_stop_animations();
+                              });
+                            }
                         } else {
-                          println!("Invalid card signature: {:?} - {:?}",val, NFC_CARD_SIGNATURE.as_bytes().to_vec());
-
-                          let process = thread::spawn( move || {
-                            Command::new("/acontrol/denieded")
-                              .arg("-c")
-                              .output()
-                              .expect("failed to execute process");
-                          });
-
-                          let _ret = acontrol_system_get_audio_drv(|audio|{
-                            let _ret = audio.play_denied();
-                          });
-                          let _ret = acontrol_system_get_display_drv(|display|{
-                            let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
-                            let _ret = display.wait_animation_ends();
-                          });
-
-                          let _ret = acontrol_system_get_display_drv(|display|{
-                            let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
-                          });
-
-                          let _ret = process.join();
-
-                          let _ret = acontrol_system_get_display_drv(|display|{
-                            let _ret = display.clear_and_stop_animations();
-                          });
+                            println!("Error reading card block: {:X?}", val);
                         }
                       },
                       Err(err) => {
@@ -606,6 +610,24 @@ pub fn acontrol_system_set_nfc_state(state: NFCSystemState, params: Option<HashM
       let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
     });
   }
+}
+
+pub fn acontrol_system_fingerprint_delete_all(_params: HashMap<String,String>) -> Result<(), String>{
+    println!("System Delete All");
+    match *ACONTROL_SYSTEM.fingerprint_drv.lock().unwrap() {
+      Some(ref drv) => {
+        let mut drv_inner = drv.lock().unwrap();
+
+        if !drv_inner.delete_all() {
+            return Err(String::from("Error deleting all fingerprints"));
+        }
+
+        return Ok(());
+      },
+      None => {
+        return Err(String::from("Fingerprint device unloaded"));
+      }
+    }
 }
 
 pub fn acontrol_system_fingerprint_start_enroll(params: HashMap<String,String>) -> Result<(), String>{

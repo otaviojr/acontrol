@@ -680,7 +680,7 @@ impl Fingerprint for Gt521fx {
                 },
                 FingerprintDriverState::ENROLL_ERROR => {
                   state_locked.set(FingerprintDriverState::IDLE);
-                  (**expires_locked) = Some(Instant::now());
+                  (**expires_locked) = None;
                 },
                 FingerprintDriverState::IDLE => {
                   if let Ok(ref mut gt521fx_locked) = gt521fx.lock() {
@@ -797,43 +797,59 @@ impl Fingerprint for Gt521fx {
     return String::from("gt521fx Fingerprint Module");
   }
 
+  fn delete_all(&mut self) -> bool {
+      let gt521fx = self.gt521fx.clone();
+      if let Ok(mut gt521fx_locked) = gt521fx.lock() {
+          match gt521fx_locked.send_command(Command::DeleteAll, 0, None){
+            Ok(response) => {
+              if response.response == Command::Ack.value() {
+                  return true;
+              } else {
+                println!("Delete error: {}", response.parameter);
+              }
+            },
+            Err(_err) => {
+            }
+          }
+      }
+      return false;
+  }
+
   fn start_enroll(&mut self, data: &FingerprintData) -> bool {
     println!("start enroll");
     let gt521fx = self.gt521fx.clone();
     let state_cloned = self.state.clone();
     let expires_cloned = self.expires.clone();
 
-    if let Ok(mut gt521fx_locked) = gt521fx.lock() {
+    if let Ok(mut state_locked) = state_cloned.lock() {
+        if let Ok(mut expires_locked) = expires_cloned.lock(){
+            if let Ok(mut gt521fx_locked) = gt521fx.lock() {
 
-      if let Some(pos)  = data.pos {
-        match gt521fx_locked.send_command(Command::EnrollStart, u32::from(pos), None){
-          Ok(response) => {
-            if response.response == Command::Ack.value() {
+              if let Some(pos)  = data.pos {
+                match gt521fx_locked.send_command(Command::EnrollStart, u32::from(pos), None){
+                  Ok(response) => {
+                    if response.response == Command::Ack.value() {
 
-              if let Err(err) = gt521fx_locked.send_command(Command::CmosLed, 0x1, None) {
-                println!("Error turning on fingerprint led: {}", err);
+                      if let Err(err) = gt521fx_locked.send_command(Command::CmosLed, 0x1, None) {
+                        println!("Error turning on fingerprint led: {}", err);
+                      } else {
+                        (*expires_locked) = Some(Instant::now());
+                        (*state_locked).set(FingerprintDriverState::ENROLL1);
+                      }
+
+                    } else {
+                        println!("EnrollStart error: {}", response.parameter);
+                        (*state_locked).set(FingerprintDriverState::ENROLL_ERROR);
+                    }
+                  },
+                  Err(_err) => {
+                      return false;
+                  }
+                }
               } else {
-                if let Ok(mut state_locked) = state_cloned.lock() {
-                  (*state_locked).set(FingerprintDriverState::ENROLL1);
-                }
-
-                if let Ok(mut expires_locked) = expires_cloned.lock(){
-                  (*expires_locked) = Some(Instant::now());
-                }
+                return false;
               }
-
-            } else {
-              println!("EnrollStart error: {}", response.parameter);
-              if let Ok(mut state_locked) = state_cloned.lock() {
-               (*state_locked).set(FingerprintDriverState::ENROLL_ERROR);
-              }
-            }
-          },
-          Err(_err) => {
           }
-        }
-      } else {
-        return false;
       }
     }
 
