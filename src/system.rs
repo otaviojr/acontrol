@@ -279,12 +279,10 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               },
               FingerprintState::AUTHORIZED => {
 
-                let process = thread::spawn( move || {
-                  Command::new("/acontrol/granted")
+                let process = Command::new("/acontrol/granted")
                     .arg("-f")
                     .stdout(Stdio::inherit())
-                    .expect("failed to execute process");
-                });
+                    .spawn();
 
                 let _ret = acontrol_system_get_audio_drv(|audio|{
                   let _ret = audio.play_granted();
@@ -299,7 +297,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                   let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
                 });
 
-                let _ret = process.join();
+                let _ret = process.wait();
 
                 let _ret = acontrol_system_get_display_drv(|display|{
                   let _ret = display.clear_and_stop_animations();
@@ -308,12 +306,10 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               }
               FingerprintState::NOT_AUTHORIZED => {
 
-                let process = thread::spawn( move || {
-                  Command::new("/acontrol/denieded")
+                let process = Command::new("/acontrol/denieded")
                     .arg("-f")
                     .stdout(Stdio::inherit())
-                    .expect("failed to execute process");
-                });
+                    .spawn();
 
                 let _ret = acontrol_system_get_audio_drv(|audio|{
                   let _ret = audio.play_denied();
@@ -327,7 +323,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                   let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
                 });
 
-                let _ret = process.join();
+                let _ret = process.wait();
 
                 let _ret = acontrol_system_get_display_drv(|display|{
                   let _ret = display.clear_and_stop_animations();
@@ -379,12 +375,10 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                               if let Ok(card) = drv.lock().unwrap().nfc_find(&uuid) {
                                 println!("Card {:?} from {} authorized!", uuid, String::from_utf8(card.name).unwrap());
 
-                                let process = thread::spawn( move || {
-                                  Command::new("/acontrol/granted")
+                                let process = Command::new("/acontrol/granted")
                                     .arg("-c")
                                     .stdout(Stdio::inherit())
-                                    .expect("failed to execute process");
-                                });
+                                    .spawn();
 
                                 let _ret = acontrol_system_get_audio_drv(|audio|{
                                   let _ret = audio.play_granted();
@@ -398,7 +392,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                                   let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
                                 });
 
-                                let _ret = process.join();
+                                let _ret = process.wait();
 
                                 let _ret = acontrol_system_get_display_drv(|display|{
                                   let _ret = display.clear_and_stop_animations();
@@ -406,12 +400,10 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                               } else {
                                 println!("Card {:?} not found!", uuid);
 
-                                let process = thread::spawn( move || {
-                                  Command::new("/acontrol/denieded")
+                                let process = Command::new("/acontrol/denieded")
                                     .arg("-c")
                                     .stdout(Stdio::inherit())
-                                    .expect("failed to execute process");
-                                });
+                                    .spawn();
 
                                 let _ret = acontrol_system_get_audio_drv(|audio|{
                                   let _ret = audio.play_denied();
@@ -425,7 +417,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                                   let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
                                 });
 
-                                let _ret = process.join();
+                                let _ret = process.wait();
 
                                 let _ret = acontrol_system_get_display_drv(|display|{
                                   let _ret = display.clear_and_stop_animations();
@@ -434,12 +426,10 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                             } else {
                               println!("Invalid card signature: {:?} - {:?}",val, NFC_CARD_SIGNATURE.as_bytes().to_vec());
 
-                              let process = thread::spawn( move || {
-                                Command::new("/acontrol/denieded")
+                              let process = Command::new("/acontrol/denieded")
                                   .arg("-c")
                                   .stdout(Stdio::inherit())
-                                  .expect("failed to execute process");
-                              });
+                                  .spawn();
 
                               let _ret = acontrol_system_get_audio_drv(|audio|{
                                 let _ret = audio.play_denied();
@@ -453,7 +443,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                                 let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
                               });
 
-                              let _ret = process.join();
+                              let _ret = process.wait();
 
                               let _ret = acontrol_system_get_display_drv(|display|{
                                 let _ret = display.clear_and_stop_animations();
@@ -466,12 +456,10 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                       Err(err) => {
                         println!("Error reading card: {}", err);
 
-                        let process = thread::spawn( move || {
-                          Command::new("/acontrol/denieded")
+                        let process = Command::new("/acontrol/denieded")
                             .arg("-c")
                             .stdout(Stdio::inherit())
-                            .expect("failed to execute process");
-                        });
+                            .spawn();
 
                         let _ret = acontrol_system_get_audio_drv(|audio|{
                           let _ret = audio.play_denied();
@@ -485,7 +473,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                           let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
                         });
 
-                        let _ret = process.join();
+                        let _ret = process.wait();
 
                         let _ret = acontrol_system_get_display_drv(|display|{
                           let _ret = display.clear_and_stop_animations();
