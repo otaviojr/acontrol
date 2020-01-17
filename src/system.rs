@@ -284,7 +284,9 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                     .output()
                     .expect("failed to execute process");
 
-                  println!("{}",String::from_utf8(output.stdout));
+                    if let Ok(value) = String::from_utf8(output.stdout) {
+                      println!("{}",value);
+                    }
                 });
 
                 let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -315,7 +317,9 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                     .output()
                     .expect("failed to execute process");
 
-                  println!("{}",String::from_utf8(output.stdout));
+                    if let Ok(value) = String::from_utf8(output.stdout) {
+                      println!("{}",value);
+                    }
                 });
 
                 let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -388,7 +392,9 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                                     .output()
                                     .expect("failed to execute process");
 
-                                  println!("{}",String::from_utf8(output.stdout));
+                                  if let Ok(value) = String::from_utf8(output.stdout) {
+                                    println!("{}",value);
+                                  }
                                 });
 
                                 let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -417,7 +423,9 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                                     .output()
                                     .expect("failed to execute process");
 
-                                  println!("{}",String::from_utf8(output.stdout));
+                                    if let Ok(value) = String::from_utf8(output.stdout) {
+                                      println!("{}",value);
+                                    }
                                 });
 
                                 let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -447,7 +455,9 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                                   .output()
                                   .expect("failed to execute process");
 
-                                println!("{}",String::from_utf8(output.stdout));
+                                  if let Ok(value) = String::from_utf8(output.stdout) {
+                                    println!("{}",value);
+                                  }
                               });
 
                               let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -481,7 +491,9 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                             .output()
                             .expect("failed to execute process");
 
-                          println!("{}",String::from_utf8(output.stdout));
+                            if let Ok(value) = String::from_utf8(output.stdout) {
+                              println!("{}",value);
+                            }
                         });
 
                         let _ret = acontrol_system_get_audio_drv(|audio|{
