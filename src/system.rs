@@ -281,7 +281,8 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                 let process = Command::new("/acontrol/granted")
                     .arg("-f")
                     .stdout(Stdio::inherit())
-                    .spawn();
+                    .spawn()
+                    .expect("failed to execute child");
 
                 let _ret = acontrol_system_get_audio_drv(|audio|{
                   let _ret = audio.play_granted();
@@ -308,7 +309,8 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                 let process = Command::new("/acontrol/denieded")
                     .arg("-f")
                     .stdout(Stdio::inherit())
-                    .spawn();
+                    .spawn()
+                    .expect("failed to execute child");
 
                 let _ret = acontrol_system_get_audio_drv(|audio|{
                   let _ret = audio.play_denied();
@@ -377,7 +379,8 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                                 let process = Command::new("/acontrol/granted")
                                     .arg("-c")
                                     .stdout(Stdio::inherit())
-                                    .spawn();
+                                    .spawn()
+                                    .expect("failed to execute child");
 
                                 let _ret = acontrol_system_get_audio_drv(|audio|{
                                   let _ret = audio.play_granted();
@@ -402,7 +405,8 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                                 let process = Command::new("/acontrol/denieded")
                                     .arg("-c")
                                     .stdout(Stdio::inherit())
-                                    .spawn();
+                                    .spawn()
+                                    .expect("failed to execute child");
 
                                 let _ret = acontrol_system_get_audio_drv(|audio|{
                                   let _ret = audio.play_denied();
@@ -428,7 +432,8 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                               let process = Command::new("/acontrol/denieded")
                                   .arg("-c")
                                   .stdout(Stdio::inherit())
-                                  .spawn();
+                                  .spawn()
+                                  .expect("failed to execute child");
 
                               let _ret = acontrol_system_get_audio_drv(|audio|{
                                 let _ret = audio.play_denied();
@@ -458,7 +463,8 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                         let process = Command::new("/acontrol/denieded")
                             .arg("-c")
                             .stdout(Stdio::inherit())
-                            .spawn();
+                            .spawn()
+                            .expect("failed to execute child");
 
                         let _ret = acontrol_system_get_audio_drv(|audio|{
                           let _ret = audio.play_denied();
