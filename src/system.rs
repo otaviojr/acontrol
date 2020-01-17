@@ -36,6 +36,7 @@ use std::collections::HashMap;
 
 use std::thread;
 use std::process::Command;
+use std::process::Stdio;
 
 #[derive(PartialEq)]
 #[allow(dead_code)]
