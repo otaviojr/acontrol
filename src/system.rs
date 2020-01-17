@@ -34,7 +34,6 @@ use display::{Display, Animation, AnimationType, AnimationColor};
 use std::sync::Mutex;
 use std::collections::HashMap;
 
-use std::thread;
 use std::process::Command;
 use std::process::Stdio;
 
