@@ -284,7 +284,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                     .output()
                     .expect("failed to execute process");
 
-                  println!(output);
+                  println!("{}",output);
                 });
 
                 let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -315,7 +315,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                     .output()
                     .expect("failed to execute process");
 
-                  println(output);
+                  println!("{}",output);
                 });
 
                 let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -388,7 +388,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                                     .output()
                                     .expect("failed to execute process");
 
-                                  println(output);
+                                  println!("{}",output);
                                 });
 
                                 let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -417,7 +417,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                                     .output()
                                     .expect("failed to execute process");
 
-                                  println(output);
+                                  println!("{}",output);
                                 });
 
                                 let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -447,7 +447,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                                   .output()
                                   .expect("failed to execute process");
 
-                                println(output);
+                                println!("{}",output);
                               });
 
                               let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -481,7 +481,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                             .output()
                             .expect("failed to execute process");
 
-                          println(output);
+                          println!("{}",output);
                         });
 
                         let _ret = acontrol_system_get_audio_drv(|audio|{
