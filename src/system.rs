@@ -278,7 +278,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               },
               FingerprintState::AUTHORIZED => {
 
-                let process = Command::new("/acontrol/granted")
+                let mut process = Command::new("/acontrol/granted")
                     .arg("-f")
                     .stdout(Stdio::inherit())
                     .spawn()
@@ -306,7 +306,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               }
               FingerprintState::NOT_AUTHORIZED => {
 
-                let process = Command::new("/acontrol/denieded")
+                let mut process = Command::new("/acontrol/denieded")
                     .arg("-f")
                     .stdout(Stdio::inherit())
                     .spawn()
@@ -376,7 +376,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                               if let Ok(card) = drv.lock().unwrap().nfc_find(&uuid) {
                                 println!("Card {:?} from {} authorized!", uuid, String::from_utf8(card.name).unwrap());
 
-                                let process = Command::new("/acontrol/granted")
+                                let mut process = Command::new("/acontrol/granted")
                                     .arg("-c")
                                     .stdout(Stdio::inherit())
                                     .spawn()
@@ -402,7 +402,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                               } else {
                                 println!("Card {:?} not found!", uuid);
 
-                                let process = Command::new("/acontrol/denieded")
+                                let mut process = Command::new("/acontrol/denieded")
                                     .arg("-c")
                                     .stdout(Stdio::inherit())
                                     .spawn()
@@ -429,7 +429,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                             } else {
                               println!("Invalid card signature: {:?} - {:?}",val, NFC_CARD_SIGNATURE.as_bytes().to_vec());
 
-                              let process = Command::new("/acontrol/denieded")
+                              let mut process = Command::new("/acontrol/denieded")
                                   .arg("-c")
                                   .stdout(Stdio::inherit())
                                   .spawn()
@@ -460,7 +460,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                       Err(err) => {
                         println!("Error reading card: {}", err);
 
-                        let process = Command::new("/acontrol/denieded")
+                        let mut process = Command::new("/acontrol/denieded")
                             .arg("-c")
                             .stdout(Stdio::inherit())
                             .spawn()
