@@ -279,14 +279,10 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               FingerprintState::AUTHORIZED => {
 
                 let process = thread::spawn( move || {
-                  let output = Command::new("/acontrol/granted")
+                  Command::new("/acontrol/granted")
                     .arg("-f")
-                    .output()
+                    .stdout(Stdio::inherit())
                     .expect("failed to execute process");
-
-                    if let Ok(value) = String::from_utf8(output.stdout) {
-                      println!("{}",value);
-                    }
                 });
 
                 let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -312,14 +308,10 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
               FingerprintState::NOT_AUTHORIZED => {
 
                 let process = thread::spawn( move || {
-                  let output = Command::new("/acontrol/denieded")
+                  Command::new("/acontrol/denieded")
                     .arg("-f")
-                    .output()
+                    .stdout(Stdio::inherit())
                     .expect("failed to execute process");
-
-                    if let Ok(value) = String::from_utf8(output.stdout) {
-                      println!("{}",value);
-                    }
                 });
 
                 let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -387,14 +379,10 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                                 println!("Card {:?} from {} authorized!", uuid, String::from_utf8(card.name).unwrap());
 
                                 let process = thread::spawn( move || {
-                                  let output = Command::new("/acontrol/granted")
+                                  Command::new("/acontrol/granted")
                                     .arg("-c")
-                                    .output()
+                                    .stdout(Stdio::inherit())
                                     .expect("failed to execute process");
-
-                                  if let Ok(value) = String::from_utf8(output.stdout) {
-                                    println!("{}",value);
-                                  }
                                 });
 
                                 let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -418,14 +406,10 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                                 println!("Card {:?} not found!", uuid);
 
                                 let process = thread::spawn( move || {
-                                  let output = Command::new("/acontrol/denieded")
+                                  Command::new("/acontrol/denieded")
                                     .arg("-c")
-                                    .output()
+                                    .stdout(Stdio::inherit())
                                     .expect("failed to execute process");
-
-                                    if let Ok(value) = String::from_utf8(output.stdout) {
-                                      println!("{}",value);
-                                    }
                                 });
 
                                 let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -450,14 +434,10 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                               println!("Invalid card signature: {:?} - {:?}",val, NFC_CARD_SIGNATURE.as_bytes().to_vec());
 
                               let process = thread::spawn( move || {
-                                let output = Command::new("/acontrol/denieded")
+                                Command::new("/acontrol/denieded")
                                   .arg("-c")
-                                  .output()
+                                  .stdout(Stdio::inherit())
                                   .expect("failed to execute process");
-
-                                  if let Ok(value) = String::from_utf8(output.stdout) {
-                                    println!("{}",value);
-                                  }
                               });
 
                               let _ret = acontrol_system_get_audio_drv(|audio|{
@@ -486,14 +466,10 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
                         println!("Error reading card: {}", err);
 
                         let process = thread::spawn( move || {
-                          let output = Command::new("/acontrol/denieded")
+                          Command::new("/acontrol/denieded")
                             .arg("-c")
-                            .output()
+                            .stdout(Stdio::inherit())
                             .expect("failed to execute process");
-
-                            if let Ok(value) = String::from_utf8(output.stdout) {
-                              println!("{}",value);
-                            }
                         });
 
                         let _ret = acontrol_system_get_audio_drv(|audio|{
