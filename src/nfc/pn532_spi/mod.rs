@@ -537,7 +537,7 @@ impl Pn532ThreadSafe {
               return Ok(ret);
           }
 
-          thread::sleep(Duration::from_millis(1));
+          thread::sleep(Duration::from_millis(100));
       }
   }
 
