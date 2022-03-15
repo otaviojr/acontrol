@@ -1,0 +1,42 @@
+mkdir /sys/kernel/config/device-tree/overlays/tsys01
+cat neopixel_rpi2_plus.dtbo > /sys/kernel/config/device-tree/overlays/tsys01/dtbo
+raspi-gpio set 12 op a0
+insmod neopixel.ko
+rmmod neopixel
+
+mkdir /sys/kernel/config/device-tree/overlays/tsys01
+cat neopixel_rpi.dtbo > /sys/kernel/config/device-tree/overlays/tsys01/dtbo
+raspi-gpio set 12 op a0
+insmod ../neopixel.ko
+rmmod neopixel
+
+mkdir /sys/kernel/config/device-tree/overlays/tsys02
+cat buzzer_rpi2_plus.dtbo > /sys/kernel/config/device-tree/overlays/tsys02/dtbo
+raspi-gpio set 21 op a0
+insmod buzzer.ko
+rmmod buzzer
+
+mkdir /sys/kernel/config/device-tree/overlays/tsys02
+cat buzzer_rpi.dtbo > /sys/kernel/config/device-tree/overlays/tsys02/dtbo
+raspi-gpio set 21 op a0
+insmod ../buzzer.ko
+rmmod buzzer
+
+
+raspi-gpio set 21 op a0
+----
+
+dtc -O dtb -o neopixel_rpi2_plus.dtbo neopixel_rpi2_plus.dts
+dtc -O dtb -o buzzer_rpi2_plus.dtbo buzzer_rpi2_plus.dts
+dtc -O dtb -o neopixel_rpi.dtbo neopixel_rpi.dts
+dtc -O dtb -o buzzer_rpi.dtbo buzzer_rpi.dts
+
+----
+
+/opt/code/acontrol/target/debug/acontrol --http-server-host=0.0.0.0 --fingerprint-module=gt521fx --nfc-module=pn532 --audio-module=buzzer --mifare-key=0x69,0xff,0x69,0xff,0x69,0xff
+
+-----
+
+Compiling command line client
+
+go build -o acontrol-cli *.go
