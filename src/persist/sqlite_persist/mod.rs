@@ -104,11 +104,11 @@ impl Persist for SQLitePersist {
         .unwrap();
 
       let card_iter = stmt
-        .query_map(NO_PARAMS, |row| Card {
-            id: row.get(0),
-            uuid: row.get(1),
-            name: row.get(2),
-        }).unwrap();
+        .query_map(NO_PARAMS, |row| Ok(Card {
+            id: row.get(0).unwrap_or(0),
+            uuid: row.get(1).unwrap_or(Vec::new()),
+            name: row.get(2).unwrap_or(Vec::new()),
+        })).unwrap();
 
       for card in card_iter {
         ret.push(card.unwrap());
@@ -127,11 +127,11 @@ impl Persist for SQLitePersist {
         .unwrap();
 
       let card_iter = stmt
-        .query_map(&[uuid as &dyn ToSql], |row| Card {
-            id: row.get(0),
-            uuid: row.get(1),
-            name: row.get(2),
-        }).unwrap();
+        .query_map(&[uuid as &dyn ToSql], |row| Ok(Card {
+            id: row.get(0).unwrap_or(0),
+            uuid: row.get(1).unwrap_or(Vec::new()),
+            name: row.get(2).unwrap_or(Vec::new()),
+        })).unwrap();
 
       for card in card_iter {
         return Ok(card.unwrap());
@@ -167,11 +167,11 @@ impl Persist for SQLitePersist {
         .unwrap();
 
       let fingerprint_iter = stmt
-        .query_map(&[pos], |row| Fingerprint {
-            id: row.get(0),
-            pos: row.get(1),
-            name: row.get(2),
-        }).unwrap();
+        .query_map(&[pos], |row| Ok(Fingerprint {
+            id: row.get(0).unwrap_or(0),
+            pos: row.get(1).unwrap_or(0),
+            name: row.get(2).unwrap_or(Vec::new()),
+        })).unwrap();
 
       for fingerprint in fingerprint_iter {
         return Ok(fingerprint.unwrap());
@@ -193,11 +193,11 @@ impl Persist for SQLitePersist {
         .unwrap();
 
       let fingerprint_iter = stmt
-        .query_map(NO_PARAMS, |row| Fingerprint {
-            id: row.get(0),
-            pos: row.get(1),
-            name: row.get(2)
-        }).unwrap();
+        .query_map(NO_PARAMS, |row| Ok(Fingerprint {
+            id: row.get(0).unwrap_or(0),
+            pos: row.get(1).unwrap_or(0),
+            name: row.get(2).unwrap_or(Vec::new())
+        })).unwrap();
 
       for fingerprint in fingerprint_iter {
         ret.push(fingerprint.unwrap());
