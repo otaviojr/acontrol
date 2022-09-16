@@ -253,8 +253,8 @@ impl NeoPixel {
   }
 
   fn run_animation<F, P, F1>(&mut self, f: F, params: Box<P>, finish: F1) -> Result<(), String> where
-                     F: Fn(&mut P) -> Result<(bool), String> + Send + Sync + 'static,
-                     F1: Fn(bool, &mut P) -> Result<(i64),String> + Send + Sync + Copy + 'static,
+                     F: Fn(&mut P) -> Result<bool, String> + Send + Sync + 'static,
+                     F1: Fn(bool, &mut P) -> Result<i64,String> + Send + Sync + Copy + 'static,
                      P: Sync + Send + 'static {
 
     let _ret = self.stop_animation();
@@ -309,7 +309,7 @@ impl NeoPixel {
   }
 
   fn animation_blink<F>(&mut self, info: NeoPixelBlinkAnimation, finish: F) -> Result<(), String>
-        where F: Fn(bool, &mut NeoPixelBlinkAnimation) -> Result<(i64), String> + Send + Sync + Copy + 'static {
+        where F: Fn(bool, &mut NeoPixelBlinkAnimation) -> Result<i64, String> + Send + Sync + Copy + 'static {
 
     let interface = self.interface.clone();
 
@@ -343,7 +343,7 @@ impl NeoPixel {
   }
 
   fn animation_spinner<F>(&mut self, info: NeoPixelSpinnerAnimation, finish: F) -> Result<(), String>
-                                        where F: Fn(bool, &mut NeoPixelSpinnerAnimation) -> Result<(i64), String> + Send + Sync + Copy + 'static {
+                                        where F: Fn(bool, &mut NeoPixelSpinnerAnimation) -> Result<i64, String> + Send + Sync + Copy + 'static {
 
     let interface = self.interface.clone();
 
@@ -393,7 +393,7 @@ impl NeoPixel {
   }
 
   fn animation_color_wipe<F>(&mut self, info: NeoPixelWipeAnimation, finish: F) -> Result<(), String>
-					where F: Fn(bool, &mut NeoPixelWipeAnimation) -> Result<(i64), String> + Send + Sync + Copy + 'static {
+					where F: Fn(bool, &mut NeoPixelWipeAnimation) -> Result<i64, String> + Send + Sync + Copy + 'static {
 
     let interface = self.interface.clone();
 

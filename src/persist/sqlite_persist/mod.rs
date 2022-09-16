@@ -119,7 +119,7 @@ impl Persist for SQLitePersist {
     }
   }
 
-  fn nfc_find(&mut self, uuid: &Vec<u8>) -> Result<(Card), String> {
+  fn nfc_find(&mut self, uuid: &Vec<u8>) -> Result<Card, String> {
 
     if let Some(ref conn) = self.conn {
       let mut stmt = conn

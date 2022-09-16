@@ -244,7 +244,7 @@ impl Mfrc522ThreadSafe {
       if let Some(ref mut spidev) = mfrc.spidev {
         {
       	  let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
-          try!(spidev.transfer(&mut transfer));
+          spidev.transfer(&mut transfer)?;
         }
         return Ok(rx_buf[1]);
       }
@@ -260,7 +260,7 @@ impl Mfrc522ThreadSafe {
       if  let Some(ref mut spidev) = mfrc.spidev {
         {
           let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
-          try!(spidev.transfer(&mut transfer));
+          spidev.transfer(&mut transfer)?;
         }
 
         for i in 1..rx_buf.len() {
@@ -276,7 +276,7 @@ impl Mfrc522ThreadSafe {
   fn write(&mut self, reg: Register, val: u8) -> Result<(), std::io::Error>{
     self.with_ss(|ref mut mfrc| {
       if let Some(ref mut spidev) = mfrc.spidev {
-        try!(spidev.write(&[reg.write(), val]));
+        spidev.write(&[reg.write(), val])?;
       }
       return Ok(())
     })
@@ -285,8 +285,8 @@ impl Mfrc522ThreadSafe {
   fn write_many(&mut self, reg: Register, buffer: &[u8]) -> Result<(), std::io::Error>{
     self.with_ss(|ref mut mfrc| {
       if let Some(ref mut spidev) = mfrc.spidev {
-        try!(spidev.write(&[reg.write()]));
-        try!(spidev.write(buffer));
+        spidev.write(&[reg.write()])?;
+        spidev.write(buffer)?;
         return Ok(());
       }
       Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"))
@@ -322,21 +322,21 @@ impl Mfrc522ThreadSafe {
   }
 
   fn flush_fifo(&mut self) -> Result<(),std::io::Error>{
-    try!(self.set_bit_mask(Register::FifoLevel, 0x80));
+    self.set_bit_mask(Register::FifoLevel, 0x80)?;
     Ok(())
   }
 
   fn calc_crc(&mut self, data: &[u8]) -> Result<[u8;2], std::io::Error> {
     //stop the ongoing command
-    try!(self.command(Command::Idle));
+    self.command(Command::Idle)?;
     //clear CRC_IRQ flag
-    try!(self.clear_bit_mask(Register::DivIrq, 1<<2));
+    self.clear_bit_mask(Register::DivIrq, 1<<2)?;
     //clear fifo buffer
-    try!(self.flush_fifo());
+    self.flush_fifo()?;
     //write our data to fifo buffer
-    try!(self.write_many(Register::FifoData, data));
+    self.write_many(Register::FifoData, data)?;
     //calc crc command
-    try!(self.command(Command::CalcCRC));
+    self.command(Command::CalcCRC)?;
 
     let now = Instant::now();
     loop {
@@ -350,10 +350,10 @@ impl Mfrc522ThreadSafe {
         //check if crc calculation cames to an end
         if irq & (1<<2) != 0 {
           //stop execution
-          try!(self.command(Command::Idle));
+          self.command(Command::Idle)?;
           //read crc
-          let crc = [try!(self.read(Register::CrcResultL)),
-                     try!(self.read(Register::CrcResultH))];
+          let crc = [self.read(Register::CrcResultL)?,
+                     self.read(Register::CrcResultH)?];
           break Ok(crc);
         }
       }
@@ -459,7 +459,7 @@ impl Mfrc522ThreadSafe {
 
   fn initialize(&mut self) -> Result<(), std::io::Error> {
     // soft reset
-    try!(self.command(Command::SoftReset));
+    self.command(Command::SoftReset)?;
 
     // check the power down flag and wait until reset finish
     let now = Instant::now();
@@ -468,27 +468,27 @@ impl Mfrc522ThreadSafe {
       if sec > 1.0 {
         return  Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "Reset Timeout"));
       }
-      if try!(self.read(Register::Command)) & (1 << 4) == 0 {
+      if self.read(Register::Command)? & (1 << 4) == 0 {
         break;
       }
     }
 
     // timer at 10Khz
-    try!(self.write(Register::Demod, 0x4d | (1 << 4) ));
-    try!(self.write(Register::TMode, 0x0 | (1 << 7) | 0b10 ));
-    try!(self.write(Register::TPrescaler, 165));
+    self.write(Register::Demod, 0x4d | (1 << 4) )?;
+    self.write(Register::TMode, 0x0 | (1 << 7) | 0b10 )?;
+    self.write(Register::TPrescaler, 165)?;
 
     // 5ms timeout
-    try!(self.write(Register::ReloadL, 50));
+    self.write(Register::ReloadL, 50)?;
 
     // 100% ASK modulation
-    try!(self.write(Register::TxAsk, 1 << 6 ));
+    self.write(Register::TxAsk, 1 << 6 )?;
 
     // CRC preset value to 0x6363
-    try!(self.write(Register::Mode, 0x3F & (!0b11) | 0b01));
+    self.write(Register::Mode, 0x3F & (!0b11) | 0b01)?;
 
     // enable antenna
-    try!(self.write(Register::TxControl, 0xB0 | 0b11));
+    self.write(Register::TxControl, 0xB0 | 0b11)?;
 
     Ok(())
   }
@@ -621,7 +621,7 @@ impl MiFare for Mfrc522ThreadSafe {
     }
   }
 
-  fn read_data(&mut self, addr: u8) -> Result<(Vec<u8>), String> {
+  fn read_data(&mut self, addr: u8) -> Result<Vec<u8>, String> {
     let mut tx_buf = vec![PICC::READ.value(), addr];
 
     if let Err(_err) = self.calc_crc(&tx_buf).map(|crc| {
@@ -882,7 +882,7 @@ impl NfcReader for Mfrc522 {
     mfrc522_inner.write_sec(uuid, WriteSecMode::Restore)
   }
 
-  fn read_data(&mut self, uuid: &Vec<u8>, addr: u8, blocks: u8) -> Result<(Vec<u8>), String> {
+  fn read_data(&mut self, uuid: &Vec<u8>, addr: u8, blocks: u8) -> Result<Vec<u8>, String> {
     let mfrc522 = self.mfrc522.clone();
     let mut mfrc522_inner = mfrc522.lock().unwrap();
 
@@ -916,7 +916,7 @@ impl NfcReader for Mfrc522 {
     Ok(buffer)
   }
 
-  fn write_data(&mut self, uuid: &Vec<u8>, addr: u8, data: &Vec<u8>) -> Result<(u8), String> {
+  fn write_data(&mut self, uuid: &Vec<u8>, addr: u8, data: &Vec<u8>) -> Result<u8, String> {
     let mfrc522 = self.mfrc522.clone();
     let mut mfrc522_inner = mfrc522.lock().unwrap();
 

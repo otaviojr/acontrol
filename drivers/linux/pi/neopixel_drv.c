@@ -98,9 +98,9 @@ static long dev_ioctl(struct file* filep, unsigned int cmd, unsigned long arg)
   if (_IOC_NR(cmd) > NEOPIXEL_IOCTL_MAX_CMD) return -EINVAL;
 
   if (_IOC_DIR(cmd) & _IOC_READ) {
-    ret = !access_ok(VERIFY_WRITE, (void *)arg, _IOC_SIZE(cmd));
+    ret = !access_ok((void __user *)arg, _IOC_SIZE(cmd));
   } else if (_IOC_DIR(cmd) & _IOC_WRITE) {
-    ret = !access_ok(VERIFY_READ, (void *)arg, _IOC_SIZE(cmd));
+    ret = !access_ok((void __user *)arg, _IOC_SIZE(cmd));
   }
 
   if (ret) return -EACCES;

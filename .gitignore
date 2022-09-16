@@ -1,3 +1,9 @@
 Cargo.lock
 target/
 .remote-sync.json
+*.cmd
+*.o
+*.ko
+*.mod
+*.symvers
+*.order

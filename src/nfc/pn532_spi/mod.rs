@@ -476,27 +476,27 @@ impl Pn532ThreadSafe {
     let mut tx_buf = [SpiCommand::ReadStatus as u8, 0];
     let mut rx_buf = [0 ; 2];
 
-    try!(self.reverse_bits(&mut tx_buf));
+    self.reverse_bits(&mut tx_buf)?;
 
-    try!(self.with_ss(|ref mut pn| {
+    self.with_ss(|ref mut pn| {
 
         if  let Some(ref mut spidev) = pn.spidev {
             {
                 let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
-                try!(spidev.transfer(&mut transfer));
+                spidev.transfer(&mut transfer)?;
             }
         } else {
             return Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI dev not found"));
         }
 
-        try!(pn.reverse_bits(&mut rx_buf));
+        pn.reverse_bits(&mut rx_buf)?;
 
         if rx_buf[1] == 0 {
             return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("No data: 0x{:X} 0x{:X}", rx_buf[0], rx_buf[1])));
         }
 
         Ok(())
-    }));
+    })?;
 
     let mut l = 256;
     if let Some(len) = len {
@@ -506,22 +506,22 @@ impl Pn532ThreadSafe {
     let mut tx_buf = vec![SpiCommand::ReadData as u8; l];
     let mut rx_buf = vec![0 ; l];
 
-    try!(self.reverse_bits(&mut tx_buf));
+    self.reverse_bits(&mut tx_buf)?;
 
-    try!(self.with_ss(|ref mut pn| {
+    self.with_ss(|ref mut pn| {
         if  let Some(ref mut spidev) = pn.spidev {
             {
                 let mut transfer = SpidevTransfer::read_write(&tx_buf, &mut rx_buf);
-                try!(spidev.transfer(&mut transfer));
+                spidev.transfer(&mut transfer)?;
             }
         } else {
             return Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI dev not found"));
         }
 
         Ok(())
-    }));
+    })?;
 
-    try!(self.reverse_bits(&mut rx_buf));
+    self.reverse_bits(&mut rx_buf)?;
 
     Ok(Frame { buffer: rx_buf.to_vec() })
   }
@@ -546,11 +546,11 @@ impl Pn532ThreadSafe {
     let mut tx_buf = vec![SpiCommand::WriteData as u8];
     tx_buf.extend(&frame.buffer);
 
-    try!(self.reverse_bits(&mut tx_buf));
+    self.reverse_bits(&mut tx_buf)?;
 
     self.with_ss(|ref mut pn| {
         if let Some(ref mut spidev) = pn.spidev {
-            try!(spidev.write(&tx_buf));
+            spidev.write(&tx_buf)?;
         } else {
             return Err(std::io::Error::new(std::io::ErrorKind::Other, "SPI device not found."));
         }
@@ -567,7 +567,7 @@ impl Pn532ThreadSafe {
 
     match Frame::from_vec(&buffer) {
         Ok(frame) => {
-            try!(self.write_frame(frame));
+            self.write_frame(frame)?;
             match self.read_frame_timeout(Some(ResponseSize::Ack.size(0)),Duration::from_millis(1000)) {
                 Ok(frame) => {
                     if frame.frame_type().is_ack() {
@@ -584,12 +584,12 @@ impl Pn532ThreadSafe {
   }
 
   fn setup(&mut self) -> Result<Vec<u8>, std::io::Error>{
-      try!(self.wake_up());
+      self.wake_up()?;
       match self.command(Command::SAMConfiguration, Some(&[0x01])) {
           Ok(_) => {
               if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(2)), Duration::from_millis(1000)) {
-                  if try!(frame.response_byte()) == Command::SAMConfiguration.response() {
-                      return Ok(try!(frame.data()));
+                  if frame.response_byte()? == Command::SAMConfiguration.response() {
+                      return Ok(frame.data()?);
                   } else {
                       return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
                   }
@@ -605,8 +605,8 @@ impl Pn532ThreadSafe {
     match self.command(Command::GetFirmwareVersion, Option::None) {
         Ok(_) => {
             if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(6)), Duration::from_millis(1000)) {
-                if try!(frame.response_byte()) == Command::GetFirmwareVersion.response() {
-                    return Ok(try!(frame.data())[3..5].to_vec());
+                if frame.response_byte()? == Command::GetFirmwareVersion.response() {
+                    return Ok(frame.data()?[3..5].to_vec());
                 } else {
                     return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid Response Code"));
                 }
@@ -630,9 +630,9 @@ impl Pn532ThreadSafe {
       match self.command(Command::InListPassiveTarget, Some(&[0x02, freq])) {
           Ok(_) => {
               if let Ok(frame) = self.read_frame_timeout(None, Duration::from_millis(1000)) {
-                  if try!(frame.response_byte()) == Command::InListPassiveTarget.response() {
+                  if frame.response_byte()? == Command::InListPassiveTarget.response() {
 
-                      let data = try!(frame.data());
+                      let data = frame.data()?;
                       let devices = data[2];
 
                       if devices > 0 {
@@ -679,8 +679,8 @@ impl Pn532ThreadSafe {
     match self.command(Command::InDataExchange , Some(&tx_buf)) {
         Ok(_) => {
             if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(3)), Duration::from_millis(1000)) {
-                if try!(frame.response_byte()) == Command::InDataExchange.response() {
-                    let data = try!(frame.data());
+                if frame.response_byte()? == Command::InDataExchange.response() {
+                    let data = frame.data()?;
                     println!("Auth received response: {:X?}", data);
 
                     let status:Error = Error::from(data[2]);
@@ -700,14 +700,14 @@ impl Pn532ThreadSafe {
     }
   }
 
-  fn read(&mut self, addr: u8) -> Result<(Vec<u8>), std::io::Error> {
+  fn read(&mut self, addr: u8) -> Result<Vec<u8>, std::io::Error> {
       let tx_buf = vec![0x01, PICC::READ as u8, addr];
 
       match self.command(Command::InDataExchange, Some(&tx_buf)) {
         Ok(_) => {
             if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(19)), Duration::from_millis(1000)) {
-                if try!(frame.response_byte()) == Command::InDataExchange.response() {
-                    let data = try!(frame.data());
+                if frame.response_byte()? == Command::InDataExchange.response() {
+                    let data = frame.data()?;
                     println!("Read received response: {:X?}", data);
 
                     let status:Error = Error::from(data[2]);
@@ -739,8 +739,8 @@ impl Pn532ThreadSafe {
     match self.command(Command::InDataExchange, Some(&tx_buf)) {
       Ok(_) => {
         if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(3)), Duration::from_millis(1000)) {
-          if try!(frame.response_byte()) == Command::InDataExchange.response() {
-              let data = try!(frame.data());
+          if frame.response_byte()? == Command::InDataExchange.response() {
+              let data = frame.data()?;
 
               println!("Write received response: {:X?}", data);
 
@@ -971,7 +971,7 @@ impl NfcReader for Pn532Spi {
       }
   }
 
-  fn read_data(&mut self, uuid: &Vec<u8>, addr: u8, blocks: u8) -> Result<(Vec<u8>), String> {
+  fn read_data(&mut self, uuid: &Vec<u8>, addr: u8, blocks: u8) -> Result<Vec<u8>, String> {
       let pn532 = self.pn532.clone();
       let mut pn532_inner = pn532.lock().unwrap();
 
@@ -1002,7 +1002,7 @@ impl NfcReader for Pn532Spi {
       Ok(buffer)
   }
 
-  fn write_data(&mut self, uuid: &Vec<u8>, addr: u8, data: &Vec<u8>) -> Result<(u8), String> {
+  fn write_data(&mut self, uuid: &Vec<u8>, addr: u8, data: &Vec<u8>) -> Result<u8, String> {
       let pn532 = self.pn532.clone();
       let mut pn532_inner = pn532.lock().unwrap();
 

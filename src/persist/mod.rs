@@ -49,7 +49,7 @@ pub trait Persist {
   fn unload(&mut self) -> Result<(), String>;
 
   fn nfc_add(&mut self, uuid: &Vec<u8>, name: &Vec<u8>) -> Result<(), String>;
-  fn nfc_find(&mut self, uuid: &Vec<u8>) -> Result<(Card), String>;
+  fn nfc_find(&mut self, uuid: &Vec<u8>) -> Result<Card, String>;
   fn nfc_list(&mut self) -> Result<Vec<Card>, String>;
   fn nfc_delete(&mut self, uuid: &Vec<u8>) -> Result<(), String>;
 
