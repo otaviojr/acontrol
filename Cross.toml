@@ -1,0 +1,8 @@
+[target.arm-unknown-linux-gnueabihf]
+pre-build = ["dpkg --add-architecture armhf && apt-get update && apt-get install --assume-yes libudev-dev:armhf libdbus-1-dev:armhf libsqlite3-dev:armhf libsystemd-dev:armhf"]
+
+[target.arm-unknown-linux-gnueabihf.env]
+#export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
+passthrough = [
+    "PKG_CONFIG_PATH",
+]

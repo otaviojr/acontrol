@@ -1,0 +1,4 @@
+[target.arm-unknown-linux-gnueabihf]
+linker = "arm-unknown-linux-gnueabihf-gcc"
+rustflags = ["-L","/lib/arm-linux-gnueabihf"]
+rustc-link-search = { all = "/lib/arm-linux-gnueabihf" }

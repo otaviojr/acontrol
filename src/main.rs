@@ -64,6 +64,7 @@ extern "C" fn handle_sigint(_:i32) {
 }
 
 fn main(){
+  let bt_drv;
   let fingerprint_drv;
   let nfcreader_drv;
   let audio_drv;
@@ -149,14 +150,23 @@ fn main(){
     process::exit(-1);
   }
 
+  let bluetooth = matches.value_of("bluetooth-module").unwrap();
   let fingerprint = matches.value_of("fingerprint-module").unwrap();
   let nfc = matches.value_of("nfc-module").unwrap();
   let audio = matches.value_of("audio-module").unwrap();
 
+  let bluetooth_b = bt::bluetooth_by_name(bluetooth);
   let fingerprint_b = fingerprint::fingerprint_by_name(fingerprint);
   let nfcreader_b = nfc::nfcreader_by_name(nfc);
   let audio_b = audio::audio_by_name(audio);
   let display_drv_b = display::display_by_name("neopixel");
+
+  if bluetooth_b.is_none() {
+    eprintln!("bluetooth module \"{}\" not found!", fingerprint);
+    process::exit(-1);
+  } else {
+    bt_drv = bluetooth_b.unwrap();
+  }
 
   if fingerprint_b.is_none() {
     eprintln!("fingerprint module \"{}\" not found!", fingerprint);
@@ -203,7 +213,7 @@ fn main(){
   params.insert("LOGS_PATH".to_string(), DEFAULT_LOGS_PATH.to_string());
   params.insert("DATA_PATH".to_string(), DEFAULT_DATA_PATH.to_string());
 
-  if !system::acontrol_system_init(&params, fingerprint_drv, 
+  if !system::acontrol_system_init(&params, bt_drv, fingerprint_drv, 
 					nfcreader_drv, audio_drv, persist_drv, display_drv) {
     process::exit(-1);
   }

@@ -1,7 +1,0 @@
-[target.arm-unknown-linux-gnueabihf]
-linker = "arm-linux-gnueabihf-gcc-10"
-rustflags = ["-L","/usr/arm-linux-gnueabihf/lib"]
-rustc-link-search = { all = "/usr/arm-linux-gnueabihf/lib" }
-#rustc-link-search = ["/usr/arm-linux-gnueabihf/lib"]
-#rustc-link-lib = ["dbus-1"]
-

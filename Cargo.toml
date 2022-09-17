@@ -23,6 +23,7 @@ serde_json = "1.0.85"
 serialport = "*"
 futures = "*"
 bluer = {version = "0.15.0", features = ["full"]}
+tokio = { version = "1.21.1", features = ["full"] }
 
 [dependencies.bodyparser]
 git = "https://github.com/iron/body-parser.git"

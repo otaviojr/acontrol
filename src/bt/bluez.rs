@@ -49,19 +49,64 @@ impl Bluetooth for BlueZ {
         Ok(())
     }
 
-    fn find_devices(&mut self, func: fn(device: &HashMap<String, String>, action: Option<&str>) -> bool) -> Result<(),String>{
+    fn find_devices(&mut self, func: fn(device: &HashMap<String, String>, action: &BluetoothAction) -> bool) -> Result<(),String>{
         let _handler = thread::spawn( move || {
-            let fut = async {
-                let session = bluer::Session::new().await?;
-                let adapter = session.default_adapter().await?;
-                println!("Discovering devices using Bluetooth adapater {}\n", adapter.name());
-                adapter.set_powered(true).await?;
-            
-                let device_events = adapter.discover_devices().await?;
-                pin_mut!(device_events);    
-            };
-                    
-            loop {
+            async {
+                if let Ok(session) = bluer::Session::new().await {
+                    if let Ok(adapter) = session.default_adapter().await {
+                        println!("Discovering devices using Bluetooth adapater {}\n", adapter.name());
+                        if let Err(err) = adapter.set_powered(true).await {
+                            return Err("Error powering up bluetooth device");
+                        } else {
+                            if let Ok(device_events) = adapter.discover_devices().await {
+                                pin_mut!(device_events);
+
+                                let mut all_change_events = SelectAll::new();
+
+                                loop {
+                                    tokio::select! {    
+                                        Some(device_event) = device_events.next() => {
+                                            match device_event {
+                                                AdapterEvent::DeviceAdded(addr) => {
+                                                    println!("Bluetooth device added: {}", addr);
+                                                    if let Ok(device) = adapter.device(addr) {
+                                                        if let Ok(change_events) = device.events().await {
+                                                            //change_events.map(move |evt| (addr, evt));
+                                                            all_change_events.push(change_events);                                   
+                                                        } else {
+                                                            println!("Error getting bluetooth device events: {}", addr);
+                                                        }
+                                                    } else {
+                                                        println!("Error getting bluetooth device: {}", addr);
+                                                    }
+                                                }
+                                                AdapterEvent::DeviceRemoved(addr) => {
+                                                    println!("Bluetooth device removed: {}", addr);
+                                                }
+                                                _ => (),
+                                            }
+                                            println!();
+                                        }
+                                        Some(device_event) = all_change_events.next() => {
+                                            match device_event {
+                                                DeviceEvent::PropertyChanged(property) => {
+                                                    println!("Bluetooth device changed: {}", "?");
+                                                    println!("    {:?}", property);
+        
+                                                }
+                                                _ => (),
+                                            }
+                                        }
+                                        else => break
+                                    }
+                                }
+                                println!("Bluetooth module finished");
+                                return Ok(());
+                            };
+                        }
+                    }                
+                }
+                return Err("Error initializing bluetooth module");
             }
         });
         Ok(())

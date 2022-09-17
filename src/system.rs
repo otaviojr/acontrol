@@ -25,6 +25,7 @@
  * THE SOFTWARE.
  *
  */
+use super::bt::{Bluetooth, BluetoothData, BluetoothProps};
 use super::fingerprint::{Fingerprint, FingerprintState, FingerprintData};
 use super::nfc::{NfcReader};
 use super::audio::{Audio};
@@ -46,7 +47,15 @@ pub enum NFCSystemState {
   RESTORE
 }
 
+#[derive(PartialEq)]
+#[allow(dead_code)]
+pub enum BluetoothSystemState {
+  READ,
+  AUTHORIZE,
+}
+
 struct AControlSystem {
+  bt_drv: Mutex<Option<Mutex<Box<dyn Bluetooth + Send + Sync>>>>,
   fingerprint_drv: Mutex<Option<Mutex<Box<dyn Fingerprint + Send + Sync>>>>,
   nfc_drv: Mutex<Option<Mutex<Box<dyn NfcReader + Send + Sync>>>>,
   audio_drv: Mutex<Option<Mutex<Box<dyn Audio + Send + Sync>>>>,
@@ -56,6 +65,8 @@ struct AControlSystem {
   nfc_state_params: Mutex<HashMap<String,String>>,
   fingerprint_data: Mutex<FingerprintData>,
   fingerprint_last_state: Mutex<Option<FingerprintState>>,
+  bt_state: Mutex<BluetoothSystemState>,
+  bt_state_params: Mutex<HashMap<String,String>>,
 }
 
 impl AControlSystem {
@@ -63,6 +74,7 @@ impl AControlSystem {
 
 lazy_static!{
   static ref ACONTROL_SYSTEM: AControlSystem = AControlSystem {
+    bt_drv: Mutex::new(None),
     fingerprint_drv: Mutex::new(None),
     nfc_drv: Mutex::new(None),
     audio_drv: Mutex::new(None),
@@ -72,6 +84,8 @@ lazy_static!{
     nfc_state_params: Mutex::new(HashMap::new()),
     fingerprint_data: Mutex::new(FingerprintData::empty()),
     fingerprint_last_state: Mutex::new(None),
+    bt_state: Mutex::new(BluetoothSystemState::READ),
+    bt_state_params: Mutex::new(HashMap::new()),
   };
 
   static ref NFC_CARD_SIGNATURE: &'static str = &"ACONTROL_CARD\0\0\0";
@@ -80,6 +94,19 @@ lazy_static!{
 
 pub fn acontrol_system_end() -> bool {
   println!("Cleaning all suffs");
+
+  match *ACONTROL_SYSTEM.bt_drv.lock().unwrap()  {
+    Some(ref drv) => {
+      if let Err(err) = drv.lock().unwrap().unload() {
+        eprintln!("Error unloading bluetooth device (=> {})", err);
+        return false;
+      }
+    },
+    None => {
+      eprintln!("Bluetooth device not found");
+      return false;
+    }
+  }
 
   match *ACONTROL_SYSTEM.audio_drv.lock().unwrap()  {
     Some(ref drv) => {
@@ -151,7 +178,8 @@ pub fn  acontrol_system_set_mifare_keys(key_a: &Vec<u8>, key_b: &Vec<u8>) -> boo
 }
 
 pub fn acontrol_system_init(params: &HashMap<String,String>,
-				fingerprint_drv: Box<dyn Fingerprint+Sync+Send>,
+        bt_drv: Box<dyn Bluetooth+Sync+Send>,
+        fingerprint_drv: Box<dyn Fingerprint+Sync+Send>,
 				nfc_drv: Box<dyn NfcReader+Sync+Send>,
 				audio_drv: Box<dyn Audio+Sync+Send>,
 				persist_drv: Box<dyn Persist+Sync+Send>,
@@ -159,6 +187,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
 
   let asystem = &ACONTROL_SYSTEM;
   unsafe {
+    *asystem.bt_drv.lock().unwrap() = Some(Mutex::new(Box::from_raw(Box::into_raw(bt_drv))));
     *asystem.fingerprint_drv.lock().unwrap() = Some(Mutex::new(Box::from_raw(Box::into_raw(fingerprint_drv))));
     *asystem.nfc_drv.lock().unwrap() = Some(Mutex::new(Box::from_raw(Box::into_raw(nfc_drv))));
     *asystem.audio_drv.lock().unwrap() = Some(Mutex::new(Box::from_raw(Box::into_raw(audio_drv))));
@@ -208,6 +237,59 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
     }
   }
 
+    //initializing bluetooth device
+    match *asystem.bt_drv.lock().unwrap() {
+      Some(ref drv) => {
+        let mut drv_inner = drv.lock().unwrap();
+  
+        if let Err(err) = drv_inner.init() {
+          eprintln!("Error initializing bluetooth (=> {})", err);
+          return false;
+        }
+  
+        drv_inner.find_devices(|device, action|{
+  
+          match *ACONTROL_SYSTEM.bt_drv.lock().unwrap() {
+  
+            Some(ref mut drv) => {
+  
+              let mut next_bt_system_state: Option<BluetoothSystemState> = None;
+              let mut drv_inner = drv.lock().unwrap();
+  
+              println!("Device found: ADDR={:X?}", device[BluetoothProps::Address.name()]);
+  
+              match *ACONTROL_SYSTEM.bt_state.lock().unwrap() {
+                BluetoothSystemState::READ => {
+                  match *ACONTROL_SYSTEM.persist_drv.lock().unwrap() {
+                    Some(ref mut drv) => {
+                    },
+                    None => {
+                      println!("Persistence driver not found");
+                    }
+                  }
+                },
+                BluetoothSystemState::AUTHORIZE => {
+                  next_bt_system_state = Some(BluetoothSystemState::READ)
+                }
+              }
+  
+              if let Some(state) = next_bt_system_state {
+                acontrol_system_set_bluetooth_state(state,None);
+              }
+  
+              return true;
+            },
+            None => return false,
+          }
+        }).unwrap();
+      },
+      None => {
+        eprintln!("Bluetooth driver not found!");
+        return false;
+      }
+    };
+
+  //initializing fingerprint device
   match *asystem.fingerprint_drv.lock().unwrap() {
     Some(ref drv) => {
       let mut drv_inner = drv.lock().unwrap();
@@ -587,6 +669,23 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
   };
 
   return true;
+}
+
+pub fn acontrol_system_set_bluetooth_state(state: BluetoothSystemState, params: Option<HashMap<String,String>>) {
+  println!("Changing Bluetooth System State");
+  if let Some(p) = params {
+    *ACONTROL_SYSTEM.bt_state_params.lock().unwrap() = p;
+  }
+  *ACONTROL_SYSTEM.bt_state.lock().unwrap() = state;
+
+  if *ACONTROL_SYSTEM.bt_state.lock().unwrap() == BluetoothSystemState::AUTHORIZE {
+    let _ret = acontrol_system_get_audio_drv(|audio|{
+      let _ret = audio.play_alert();
+    });
+    let _ret = acontrol_system_get_display_drv(|display|{
+      let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+    });
+  }
 }
 
 pub fn acontrol_system_set_nfc_state(state: NFCSystemState, params: Option<HashMap<String,String>>) {
