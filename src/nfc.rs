@@ -25,8 +25,8 @@
  * THE SOFTWARE.
  *
  */
-pub mod mfrc522;
-pub mod pn532_spi;
+mod mfrc522;
+mod pn532_spi;
 
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]

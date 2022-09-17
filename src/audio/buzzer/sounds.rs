@@ -29,7 +29,7 @@
 use std::thread;
 use std::time::Duration;
 
-use audio::buzzer::{Buzzer, AudioThreadCommand};
+use super::{Buzzer, AudioThreadCommand};
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]

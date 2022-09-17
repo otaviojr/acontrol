@@ -25,29 +25,8 @@
  * THE SOFTWARE.
  *
  */
-extern crate libc;
 
-extern crate serialport;
-
-#[macro_use]
-extern crate nix;
-
-extern crate iron;
-extern crate router;
-extern crate bodyparser;
-
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate clap;
-extern crate spidev;
-extern crate sysfs_gpio;
-extern crate rusqlite;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde;
-extern crate serde_json;
-
+pub mod bt;
 pub mod fingerprint;
 pub mod nfc;
 pub mod audio;
@@ -55,6 +34,16 @@ pub mod server;
 pub mod persist;
 pub mod system;
 pub mod display;
+
+#[macro_use]
+extern crate nix;
+
+#[macro_use]
+extern crate lazy_static;
+#[macro_use]
+extern crate clap;
+#[macro_use]
+extern crate serde_derive;
 
 use nix::sys::signal;
 use std::process;
@@ -100,36 +89,42 @@ fn main(){
 		.short("f")
 		.long("fingerprint-module")
 		.help("Available modules: gt521fx"))
-        .arg(Arg::with_name("nfc-module")
-                .required(true)
-                .takes_value(true)
-                .short("n")
-                .long("nfc-module")
-                .help("Available modules: mfrc522"))
-        .arg(Arg::with_name("mifare-key")
-                .required(false)
-                .takes_value(true)
-                .short("k")
-                .long("mifare-key")
-                .help("Mifare key used to format/read/write card. Default (0xFF, 0xFF, 0XFF, 0xFF, 0xFF, 0xFF)"))
-        .arg(Arg::with_name("audio-module")
-                .required(true)
-                .takes_value(true)
-                .short("a")
-                .long("audio-module")
-                .help("Available modules: buzzer"))
-        .arg(Arg::with_name("http-server-port")
-                .required(false)
-                .takes_value(true)
-                .short("p")
-                .long("http-server-port")
-                .help("http server port to listen to"))
-        .arg(Arg::with_name("http-server-host")
-                .required(false)
-                .takes_value(true)
-                .short("h")
-                .long("http-server-host")
-                .help("http server host to bind to"))
+  .arg(Arg::with_name("nfc-module")
+          .required(true)
+          .takes_value(true)
+          .short("n")
+          .long("nfc-module")
+          .help("Available modules: mfrc522"))
+  .arg(Arg::with_name("mifare-key")
+          .required(false)
+          .takes_value(true)
+          .short("k")
+          .long("mifare-key")
+          .help("Mifare key used to format/read/write card. Default (0xFF, 0xFF, 0XFF, 0xFF, 0xFF, 0xFF)"))
+  .arg(Arg::with_name("audio-module")
+          .required(true)
+          .takes_value(true)
+          .short("a")
+          .long("audio-module")
+          .help("Available modules: buzzer"))
+  .arg(Arg::with_name("http-server-port")
+          .required(false)
+          .takes_value(true)
+          .short("p")
+          .long("http-server-port")
+          .help("http server port to listen to"))
+  .arg(Arg::with_name("http-server-host")
+          .required(false)
+          .takes_value(true)
+          .short("h")
+          .long("http-server-host")
+          .help("http server host to bind to"))
+  .arg(Arg::with_name("bluetooth-module")
+          .required(true)
+          .takes_value(true)
+          .short("b")
+          .long("bluetooth-module")
+          .help("Available modules: bluez"))  
 	.get_matches();
 
   let http_port:u32 = value_t!(matches, "http-server-port",u32).unwrap_or(HTTP_DEFAULT_PORT);

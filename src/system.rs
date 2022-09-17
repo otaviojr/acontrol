@@ -25,11 +25,11 @@
  * THE SOFTWARE.
  *
  */
-use fingerprint::{Fingerprint, FingerprintState, FingerprintData};
-use nfc::{NfcReader};
-use audio::{Audio};
-use persist::{Persist};
-use display::{Display, Animation, AnimationType, AnimationColor};
+use super::fingerprint::{Fingerprint, FingerprintState, FingerprintData};
+use super::nfc::{NfcReader};
+use super::audio::{Audio};
+use super::persist::{Persist};
+use super::display::{Display, Animation, AnimationType, AnimationColor};
 
 use std::sync::Mutex;
 use std::collections::HashMap;

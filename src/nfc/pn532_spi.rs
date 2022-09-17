@@ -1,4 +1,4 @@
-use nfc::{NfcReader, WriteSecMode, CardType};
+use super::{NfcReader, WriteSecMode, CardType};
 
 use std::mem::transmute;
 use std::collections::VecDeque;

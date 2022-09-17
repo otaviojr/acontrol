@@ -25,7 +25,7 @@
  * THE SOFTWARE.
  *
  */
-use fingerprint::{Fingerprint,FingerprintState, FingerprintData};
+use super::{Fingerprint,FingerprintState, FingerprintData};
 
 use std::time::{Duration,Instant};
 use std::thread;

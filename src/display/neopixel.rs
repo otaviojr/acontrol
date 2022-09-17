@@ -25,7 +25,7 @@
  * THE SOFTWARE.
  *
  */
-use display::{Display, Animation, AnimationType, AnimationColor};
+use super::{Display, Animation, AnimationType, AnimationColor};
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -253,9 +253,9 @@ impl NeoPixel {
   }
 
   fn run_animation<F, P, F1>(&mut self, f: F, params: Box<P>, finish: F1) -> Result<(), String> where
-                     F: Fn(&mut P) -> Result<bool, String> + Send + Sync + 'static,
-                     F1: Fn(bool, &mut P) -> Result<i64,String> + Send + Sync + Copy + 'static,
-                     P: Sync + Send + 'static {
+                    F: Fn(&mut P) -> Result<bool, String> + Send + Sync + 'static,
+                    F1: Fn(bool, &mut P) -> Result<i64,String> + Send + Sync + Copy + 'static,
+                    P: Sync + Send + 'static {
 
     let _ret = self.stop_animation();
 
@@ -296,7 +296,7 @@ impl NeoPixel {
             break;
           }
 
-	        thread::sleep(Duration::from_millis(wait));
+          thread::sleep(Duration::from_millis(wait));
         }
       }
       Ok(())
@@ -393,7 +393,7 @@ impl NeoPixel {
   }
 
   fn animation_color_wipe<F>(&mut self, info: NeoPixelWipeAnimation, finish: F) -> Result<(), String>
-					where F: Fn(bool, &mut NeoPixelWipeAnimation) -> Result<i64, String> + Send + Sync + Copy + 'static {
+          where F: Fn(bool, &mut NeoPixelWipeAnimation) -> Result<i64, String> + Send + Sync + Copy + 'static {
 
     let interface = self.interface.clone();
 
@@ -412,8 +412,8 @@ impl NeoPixel {
       }
 
       if animation_info.direction == NeoPixelAnimationDirection::Normal &&
-           animation_info.current_pixel >= interface.get_num_leds().unwrap() &&
-           animation_info.start.elapsed().as_secs() > animation_info.dismiss {
+          animation_info.current_pixel >= interface.get_num_leds().unwrap() &&
+          animation_info.start.elapsed().as_secs() > animation_info.dismiss {
 
         animation_info.direction = NeoPixelAnimationDirection::Backwards;
         animation_info.current_pixel = interface.get_num_leds().unwrap() - 1;
@@ -457,10 +457,10 @@ impl Display for NeoPixel {
   fn init(&mut self) -> Result<(), String> {
 
     self.devfile = match OpenOptions::new()
-                           .read(true)
-                           .write(true)
-                           .create(false)
-                           .open("/dev/neopixel") {
+                          .read(true)
+                          .write(true)
+                          .create(false)
+                          .open("/dev/neopixel") {
       Ok(file) => {
         self.interface.set_driver_fd(Some(file.as_raw_fd()));
         Some(file)

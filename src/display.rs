@@ -25,7 +25,7 @@
  * THE SOFTWARE.
  *
  */
-pub mod neopixel;
+mod neopixel;
 
 //#[derive(Clone, Copy)]
 //#[allow(dead_code)]
@@ -88,8 +88,9 @@ pub trait Display : Sync + Send {
 }
 
 pub fn display_by_name(name: &str) -> Option<Box<dyn Display+Sync+Send>> {
-    match name {
-      "neopixel" => return Some(Box::new(neopixel::NeoPixel::new())),
-      _ => return None
-    }
+  match name {
+    "neopixel" => return Some(Box::new(neopixel::NeoPixel::new())),
+    _ => return None
+  }
 }
+

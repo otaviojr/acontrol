@@ -25,7 +25,7 @@
  * THE SOFTWARE.
  *
  */
-use nfc::{NfcReader, WriteSecMode, CardType};
+use super::{NfcReader, WriteSecMode, CardType};
 
 use std::collections::VecDeque;
 use std::sync::Arc;

@@ -25,7 +25,7 @@
  * THE SOFTWARE.
  *
  */
-use persist::{Persist, Card, Fingerprint};
+use super::{Persist, Card, Fingerprint, Bluetooth};
 
 use std::path::Path;
 use std::collections::HashMap;
@@ -72,6 +72,17 @@ impl Persist for SQLitePersist {
       ) {
         return Err(format!("Error creating table fingerprint: {}",err));
       }
+
+      if let Err(err) = conn.execute(
+        "create table if not exists bluetooth (
+             id integer primary key,
+             addr varchar(255) not null,
+             name varchar(255) not null
+         )",
+        NO_PARAMS,
+    ) {
+      return Err(format!("Error creating table bluetooth: {}",err));
+    }
     }
 
     Ok(())
@@ -209,6 +220,74 @@ impl Persist for SQLitePersist {
   }
 
   fn fingerprint_delete(&mut self, _pos: i32) -> Result<(), String> {
+    Ok(())
+  }
+
+
+
+
+  fn bluetooth_add(&mut self, addr: &Vec<u8>, name: &Vec<u8>) -> Result<(), String> {
+    if let Some(ref conn) = self.conn {
+      if let Err(err) = conn.execute("INSERT INTO bluetooth (addr, name) VALUES (?1,?2)",
+          &[addr as &dyn ToSql, name as &dyn ToSql],
+      ) {
+        return Err(format!("Error inserting bluetooth device to the database: {}", err));
+      }
+    }
+
+    Ok(())
+  }
+
+  fn bluetooth_find(&mut self, addr: &Vec<u8>) -> Result<Bluetooth, String> {
+
+    if let Some(ref conn) = self.conn {
+      let mut stmt = conn
+        .prepare("SELECT id,addr,name FROM bluetooth where addr=?1")
+        .unwrap();
+
+      let bluetooth_iter = stmt
+        .query_map(&[addr as &dyn ToSql], |row| Ok(Bluetooth {
+            id: row.get(0).unwrap_or(0),
+            addr: row.get(1).unwrap_or(Vec::new()),
+            name: row.get(2).unwrap_or(Vec::new()),
+        })).unwrap();
+
+      for bluetooth in bluetooth_iter {
+        return Ok(bluetooth.unwrap());
+      }
+    } else {
+      return Err(format!("{}","Database not connected"));
+    }
+
+    Err(format!("{}","Bluetooth Device Not Found"))
+  }
+
+  fn bluetooth_list(&mut self) -> Result<Vec<Bluetooth>, String> {
+
+    let mut ret: Vec<Bluetooth> = Vec::new();
+
+    if let Some(ref conn) = self.conn {
+      let mut stmt = conn
+        .prepare("SELECT id,addr,name FROM bluetooth")
+        .unwrap();
+
+      let bluetooth_iter = stmt
+        .query_map(NO_PARAMS, |row| Ok(Bluetooth {
+            id: row.get(0).unwrap_or(0),
+            addr: row.get(1).unwrap_or(Vec::new()),
+            name: row.get(2).unwrap_or(Vec::new())
+        })).unwrap();
+
+      for bluetooth in bluetooth_iter {
+        ret.push(bluetooth.unwrap());
+      }
+      return Ok(ret);
+    } else {
+      return Err(format!("{}","Database not connected"));
+    }
+  }
+
+  fn bluetooth_delete(&mut self, _addr: &Vec<u8>) -> Result<(), String> {
     Ok(())
   }
 }

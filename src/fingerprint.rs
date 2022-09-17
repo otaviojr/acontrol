@@ -25,7 +25,7 @@
  * THE SOFTWARE.
  *
  */
-pub mod gt521fx;
+mod gt521fx;
 
 #[derive(Clone, Copy, PartialEq)]
 #[allow(dead_code)]

@@ -1,8 +1,8 @@
 /**
- * @file   audio/mod.rs
+ * @file   server/mod.rs
  * @author Otavio Ribeiro
  * @date   24 Dec 2017
- * @brief  Audio global interface
+ * @brief  WebAPI global interface
  *
  * Copyright (c) 2019 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
@@ -25,23 +25,38 @@
  * THE SOFTWARE.
  *
  */
-pub mod buzzer;
+mod webserver;
 
-pub trait Audio {
-  fn init(&mut self) -> Result<(),String>;
-  fn play_new(&mut self) -> Result<(), String>;
-  fn play_granted(&mut self) -> Result<(), String>;
-  fn play_denied(&mut self) -> Result<(), String>;
-  fn play_success(&mut self) -> Result<(), String>;
-  fn play_error(&mut self) -> Result<(), String>;
-  fn play_alert(&mut self) -> Result<(), String>;
-  fn unload(&mut self) -> Result<(),String>;
+#[derive(Serialize, Deserialize)]
+struct WebServerDefaultResponse {
+  ret: bool,
+  msg: String
+}
+
+#[derive(Serialize, Deserialize)]
+struct WebCard {
+  id: i32,
+  uuid: Vec<u8>,
+  name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct WebServerNfcListResponse {
+  ret: bool,
+  msg: String,
+  cards: Vec<WebCard>,
+}
+
+pub trait Server {
+  fn port(&mut self, port: u32) -> Box<&mut dyn Server>;
+  fn host(&mut self, host: &str) -> Box<&mut dyn Server>;
+  fn init(&self) -> Result<(),String>;
   fn signature(&self) -> String;
 }
 
-pub fn audio_by_name(name: &str) -> Option<Box<dyn Audio+Sync+Send>> {
-    match name {
-      "buzzer" => return Some(Box::new(buzzer::Buzzer::new())),
-      _ => return None
-    }
+pub fn create_server_by_name(name:&str) -> Option<Box<dyn Server+'static>> {
+  match name {
+    "generic" => return Some(Box::new(webserver::WebServer::new())),
+    _ => return None
+  }
 }

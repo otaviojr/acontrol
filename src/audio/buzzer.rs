@@ -26,9 +26,9 @@
  *
  */
 
-pub mod sounds;
+mod sounds;
 
-use audio::{Audio};
+use super::{Audio};
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -40,7 +40,7 @@ use std::fs::OpenOptions;
 use std::os::unix::io::{RawFd,AsRawFd};                                                                                                           
 use std::mem;
 
-use audio::buzzer::sounds::{Sounds, Tone};
+use super::buzzer::sounds::{Sounds, Tone};
 
 #[allow(dead_code)]
 #[allow(non_camel_case_types)]

@@ -25,7 +25,7 @@
  * THE SOFTWARE.
  *
  */
-pub mod sqlite_persist;
+mod sqlite_persist;
 
 use std::collections::HashMap;
 
@@ -44,6 +44,12 @@ pub struct Fingerprint {
   pub name: Vec<u8>
 }
 
+pub struct Bluetooth {
+  pub id: i32,
+  pub addr: Vec<u8>,
+  pub name: Vec<u8>
+}
+
 pub trait Persist {
   fn init(&mut self, params: &HashMap<String,String>) -> Result<(), String>;
   fn unload(&mut self) -> Result<(), String>;
@@ -57,6 +63,11 @@ pub trait Persist {
   fn fingerprint_find(&mut self, pos: i32) -> Result<Fingerprint, String>;
   fn fingerprint_list(&mut self) -> Result<Vec<Fingerprint>, String>;
   fn fingerprint_delete(&mut self, pos: i32) -> Result<(), String>;
+
+  fn bluetooth_add(&mut self, addr: &Vec<u8>, name: &Vec<u8>) -> Result<(), String>;
+  fn bluetooth_find(&mut self, addr: &Vec<u8>) -> Result<Bluetooth, String>;
+  fn bluetooth_list(&mut self) -> Result<Vec<Bluetooth>, String>;
+  fn bluetooth_delete(&mut self, _addr: &Vec<u8>) -> Result<(), String>;
 }
 
 pub fn persist_by_name(name: &str) -> Option<Box<dyn Persist+Sync+Send>> {
