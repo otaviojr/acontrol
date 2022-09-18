@@ -1,0 +1,12 @@
+[Unit]
+Description=AControl Access Control
+After=network.target
+
+[Service]
+ExecStart=/acontrol/acontrol --http-server-host=0.0.0.0 --fingerprint-module=gt521fx --nfc-module=pn532_spi --audio-module=buzzer --mifare-key=0x00,0x00,0x00,0x00,0x00,0x00
+Restart=always
+StandardOutput=file:/var/log/acontrol/output.log
+StandardError=file:/var/log/acontrol/error.log
+
+[Install]
+WantedBy=multi-user.target

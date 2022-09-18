@@ -63,7 +63,8 @@ extern "C" fn handle_sigint(_:i32) {
   process::exit(0);
 }
 
-fn main(){
+#[tokio::main]
+async fn main(){
   let bt_drv;
   let fingerprint_drv;
   let nfcreader_drv;
@@ -108,6 +109,12 @@ fn main(){
           .short("a")
           .long("audio-module")
           .help("Available modules: buzzer"))
+  .arg(Arg::with_name("bluetooth-module")
+          .required(true)
+          .takes_value(true)
+          .short("b")
+          .long("bluetooth-module")
+          .help("Available modules: bluez"))  
   .arg(Arg::with_name("http-server-port")
           .required(false)
           .takes_value(true)
@@ -120,12 +127,6 @@ fn main(){
           .short("h")
           .long("http-server-host")
           .help("http server host to bind to"))
-  .arg(Arg::with_name("bluetooth-module")
-          .required(true)
-          .takes_value(true)
-          .short("b")
-          .long("bluetooth-module")
-          .help("Available modules: bluez"))  
 	.get_matches();
 
   let http_port:u32 = value_t!(matches, "http-server-port",u32).unwrap_or(HTTP_DEFAULT_PORT);
@@ -196,6 +197,7 @@ fn main(){
     display_drv = display_drv_b.unwrap();
   }
 
+  println!("Bluetooth driver: {}",bt_drv.signature());
   println!("Fingerprint driver: {}",fingerprint_drv.signature());
   println!("Nfc driver: {}",nfcreader_drv.signature());
   println!("Audio driver: {}", audio_drv.signature());

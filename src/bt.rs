@@ -112,6 +112,7 @@ pub trait Bluetooth {
     fn unload(&mut self) -> Result<(), String>;
     fn delete_all(&mut self) -> bool;
     fn start_enroll(&mut self, data: &BluetoothData) -> bool;
+    fn signature(&self) -> String;
   }
   
 pub fn bluetooth_by_name(name: &str) -> Option<Box<dyn Bluetooth+Sync+Send>> {

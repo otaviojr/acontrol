@@ -27,6 +27,7 @@
  */
 use super::{Bluetooth,BluetoothAction, BluetoothData, BluetoothProps};
 
+use tokio::runtime::{Handle,Runtime};
 use bluer::{Adapter, AdapterEvent, Address, DeviceEvent};
 use futures::{pin_mut, stream::SelectAll, StreamExt};
 use std::{collections::HashSet, env, collections::HashMap};
@@ -51,63 +52,71 @@ impl Bluetooth for BlueZ {
 
     fn find_devices(&mut self, func: fn(device: &HashMap<String, String>, action: &BluetoothAction) -> bool) -> Result<(),String>{
         let _handler = thread::spawn( move || {
-            async {
+            println!("BlueZ module searching for devices");
+            let rt = Runtime::new().unwrap();
+            let handle = rt.handle().clone();        
+            handle.block_on(async {
                 if let Ok(session) = bluer::Session::new().await {
                     if let Ok(adapter) = session.default_adapter().await {
-                        println!("Discovering devices using Bluetooth adapater {}\n", adapter.name());
+                        println!("Discovering devices using Bluetooth adapater {}", adapter.name());
                         if let Err(err) = adapter.set_powered(true).await {
                             return Err("Error powering up bluetooth device");
                         } else {
-                            if let Ok(device_events) = adapter.discover_devices().await {
-                                pin_mut!(device_events);
+                            match adapter.discover_devices().await {
+                                Ok(device_events) => {
+                                    pin_mut!(device_events);
 
-                                let mut all_change_events = SelectAll::new();
-
-                                loop {
-                                    tokio::select! {    
-                                        Some(device_event) = device_events.next() => {
-                                            match device_event {
-                                                AdapterEvent::DeviceAdded(addr) => {
-                                                    println!("Bluetooth device added: {}", addr);
-                                                    if let Ok(device) = adapter.device(addr) {
-                                                        if let Ok(change_events) = device.events().await {
-                                                            //change_events.map(move |evt| (addr, evt));
-                                                            all_change_events.push(change_events);                                   
+                                    let mut all_change_events = SelectAll::new();
+    
+                                    loop {
+                                        tokio::select! {    
+                                            Some(device_event) = device_events.next() => {
+                                                match device_event {
+                                                    AdapterEvent::DeviceAdded(addr) => {
+                                                        println!("Bluetooth device added: {}", addr);
+                                                        if let Ok(device) = adapter.device(addr) {
+                                                            if let Ok(change_events) = device.events().await {
+                                                                //change_events.map(move |evt| (addr, evt));
+                                                                all_change_events.push(change_events);                                   
+                                                            } else {
+                                                                println!("Error getting bluetooth device events: {}", addr);
+                                                            }
                                                         } else {
-                                                            println!("Error getting bluetooth device events: {}", addr);
+                                                            println!("Error getting bluetooth device: {}", addr);
                                                         }
-                                                    } else {
-                                                        println!("Error getting bluetooth device: {}", addr);
                                                     }
+                                                    AdapterEvent::DeviceRemoved(addr) => {
+                                                        println!("Bluetooth device removed: {}", addr);
+                                                    }
+                                                    _ => (),
                                                 }
-                                                AdapterEvent::DeviceRemoved(addr) => {
-                                                    println!("Bluetooth device removed: {}", addr);
-                                                }
-                                                _ => (),
+                                                println!();
                                             }
-                                            println!();
-                                        }
-                                        Some(device_event) = all_change_events.next() => {
-                                            match device_event {
-                                                DeviceEvent::PropertyChanged(property) => {
-                                                    println!("Bluetooth device changed: {}", "?");
-                                                    println!("    {:?}", property);
-        
+                                            Some(device_event) = all_change_events.next() => {
+                                                match device_event {
+                                                    DeviceEvent::PropertyChanged(property) => {
+                                                        println!("Bluetooth device changed: {}", "?");
+                                                        println!("    {:?}", property);
+            
+                                                    }
+                                                    _ => (),
                                                 }
-                                                _ => (),
                                             }
+                                            else => break
                                         }
-                                        else => break
                                     }
+                                    println!("Bluetooth module finished");
+                                    return Ok(());
                                 }
-                                println!("Bluetooth module finished");
-                                return Ok(());
-                            };
+                                Err(err) => {
+                                    println!("Bluetooth error discovering devices: {}",err);
+                                }
+                            }
                         }
                     }                
                 }
                 return Err("Error initializing bluetooth module");
-            }
+            });
         });
         Ok(())
     }
@@ -122,5 +131,9 @@ impl Bluetooth for BlueZ {
 
     fn start_enroll(&mut self, data: &BluetoothData) -> bool{
         return false;
+    }
+
+    fn signature(&self) -> String {
+        return String::from("BlueZ bluetooth module");
     }
 }
