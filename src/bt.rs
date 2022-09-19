@@ -29,6 +29,7 @@
 mod bluez;
 
 use std::collections::HashMap;
+use async_trait::async_trait;
 
 #[derive(Clone, Copy, PartialEq)]
 #[allow(dead_code)]
@@ -106,9 +107,10 @@ impl BluetoothData {
     }
 }
 
+#[async_trait]
 pub trait Bluetooth {
-    fn init(&mut self) -> Result<(), String>;
-    fn find_devices(&mut self, func: fn(device: &HashMap<String, String>, action: &BluetoothAction) -> bool) -> Result<(),String>;
+    async fn init(&mut self) -> Result<(), String>;
+    async fn find_devices(&mut self, func: fn(device: &HashMap<String, String>, action: &BluetoothAction) -> bool) -> Result<(),String>;
     fn unload(&mut self) -> Result<(), String>;
     fn delete_all(&mut self) -> bool;
     fn start_enroll(&mut self, data: &BluetoothData) -> bool;

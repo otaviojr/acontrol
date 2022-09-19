@@ -177,7 +177,7 @@ pub fn  acontrol_system_set_mifare_keys(key_a: &Vec<u8>, key_b: &Vec<u8>) -> boo
   }
 }
 
-pub fn acontrol_system_init(params: &HashMap<String,String>,
+pub async fn acontrol_system_init(params: &HashMap<String,String>,
         bt_drv: Box<dyn Bluetooth+Sync+Send>,
         fingerprint_drv: Box<dyn Fingerprint+Sync+Send>,
 				nfc_drv: Box<dyn NfcReader+Sync+Send>,
@@ -242,7 +242,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
       Some(ref drv) => {
         let mut drv_inner = drv.lock().unwrap();
   
-        if let Err(err) = drv_inner.init() {
+        if let Err(err) = drv_inner.init().await {
           eprintln!("Error initializing bluetooth (=> {})", err);
           return false;
         }
@@ -281,7 +281,7 @@ pub fn acontrol_system_init(params: &HashMap<String,String>,
             },
             None => return false,
           }
-        }).unwrap();
+        }).await.unwrap();
       },
       None => {
         eprintln!("Bluetooth driver not found!");

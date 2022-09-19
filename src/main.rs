@@ -216,7 +216,7 @@ async fn main(){
   params.insert("DATA_PATH".to_string(), DEFAULT_DATA_PATH.to_string());
 
   if !system::acontrol_system_init(&params, bt_drv, fingerprint_drv, 
-					nfcreader_drv, audio_drv, persist_drv, display_drv) {
+					nfcreader_drv, audio_drv, persist_drv, display_drv).await {
     process::exit(-1);
   }
 

@@ -35,7 +35,6 @@ use std::sync::Mutex;
 use std::io::prelude::*;
 use std::io::{ErrorKind};
 
-//use serialport::prelude::*;
 use serialport::{DataBits,FlowControl,Parity,StopBits,ClearBuffer,SerialPort,SerialPortSettings};
 
 use sysfs_gpio::{Direction, Pin};
