@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:beacon_broadcast/beacon_broadcast.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   runApp(const MyApp());
@@ -63,7 +64,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   BeaconBroadcast beaconBroadcast = BeaconBroadcast();
   bool _isAdvertising = false;
-  late BeaconStatus _isTransmissionSupported;
+  late BeaconStatus _isTransmissionSupported = BeaconStatus.notSupportedCannotGetAdvertiser;
   late StreamSubscription<bool> _isAdvertisingSubscription;
 
   int _counter = 0;
@@ -73,11 +74,16 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
     beaconBroadcast
         .checkTransmissionSupported()
-        .then((isTransmissionSupported) {
-      setState(() {
-        _isTransmissionSupported = isTransmissionSupported;
-      });
-    });
+        .then((isTransmissionSupported) async {
+
+            //Ask for runtime permissions if necessary.
+            var status = await Permission.bluetoothAdvertise.request();
+            if (status.isGranted) {
+              setState(() {
+                _isTransmissionSupported = isTransmissionSupported;
+              });
+            }
+        });
 
     _isAdvertisingSubscription =
         beaconBroadcast.getAdvertisingStateChange().listen((isAdvertising) {
