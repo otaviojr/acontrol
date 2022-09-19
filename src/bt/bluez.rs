@@ -25,27 +25,27 @@
  * THE SOFTWARE.
  *
  */
-use super::{Bluetooth,BluetoothAction, BluetoothData, BluetoothProps};
+use super::{Bluetooth, BluetoothData, BluetoothProps, BluetoothDevice};
 
 use async_trait::async_trait;
 use tokio::runtime::{Handle,Runtime};
 use bluer::{Session, Adapter, AdapterEvent, Address, DeviceEvent,DeviceProperty, adv::Advertisement, adv::AdvertisementHandle};
 use futures::{pin_mut, stream::SelectAll, StreamExt};
 use std::{collections::HashSet, env, collections::HashMap};
-use std::time::{Duration};
+use std::time::{Duration, Instant};
 use std::thread;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Mutex, Arc};
 
 pub struct BlueZ {
     session: Arc<Mutex<Option<Session>>>,
     adapter: Arc<Mutex<Option<Adapter>>>,
-    adv_handle: Box<Option<AdvertisementHandle>>
+    adv_handle: Box<Option<AdvertisementHandle>>,
+    devices: Arc<Mutex<HashMap<String,Arc<Mutex<BluetoothDevice>>>>>,
 }
 
 impl BlueZ {
     pub fn new() -> Self {
-        return BlueZ { session: Arc::new(Mutex::new(Option::None)), adapter: Arc::new(Mutex::new(Option::None)), adv_handle: Box::new(Option::None) };
+        return BlueZ { session: Arc::new(Mutex::new(Option::None)), adapter: Arc::new(Mutex::new(Option::None)), adv_handle: Box::new(Option::None), devices: Arc::new(Mutex::new(HashMap::new())) };
     }
 }
 
@@ -81,8 +81,10 @@ impl Bluetooth for BlueZ {
         Err(String::from("BlueZ: Error initializing bluetooth module"))
     }
 
-    async fn find_devices(&mut self, func: fn(device: &HashMap<String, String>, action: &BluetoothAction) -> bool) -> Result<(),String>{
+    async fn find_devices(&mut self, func: fn(device: BluetoothDevice) -> bool) -> Result<(),String>{
         let adapter_mutex = self.adapter.clone();
+        let devices_mutex = self.devices.clone();
+
         thread::spawn( move || {
             println!("BlueZ module searching for devices");
             let rt = Runtime::new().unwrap();
@@ -91,73 +93,99 @@ impl Bluetooth for BlueZ {
                 if let Ok(ref mut adapter_locked) = adapter_mutex.lock() {
                     if let Some(ref adapter) = **adapter_locked {
                         println!("Discovering devices using Bluetooth adapater {}", adapter.name());
-                        match adapter.discover_devices().await {
-                            Ok(device_events) => {
-                                pin_mut!(device_events);
-        
-                                let mut all_change_events = SelectAll::new();
-        
-                                loop {
-                                    tokio::select! {    
-                                        Some(device_event) = device_events.next() => {
-                                            match device_event {
-                                                AdapterEvent::DeviceAdded(addr) => {
-                                                    //println!("Bluetooth device added: {}", addr);
-                                                    if let Ok(device) = adapter.device(addr) {
-                                                        if let Ok(change_events) = device.events().await {
-                                                            let event = change_events.map(move |evt| (addr, evt));
-                                                            all_change_events.push(event);                                   
+                        if let Ok(ref mut devices) = devices_mutex.lock() {
+                            match adapter.discover_devices().await {
+                                Ok(device_events) => {
+                                    pin_mut!(device_events);
+            
+                                    let mut all_change_events = SelectAll::new();
+            
+                                    loop {
+                                        tokio::select! {    
+                                            Some(device_event) = device_events.next() => {
+                                                match device_event {
+                                                    AdapterEvent::DeviceAdded(addr) => {
+                                                        devices.insert(addr.to_string(), Arc::new(Mutex::new(BluetoothDevice::new(addr.to_string()))));
+                                                        if let Ok(device) = adapter.device(addr) {
+                                                            if let Ok(change_events) = device.events().await {
+                                                                let event = change_events.map(move |evt| (addr, evt));
+                                                                all_change_events.push(event);                                   
+                                                            } else {
+                                                                println!("Error getting bluetooth device events: {}", addr);
+                                                            }
                                                         } else {
-                                                            println!("Error getting bluetooth device events: {}", addr);
+                                                            println!("Error getting bluetooth device: {}", addr);
                                                         }
-                                                    } else {
-                                                        println!("Error getting bluetooth device: {}", addr);
                                                     }
+                                                    AdapterEvent::DeviceRemoved(addr) => {
+                                                        devices.remove(&addr.to_string());
+                                                    }
+                                                    _ => (),
                                                 }
-                                                AdapterEvent::DeviceRemoved(addr) => {
-                                                    //println!("Bluetooth device removed: {}", addr);
-                                                }
-                                                _ => (),
                                             }
-                                        }
-                                        Some((addr,DeviceEvent::PropertyChanged(property))) = all_change_events.next() => {
-                                            let device = adapter.device(addr).unwrap();
+                                            Some((addr,DeviceEvent::PropertyChanged(property))) = all_change_events.next() => {
+                                                let device = adapter.device(addr).unwrap();
+            
+                                                match property {
+                                                    DeviceProperty::Rssi(rssi) => {
+                                                        if let Some(bluetooth_device_arc) = devices.get(&addr.to_string()) {
+                                                            let bluetooth_device_mutex = bluetooth_device_arc.clone();
+                                                            if let Ok(ref mut bluetooth_device_locked) = bluetooth_device_mutex.lock() {
+                                                                let ref mut bluetooth_device = **bluetooth_device_locked;
+
+                                                                bluetooth_device.name = device.name().await.unwrap_or_default().unwrap_or_default().to_string();
+                                                                bluetooth_device.rssi = rssi;
+
+                                                                if device.is_paired().await.unwrap_or_default() == true {
+                                                                    println!("-------------------------");
+                                                                    println!("    Property:           {:?}", property);
+                                                                    println!("    Address:            {}", addr);
+                                                                    println!("    Address type:       {}", device.address_type().await.unwrap());
+                                                                    println!("    Name:               {:?}", device.name().await.unwrap_or_default());
+                                                                    println!("    Icon:               {:?}", device.icon().await.unwrap_or_default());
+                                                                    println!("    Class:              {:?}", device.class().await.unwrap_or_default());
+                                                                    println!("    UUIDs:              {:?}", device.uuids().await.unwrap_or_default());
+                                                                    println!("    Paired:             {:?}", device.is_paired().await.unwrap_or_default());
+                                                                    println!("    Connected:          {:?}", device.is_connected().await.unwrap_or_default());
+                                                                    println!("    Trusted:            {:?}", device.is_trusted().await.unwrap_or_default());
+                                                                    println!("    Modalias:           {:?}", device.modalias().await.unwrap_or_default());
+                                                                    println!("    RSSI:               {:?}", device.rssi().await.unwrap_or_default());
+                                                                    println!("    TX power:           {:?}", device.tx_power().await.unwrap_or_default());
+                                                                    println!("    Manufacturer data:  {:?}", device.manufacturer_data().await.unwrap_or_default());
+                                                                    println!("    Service data:       {:?}", device.service_data().await.unwrap_or_default());
+                                                                    println!("-------------------------");
         
-                                            match property {
-                                                DeviceProperty::Rssi(rssi) => {
-                                                    if rssi < -50 && device.is_paired().await.unwrap_or_default() == true {
-                                                        println!("-------------------------");
-                                                        println!("    Property:           {:?}", property);
-                                                        println!("    Address:            {}", addr);
-                                                        println!("    Address type:       {}", device.address_type().await.unwrap());
-                                                        println!("    Name:               {:?}", device.name().await.unwrap_or_default());
-                                                        println!("    Icon:               {:?}", device.icon().await.unwrap_or_default());
-                                                        println!("    Class:              {:?}", device.class().await.unwrap_or_default());
-                                                        println!("    UUIDs:              {:?}", device.uuids().await.unwrap_or_default());
-                                                        println!("    Paired:             {:?}", device.is_paired().await.unwrap_or_default());
-                                                        println!("    Connected:          {:?}", device.is_connected().await.unwrap_or_default());
-                                                        println!("    Trusted:            {:?}", device.is_trusted().await.unwrap_or_default());
-                                                        println!("    Modalias:           {:?}", device.modalias().await.unwrap_or_default());
-                                                        println!("    RSSI:               {:?}", device.rssi().await.unwrap_or_default());
-                                                        println!("    TX power:           {:?}", device.tx_power().await.unwrap_or_default());
-                                                        println!("    Manufacturer data:  {:?}", device.manufacturer_data().await.unwrap_or_default());
-                                                        println!("    Service data:       {:?}", device.service_data().await.unwrap_or_default());
-                                                        println!("-------------------------");
+                                                                    println!("Device {} elapsed {:?}", addr, bluetooth_device.created.elapsed());
+                                                                    if rssi > -70 {
+                                                                        if bluetooth_device.access.is_none() || bluetooth_device.access.unwrap().elapsed() >= Duration::from_secs(30){
+                                                                            bluetooth_device.access = Some(Instant::now());
+                                                                            func(bluetooth_device.clone());
+                                                                        } else {
+                                                                            println!("Device {} out of time window", addr);
+                                                                        }
+                                                                    } else {
+                                                                        println!("Device {} low rssi", addr);
+                                                                    }
+                                                                }
+                                                            };
+                                                        } else {
+                                                            devices.insert(addr.to_string(), Arc::new(Mutex::new(BluetoothDevice::new(addr.to_string()))));
+                                                        }
+                                                    } 
+                                                    _ => {
                                                     }
-                                                }
-                                                _ => {
                                                 }
                                             }
                                         }
+                                        thread::sleep(Duration::from_millis(100));
                                     }
-                                    thread::sleep(Duration::from_millis(100));
+                                    println!("Bluetooth module finished");
+                                    return Ok(());
                                 }
-                                println!("Bluetooth module finished");
-                                return Ok(());
-                            }
-                            Err(err) => {
-                                println!("Bluetooth error discovering devices: {}",err);
-                            }
+                                Err(err) => {
+                                    println!("Bluetooth error discovering devices: {}",err);
+                                }
+                            }    
                         }
                     }         
                 }             

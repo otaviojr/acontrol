@@ -25,14 +25,14 @@
  * THE SOFTWARE.
  *
  */
-use super::bt::{Bluetooth, BluetoothData, BluetoothProps};
+use super::bt::{Bluetooth, BluetoothData, BluetoothProps, BluetoothDevice};
 use super::fingerprint::{Fingerprint, FingerprintState, FingerprintData};
 use super::nfc::{NfcReader};
 use super::audio::{Audio};
 use super::persist::{Persist};
 use super::display::{Display, Animation, AnimationType, AnimationColor};
 
-use std::sync::Mutex;
+use std::sync::{Mutex, Arc};
 use std::collections::HashMap;
 
 use std::process::Command;
@@ -247,7 +247,7 @@ pub async fn acontrol_system_init(params: &HashMap<String,String>,
           return false;
         }
   
-        drv_inner.find_devices(|device, action|{
+        drv_inner.find_devices(|device: BluetoothDevice| {
   
           match *ACONTROL_SYSTEM.bt_drv.lock().unwrap() {
   
@@ -256,12 +256,48 @@ pub async fn acontrol_system_init(params: &HashMap<String,String>,
               let mut next_bt_system_state: Option<BluetoothSystemState> = None;
               let mut drv_inner = drv.lock().unwrap();
   
-              println!("Device found: ADDR={:X?}", device[BluetoothProps::Address.name()]);
+              println!("Device found: ADDR={:X?}", device.addr);
   
               match *ACONTROL_SYSTEM.bt_state.lock().unwrap() {
                 BluetoothSystemState::READ => {
                   match *ACONTROL_SYSTEM.persist_drv.lock().unwrap() {
                     Some(ref mut drv) => {
+
+                      let _ret = acontrol_system_get_display_drv(|display|{
+                        let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                      });
+
+                      let mut query = Command::new("/acontrol/query")
+                      .output()
+                      .expect("failed to execute child");
+  
+                      if String::from_utf8_lossy(query.stdout.as_slice()).trim_end().to_lowercase().eq(&String::from("close")) {
+                          let mut process = Command::new("/acontrol/granted")
+                          .arg("-f")
+                          .stdout(Stdio::inherit())
+                          .spawn()
+                          .expect("failed to execute child");
+                                  
+                          let _ret = acontrol_system_get_audio_drv(|audio|{
+                            let _ret = audio.play_granted();
+                          });
+        
+                          let _ret = acontrol_system_get_display_drv(|display|{
+                            let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
+                            let _ret = display.wait_animation_ends();
+                          });
+        
+                          let _ret = acontrol_system_get_display_drv(|display|{
+                            let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                          });
+        
+                          let _ret = process.wait();        
+                      } else {
+                        println!("Device is already open: {}", String::from_utf8_lossy(query.stdout.as_slice()).to_lowercase());
+                      }
+                      let _ret = acontrol_system_get_display_drv(|display|{
+                        let _ret = display.clear_and_stop_animations();
+                      });
                     },
                     None => {
                       println!("Persistence driver not found");

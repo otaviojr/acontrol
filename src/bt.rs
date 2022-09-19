@@ -30,30 +30,26 @@ mod bluez;
 
 use std::collections::HashMap;
 use async_trait::async_trait;
+use std::time::Instant;
+use std::sync::{Mutex,Arc};
 
-#[derive(Clone, Copy, PartialEq)]
-#[allow(dead_code)]
-#[allow(non_camel_case_types)]
-pub enum BluetoothAction {
-    Add,
-    Remove,
-    Change,
+#[derive(Eq, Hash, PartialEq)]
+#[derive(Clone)]
+pub struct BluetoothDevice {
+  pub name: String,
+  pub addr: String,
+  pub rssi: i16,
+  pub created: Instant,
+  pub access: Option<Instant>,
 }
 
-impl BluetoothAction {
-    pub fn name(&self) -> &'static str {
-      match *self {
-        BluetoothAction::Add => "ADD",
-        BluetoothAction::Remove => "REMOVE",
-        BluetoothAction::Change => "CHANGE",
-      }
-    }
-  
-    pub fn set(&mut self, new_state:BluetoothAction) {
-      *self = new_state;
+impl BluetoothDevice {
+    pub fn new(addr: String) -> Self {
+      return BluetoothDevice { name: String::from(""), addr: addr, rssi: 0, created: Instant::now(), access: Option::None };
     }
 }
 
+#[derive(Eq, Hash, PartialEq)]
 pub enum BluetoothProps {
   Address,
   Name,
@@ -110,7 +106,7 @@ impl BluetoothData {
 #[async_trait]
 pub trait Bluetooth {
     async fn init(&mut self) -> Result<(), String>;
-    async fn find_devices(&mut self, func: fn(device: &HashMap<String, String>, action: &BluetoothAction) -> bool) -> Result<(),String>;
+    async fn find_devices(&mut self, func: fn(device: BluetoothDevice) -> bool) -> Result<(),String>;
     fn unload(&mut self) -> Result<(), String>;
     fn delete_all(&mut self) -> bool;
     fn start_enroll(&mut self, data: &BluetoothData) -> bool;
