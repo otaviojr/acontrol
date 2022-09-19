@@ -69,9 +69,13 @@ impl Bluetooth for BlueZ {
                     println!("Bluetooth Advertising:");
                     println!("{:?}", &le_advertisement);
                     if let Ok(adv_handle) = adapter.advertise(le_advertisement).await{
-                        self.adv_handle = Box::new(Some(adv_handle));
-                        self.session = Arc::new(Mutex::new(Some(session)));
-                        self.adapter = Arc::new(Mutex::new(Some(adapter)));    
+                        if adapter.set_discoverable(true).await.is_ok() {
+                            if adapter.set_pairable(true).await.is_ok() {
+                                self.adv_handle = Box::new(Some(adv_handle));
+                                self.session = Arc::new(Mutex::new(Some(session)));
+                                self.adapter = Arc::new(Mutex::new(Some(adapter)));
+                            }
+                        }    
                     }
                     return Ok(());
                 }
