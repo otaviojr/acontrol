@@ -1,20 +1,22 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:beacon_broadcast/beacon_broadcast.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const ABeacon());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class ABeacon extends StatelessWidget {
+  const ABeacon({super.key});
 
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'ABeacon',
       theme: ThemeData(
         // This is the theme of your application.
         //
@@ -27,13 +29,13 @@ class MyApp extends StatelessWidget {
         // is not restarted.
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const ABeaconPage(title: 'ABeacon'),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+class ABeaconPage extends StatefulWidget {
+  const ABeaconPage({super.key, required this.title});
 
   // This widget is the home page of your application. It is stateful, meaning
   // that it has a State object (defined below) that contains fields that affect
@@ -47,37 +49,56 @@ class MyHomePage extends StatefulWidget {
   final String title;
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<ABeaconPage> createState() => _MyABeaconPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  static const String uuid = '39ED98FF-2900-441A-802F-9C398FC199D2';
+class _MyABeaconPageState extends State<ABeaconPage> {
+  static const String uuid = '9BFBEF3A-210A-4B3A-9E58-24E7CD8354ED';
   static const int majorId = 1;
   static const int minorId = 100;
-  static const int transmissionPower = -59;
-  static const String identifier = 'com.example.myDeviceRegion';
-  static const AdvertiseMode advertiseMode = AdvertiseMode.lowPower;
+  static const int transmissionPower = -20;
+  static const String identifier = 'com.otavioeng.acontrol';
+  static const AdvertiseMode advertiseMode = AdvertiseMode.lowLatency;
   static const String layout = BeaconBroadcast.ALTBEACON_LAYOUT;
-  static const int manufacturerId = 0x0118;
-  static const List<int> extraData = [100];
+  static const int manufacturerId = 0x3712;
+  static const List<int> extraData = [0x12];
 
   BeaconBroadcast beaconBroadcast = BeaconBroadcast();
-  bool _isAdvertising = false;
-  late BeaconStatus _isTransmissionSupported;
+  BeaconStatus _isTransmissionSupported = BeaconStatus.notSupportedCannotGetAdvertiser;
   late StreamSubscription<bool> _isAdvertisingSubscription;
 
+  bool _isAdvertising = false;
   int _counter = 0;
+
+  void _checkPermissions() async {
+    var status = await Permission.bluetooth.request();
+
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.bluetooth,
+      Permission.bluetoothAdvertise,
+      Permission.location,
+    ].request();
+
+    /*if(await Permission.bluetooth.isDenied || await Permission.bluetooth.isPermanentlyDenied ||
+      await Permission.bluetoothAdvertise.isDenied || await Permission.bluetoothAdvertise.isPermanentlyDenied ||
+      await Permission.location.isDenied || await Permission.location.isPermanentlyDenied) {
+      openAppSettings();
+    }*/
+  }
 
   @override
   void initState() {
     super.initState();
+
+    _checkPermissions();
+
     beaconBroadcast
         .checkTransmissionSupported()
-        .then((isTransmissionSupported) {
-      setState(() {
-        _isTransmissionSupported = isTransmissionSupported;
-      });
-    });
+        .then((isTransmissionSupported) async {
+            setState(() {
+              _isTransmissionSupported = isTransmissionSupported;
+            });
+        });
 
     _isAdvertisingSubscription =
         beaconBroadcast.getAdvertisingStateChange().listen((isAdvertising) {
@@ -111,7 +132,7 @@ class _MyHomePageState extends State<MyHomePage> {
       appBar: AppBar(
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
-        title: const Text('Beacon Broadcast'),
+        title: const Text('ABeacon Unlock'),
       ),
       body: SingleChildScrollView(
         child: Padding(
@@ -133,41 +154,39 @@ class _MyHomePageState extends State<MyHomePage> {
               Container(height: 16.0),
               Center(
                 child: ElevatedButton(
-                  onPressed: () {
-                    beaconBroadcast
-                        .setUUID(uuid)
-                        .setMajorId(majorId)
-                        .setMinorId(minorId)
-                        .setTransmissionPower(transmissionPower)
-                        .setAdvertiseMode(advertiseMode)
-                        .setIdentifier(identifier)
-                        .setLayout(layout)
-                        .setManufacturerId(manufacturerId)
-                        .setExtraData(extraData)
-                        .start();
+                  onPressed: () async {
+                    setState(() {
+                      _counter ++;
+                    });
+                    if(!_isAdvertising) {
+                      if (Platform.isAndroid) {
+                        beaconBroadcast
+                            .setUUID(uuid)
+                            .setMajorId(majorId)
+                            .setMinorId(minorId)
+                            .setTransmissionPower(transmissionPower)
+                            .setAdvertiseMode(advertiseMode)
+                            .setLayout(layout)
+                            .setManufacturerId(manufacturerId)
+                            .setExtraData(extraData);
+                      } else if (Platform.isIOS) {
+                        beaconBroadcast
+                            .setUUID(uuid)
+                            .setMajorId(majorId)
+                            .setMinorId(minorId)
+                            .setIdentifier(identifier)
+                            .setTransmissionPower(transmissionPower)
+                            .setAdvertiseMode(advertiseMode);
+                        }
+                      beaconBroadcast.start();
+                    } else {
+                      beaconBroadcast.stop();
+                    }
                   },
                   child: Text('START'),
                 ),
               ),
-              Center(
-                child: ElevatedButton(
-                  onPressed: () {
-                    beaconBroadcast.stop();
-                  },
-                  child: Text('STOP'),
-                ),
-              ),
-              Text('Beacon Data',
-                  style: Theme.of(context).textTheme.headline5),
-              Text('UUID: $uuid'),
-              Text('Major id: $majorId'),
-              Text('Minor id: $minorId'),
-              Text('Tx Power: $transmissionPower'),
-              Text('Advertise Mode Value: $advertiseMode'),
-              Text('Identifier: $identifier'),
-              Text('Layout: $layout'),
-              Text('Manufacturer Id: $manufacturerId'),
-              Text('Extra data: $extraData'),
+              Text("Valor: " + _counter.toString())
             ],
           ),
         ),
