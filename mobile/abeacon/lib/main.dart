@@ -58,7 +58,7 @@ class _MyABeaconPageState extends State<ABeaconPage> {
   static const int minorId = 100;
   static const int transmissionPower = -20;
   static const String identifier = 'com.otavioeng.acontrol';
-  static const AdvertiseMode advertiseMode = AdvertiseMode.balanced;
+  static const AdvertiseMode advertiseMode = AdvertiseMode.lowLatency;
   static const String layout = BeaconBroadcast.ALTBEACON_LAYOUT;
   static const int manufacturerId = 0x3712;
   static const List<int> extraData = [0x12];
@@ -160,24 +160,24 @@ class _MyABeaconPageState extends State<ABeaconPage> {
                     });
                     if(!_isAdvertising) {
                       if (Platform.isAndroid) {
-                      beaconBroadcast
-                          .setUUID(uuid)
-                          .setMajorId(majorId)
-                          .setMinorId(minorId)
-                          .setTransmissionPower(transmissionPower)
-                          .setAdvertiseMode(advertiseMode)
-                          .setLayout(layout)
-                          .setManufacturerId(manufacturerId)
-                          .setExtraData(extraData);
+                        beaconBroadcast
+                            .setUUID(uuid)
+                            .setMajorId(majorId)
+                            .setMinorId(minorId)
+                            .setTransmissionPower(transmissionPower)
+                            .setAdvertiseMode(advertiseMode)
+                            .setLayout(layout)
+                            .setManufacturerId(manufacturerId)
+                            .setExtraData(extraData);
                       } else if (Platform.isIOS) {
-                      beaconBroadcast
-                          .setUUID(uuid)
-                          .setMajorId(majorId)
-                          .setMinorId(minorId)
-                          .setIdentifier(identifier)
-                          .setTransmissionPower(transmissionPower)
-                          .setAdvertiseMode(advertiseMode);
-                      }
+                        beaconBroadcast
+                            .setUUID(uuid)
+                            .setMajorId(majorId)
+                            .setMinorId(minorId)
+                            .setIdentifier(identifier)
+                            .setTransmissionPower(transmissionPower)
+                            .setAdvertiseMode(advertiseMode);
+                        }
                       beaconBroadcast.start();
                     } else {
                       beaconBroadcast.stop();
