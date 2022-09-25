@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:abeacon/animated_button.dart';
 import 'package:flutter/material.dart';
 import 'package:beacon_broadcast/beacon_broadcast.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -68,7 +69,7 @@ class _MyABeaconPageState extends State<ABeaconPage> {
   late StreamSubscription<bool> _isAdvertisingSubscription;
 
   bool _isAdvertising = false;
-  int _counter = 0;
+  late Timer t;
 
   void _checkPermissions() async {
     var status = await Permission.bluetooth.request();
@@ -108,41 +109,19 @@ class _MyABeaconPageState extends State<ABeaconPage> {
         });
   }
 
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
         title: const Text('ABeacon Unlock'),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Column(
+      body: Center(
+        child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text('Is transmission supported?',
+            children: [
+              /*Text('Is transmission supported?',
                   style: Theme.of(context).textTheme.headline5),
               Text('$_isTransmissionSupported',
                   style: Theme.of(context).textTheme.subtitle1),
@@ -151,51 +130,48 @@ class _MyABeaconPageState extends State<ABeaconPage> {
                   style: Theme.of(context).textTheme.headline5),
               Text('$_isAdvertising',
                   style: Theme.of(context).textTheme.subtitle1),
-              Container(height: 16.0),
-              Center(
-                child: ElevatedButton(
-                  onPressed: () async {
-                    setState(() {
-                      _counter ++;
-                    });
-                    if(!_isAdvertising) {
-                      if (Platform.isAndroid) {
-                        beaconBroadcast
-                            .setUUID(uuid)
-                            .setMajorId(majorId)
-                            .setMinorId(minorId)
-                            .setTransmissionPower(transmissionPower)
-                            .setAdvertiseMode(advertiseMode)
-                            .setLayout(layout)
-                            .setManufacturerId(manufacturerId)
-                            .setExtraData(extraData);
-                      } else if (Platform.isIOS) {
-                        beaconBroadcast
-                            .setUUID(uuid)
-                            .setMajorId(majorId)
-                            .setMinorId(minorId)
-                            .setIdentifier(identifier)
-                            .setTransmissionPower(transmissionPower)
-                            .setAdvertiseMode(advertiseMode);
-                        }
-                      beaconBroadcast.start();
-                    } else {
-                      beaconBroadcast.stop();
+              Container(height: 16.0),*/
+              AnimatedButtonWidget(
+                animated: _isAdvertising,
+                width: 220,
+                height: 220,
+                onButtonTap: () {
+                  print("got button clicked");
+                  if(!_isAdvertising) {
+                    if (Platform.isAndroid) {
+                      beaconBroadcast
+                          .setUUID(uuid)
+                          .setMajorId(majorId)
+                          .setMinorId(minorId)
+                          .setTransmissionPower(transmissionPower)
+                          .setAdvertiseMode(advertiseMode)
+                          .setLayout(layout)
+                          .setManufacturerId(manufacturerId)
+                          .setExtraData(extraData);
+                    } else if (Platform.isIOS) {
+                      beaconBroadcast
+                          .setUUID(uuid)
+                          .setMajorId(majorId)
+                          .setMinorId(minorId)
+                          .setIdentifier(identifier)
+                          .setTransmissionPower(transmissionPower)
+                          .setAdvertiseMode(advertiseMode);
                     }
-                  },
-                  child: Text('START'),
-                ),
-              ),
-              Text("Valor: " + _counter.toString())
-            ],
-          ),
+                    beaconBroadcast.start();
+                    t = Timer(const Duration(minutes: 10), () {
+                      beaconBroadcast.stop();
+                    });
+                  } else {
+                    t?.cancel();
+                    beaconBroadcast.stop();
+                  }
+                },
+                buttonText: TextSpan(
+                    text: (_isAdvertising ? 'STOP' : 'GO'), style: TextStyle(color: Colors.black, fontSize: 32)),
+              )
+            ]
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
