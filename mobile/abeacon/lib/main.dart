@@ -5,8 +5,11 @@ import 'package:abeacon/animated_button.dart';
 import 'package:flutter/material.dart';
 import 'package:beacon_broadcast/beacon_broadcast.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 void main() {
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   runApp(const ABeacon());
 }
 
@@ -107,6 +110,11 @@ class _MyABeaconPageState extends State<ABeaconPage> {
             _isAdvertising = isAdvertising;
           });
         });
+
+    Timer(const Duration(seconds: 2), () {
+      FlutterNativeSplash.remove();
+    });
+
   }
 
   @override

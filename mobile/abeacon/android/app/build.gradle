@@ -60,6 +60,7 @@ android {
             signingConfig signingConfigs.debug
         }
     }
+    namespace 'com.otavio.eng.acontrol.abeacon'
 }
 
 flutter {
