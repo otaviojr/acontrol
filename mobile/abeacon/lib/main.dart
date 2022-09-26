@@ -6,10 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:beacon_broadcast/beacon_broadcast.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:wakelock/wakelock.dart';
 
 void main() {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  Wakelock.enable();
   runApp(const ABeacon());
 }
 
@@ -108,6 +110,7 @@ class _MyABeaconPageState extends State<ABeaconPage> {
         beaconBroadcast.getAdvertisingStateChange().listen((isAdvertising) {
           setState(() {
             _isAdvertising = isAdvertising;
+            Wakelock.toggle(enable: _isAdvertising);
           });
         });
 

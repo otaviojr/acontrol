@@ -40,6 +40,7 @@ dependencies:
   permission_handler: ^10.0.0
   get: ^4.6.5
   flutter_native_splash: ^2.2.10
+  wakelock:
 
 dev_dependencies:
   flutter_test:
