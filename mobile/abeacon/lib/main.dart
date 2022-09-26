@@ -96,6 +96,8 @@ class _MyABeaconPageState extends State<ABeaconPage> {
   void initState() {
     super.initState();
 
+    Wakelock.toggle(enable: false);
+
     _checkPermissions();
 
     beaconBroadcast
