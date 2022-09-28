@@ -25,21 +25,14 @@
  * THE SOFTWARE.
  *
  */
-use super::{Bluetooth, BluetoothData, BluetoothProps, BluetoothDevice};
+use super::{Bluetooth, BluetoothData, BluetoothDevice};
 
 use async_trait::async_trait;
-use tokio::runtime::{Handle,Runtime};
+
 use tokio::sync::{mpsc,Mutex};
-use bluer::{Session, Adapter, AdapterEvent, Address, DeviceEvent,DeviceProperty, adv::Advertisement, adv::AdvertisementHandle, monitor::{Monitor, RegisteredMonitorHandle, DeviceFound, Pattern}};
-use futures::{
-    pin_mut, 
-    stream::SelectAll, 
-    StreamExt, 
-    Future,
-};
-use std::{collections::HashSet, env, collections::HashMap,pin::Pin};
-use std::time::{Duration, Instant};
-use std::thread;
+use bluer::{Session, Adapter, monitor::{Monitor, RegisteredMonitorHandle, Pattern}};
+
+use std::{collections::HashMap};
 use std::sync::{Arc};
 
 pub struct BlueZ {
@@ -126,9 +119,7 @@ impl Bluetooth for BlueZ {
     async fn find_devices(&mut self, func: fn(device: BluetoothDevice) -> bool) -> Result<(),String>{
         let adapter_mutex = self.adapter.clone();
         let rx = self.event_rx.clone();
-        println!("Starting bluetooth thread");
         let _ = tokio::spawn(async move {
-            println!("Bluetooth thread started");
             let ref adapter_lock = adapter_mutex.lock().await;
             if let Some(ref adapter) = **adapter_lock {
                 let mut rx1 = rx.lock().await;
