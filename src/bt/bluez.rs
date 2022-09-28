@@ -29,23 +29,38 @@ use super::{Bluetooth, BluetoothData, BluetoothProps, BluetoothDevice};
 
 use async_trait::async_trait;
 use tokio::runtime::{Handle,Runtime};
-use bluer::{Session, Adapter, AdapterEvent, Address, DeviceEvent,DeviceProperty, adv::Advertisement, adv::AdvertisementHandle};
-use futures::{pin_mut, stream::SelectAll, StreamExt};
-use std::{collections::HashSet, env, collections::HashMap};
+use tokio::sync::{mpsc,Mutex};
+use bluer::{Session, Adapter, AdapterEvent, Address, DeviceEvent,DeviceProperty, adv::Advertisement, adv::AdvertisementHandle, monitor::{Monitor, RegisteredMonitorHandle, DeviceFound, Pattern}};
+use futures::{
+    pin_mut, 
+    stream::SelectAll, 
+    StreamExt, 
+    Future,
+};
+use std::{collections::HashSet, env, collections::HashMap,pin::Pin};
 use std::time::{Duration, Instant};
 use std::thread;
-use std::sync::{Mutex, Arc};
+use std::sync::{Arc};
 
 pub struct BlueZ {
     session: Arc<Mutex<Option<Session>>>,
     adapter: Arc<Mutex<Option<Adapter>>>,
-    adv_handle: Box<Option<AdvertisementHandle>>,
+    monitor_handle: Box<Option<RegisteredMonitorHandle>>,
     devices: Arc<Mutex<HashMap<String,Arc<Mutex<BluetoothDevice>>>>>,
+    event_tx: mpsc::Sender<bluer::Address>,
+    event_rx: Arc<Mutex<mpsc::Receiver<bluer::Address>>>,
 }
 
 impl BlueZ {
     pub fn new() -> Self {
-        return BlueZ { session: Arc::new(Mutex::new(Option::None)), adapter: Arc::new(Mutex::new(Option::None)), adv_handle: Box::new(Option::None), devices: Arc::new(Mutex::new(HashMap::new())) };
+        let (e_tx, e_rx) = mpsc::channel(1);
+
+        return BlueZ { session: Arc::new(Mutex::new(Option::None)), 
+                        adapter: Arc::new(Mutex::new(Option::None)), 
+                        monitor_handle: Box::new(Option::None),
+                        devices: Arc::new(Mutex::new(HashMap::new())),
+                        event_tx: e_tx, event_rx: Arc::new(tokio::sync::Mutex::new(e_rx)),
+                     };
     }
 }
 
@@ -55,31 +70,54 @@ impl Bluetooth for BlueZ {
         if let Ok(session) = Session::new().await {
             if let Ok(adapter) = session.default_adapter().await {
                 if adapter.set_powered(true).await.is_ok() {
-                    let le_advertisement = Advertisement {
-                        advertisement_type: bluer::adv::Type::Peripheral,
-                        service_uuids: vec!["123e4567-e89b-12d3-a456-426614174000".parse().unwrap()].into_iter().collect(),
-                        discoverable: Some(true),
-                        discoverable_timeout: Some(Duration::from_millis(0)),
-                        local_name: Some("acontrol".to_string()),
-                        min_interval: Some(Duration::from_millis(500)),
-                        max_interval: Some(Duration::from_millis(1000)),
-                        tx_power: Some(20),
-                        ..Default::default()
-                    };
-                    println!("Bluetooth Advertising:");
-                    println!("{:?}", &le_advertisement);
-                    if let Ok(adv_handle) = adapter.advertise(le_advertisement).await{
-                        if adapter.set_discoverable(true).await.is_ok() {
-                            if adapter.set_pairable(true).await.is_ok() {
-                                self.adv_handle = Box::new(Some(adv_handle));
-                                self.session = Arc::new(Mutex::new(Some(session)));
-                                self.adapter = Arc::new(Mutex::new(Some(adapter)));
-                            }
-                        }    
+                    println!("Bluetooth: registering monitor");
+                    if let Ok(mut monitor_handle) = adapter.register_monitor().await {
+                        let mut tx = self.event_tx.clone();
+                        monitor_handle.add_monitor(Monitor {
+                            activate: Some(Box::new(move || {
+                                Box::pin(async {
+                                    println!("Monitor 1: Activate funcion called");
+                                    Ok(())
+                                })
+                            })),
+                            release: Some(Box::new(move || {
+                                Box::pin(async {
+                                    println!("Monitor 1: Release funcion called");
+                                    Ok(())
+                                })
+                            })),
+                            device_found: Some(Box::new(move |device| {
+                                let mut tx1 = tx.clone();
+                                Box::pin(async move {
+                                    println!("Monitor 1: DeviceFound funcion called: {}",device.addr);
+                                    let _ = tx1.send(device.addr).await;
+                                    Ok(())
+                                })
+                            })),
+                            patterns: Some(vec!(Pattern {
+                                start_position: 4,
+                                ad_data_type: 0xff,
+                                content_of_pattern: vec!(0x9b,0xfb,0xef,0x3a,0x21,0x0a,0x4b, 0x3a,0x9e,0x58,0x24,0xe7,0xcd,0x83,0x54,0xed)
+                            })),
+                            rssi_low_threshold: Some(127),
+                            rssi_high_threshold: Some(127),
+                            rssi_low_timeout: Some(0),
+                            rssi_high_timeout: Some(0),
+                            ..Default::default()
+                        }).await;
+                        self.monitor_handle = Box::new(Some(monitor_handle));
+                        self.session = Arc::new(Mutex::new(Some(session)));
+                        self.adapter = Arc::new(Mutex::new(Some(adapter)));
+                    } else {
+                        println!("Monitor: Somethings gets wrong with the monitor");
                     }
                     return Ok(());
                 }
+            } else {
+                println!("BlueZ: no default adapter");
             }
+        } else {
+            println!("BlueZ: Session error");
         }
 
         Err(String::from("BlueZ: Error initializing bluetooth module"))
@@ -87,122 +125,48 @@ impl Bluetooth for BlueZ {
 
     async fn find_devices(&mut self, func: fn(device: BluetoothDevice) -> bool) -> Result<(),String>{
         let adapter_mutex = self.adapter.clone();
-        let devices_mutex = self.devices.clone();
+        let rx = self.event_rx.clone();
+        println!("Starting bluetooth thread");
+        let _ = tokio::spawn(async move {
+            println!("Bluetooth thread started");
+            let ref adapter_lock = adapter_mutex.lock().await;
+            if let Some(ref adapter) = **adapter_lock {
+                let mut rx1 = rx.lock().await;
+                while let Some(addr) = rx1.recv().await {
+                    let device = adapter.device(addr).unwrap();
+                    println!("Monitor thread: DeviceFound funcion called: {}",addr);
+                    println!("-------------------------");
+                    println!("    Address:            {}", addr);
+                    println!("    Address type:       {}", device.address_type().await.unwrap());
+                    println!("    Name:               {:?}", device.name().await.unwrap_or_default());
+                    println!("    Icon:               {:?}", device.icon().await.unwrap_or_default());
+                    println!("    Class:              {:?}", device.class().await.unwrap_or_default());
+                    println!("    UUIDs:              {:?}", device.uuids().await.unwrap_or_default());
+                    println!("    Paired:             {:?}", device.is_paired().await.unwrap_or_default());
+                    println!("    Connected:          {:?}", device.is_connected().await.unwrap_or_default());
+                    println!("    Trusted:            {:?}", device.is_trusted().await.unwrap_or_default());
+                    println!("    Modalias:           {:?}", device.modalias().await.unwrap_or_default());
+                    println!("    RSSI:               {:?}", device.rssi().await.unwrap_or_default());
+                    println!("    TX power:           {:?}", device.tx_power().await.unwrap_or_default());
+                    println!("    Manufacturer data:  {:?}", device.manufacturer_data().await.unwrap_or_default());
+                    println!("    Service data:       {:?}", device.service_data().await.unwrap_or_default());
+                    println!("-------------------------");
+                    let bd = BluetoothDevice::new(addr.to_string());
+                    func(bd);
+                }
 
-        thread::spawn( move || {
-            println!("BlueZ module searching for devices");
-            let rt = Runtime::new().unwrap();
-            let handle_async = rt.handle().clone();
-            handle_async.block_on(async {
-                if let Ok(ref mut adapter_locked) = adapter_mutex.lock() {
-                    if let Some(ref adapter) = **adapter_locked {
-                        println!("Discovering devices using Bluetooth adapater {}", adapter.name());
-                        if let Ok(ref mut devices) = devices_mutex.lock() {
-                            match adapter.discover_devices().await {
-                                Ok(device_events) => {
-                                    pin_mut!(device_events);
-            
-                                    let mut all_change_events = SelectAll::new();
-            
-                                    loop {
-                                        tokio::select! {    
-                                            Some(device_event) = device_events.next() => {
-                                                match device_event {
-                                                    AdapterEvent::DeviceAdded(addr) => {
-                                                        devices.insert(addr.to_string(), Arc::new(Mutex::new(BluetoothDevice::new(addr.to_string()))));
-                                                        if let Ok(device) = adapter.device(addr) {
-                                                            if let Ok(change_events) = device.events().await {
-                                                                let event = change_events.map(move |evt| (addr, evt));
-                                                                all_change_events.push(event);                                   
-                                                            } else {
-                                                                println!("Error getting bluetooth device events: {}", addr);
-                                                            }
-                                                        } else {
-                                                            println!("Error getting bluetooth device: {}", addr);
-                                                        }
-                                                    }
-                                                    AdapterEvent::DeviceRemoved(addr) => {
-                                                        devices.remove(&addr.to_string());
-                                                    }
-                                                    _ => (),
-                                                }
-                                            }
-                                            Some((addr,DeviceEvent::PropertyChanged(property))) = all_change_events.next() => {
-                                                let device = adapter.device(addr).unwrap();
-            
-                                                match property {
-                                                    DeviceProperty::Rssi(rssi) => {
-                                                        if let Some(bluetooth_device_arc) = devices.get(&addr.to_string()) {
-                                                            let bluetooth_device_mutex = bluetooth_device_arc.clone();
-                                                            if let Ok(ref mut bluetooth_device_locked) = bluetooth_device_mutex.lock() {
-                                                                let ref mut bluetooth_device = **bluetooth_device_locked;
-
-                                                                bluetooth_device.name = device.name().await.unwrap_or_default().unwrap_or_default().to_string();
-                                                                bluetooth_device.rssi = rssi;
-
-                                                                if device.is_paired().await.unwrap_or_default() == true {
-                                                                    println!("-------------------------");
-                                                                    println!("    Property:           {:?}", property);
-                                                                    println!("    Address:            {}", addr);
-                                                                    println!("    Address type:       {}", device.address_type().await.unwrap());
-                                                                    println!("    Name:               {:?}", device.name().await.unwrap_or_default());
-                                                                    println!("    Icon:               {:?}", device.icon().await.unwrap_or_default());
-                                                                    println!("    Class:              {:?}", device.class().await.unwrap_or_default());
-                                                                    println!("    UUIDs:              {:?}", device.uuids().await.unwrap_or_default());
-                                                                    println!("    Paired:             {:?}", device.is_paired().await.unwrap_or_default());
-                                                                    println!("    Connected:          {:?}", device.is_connected().await.unwrap_or_default());
-                                                                    println!("    Trusted:            {:?}", device.is_trusted().await.unwrap_or_default());
-                                                                    println!("    Modalias:           {:?}", device.modalias().await.unwrap_or_default());
-                                                                    println!("    RSSI:               {:?}", device.rssi().await.unwrap_or_default());
-                                                                    println!("    TX power:           {:?}", device.tx_power().await.unwrap_or_default());
-                                                                    println!("    Manufacturer data:  {:?}", device.manufacturer_data().await.unwrap_or_default());
-                                                                    println!("    Service data:       {:?}", device.service_data().await.unwrap_or_default());
-                                                                    println!("-------------------------");
-        
-                                                                    println!("Device {} elapsed {:?}", addr, bluetooth_device.created.elapsed());
-                                                                    if rssi > -70 {
-                                                                        if bluetooth_device.access.is_none() || bluetooth_device.access.unwrap().elapsed() >= Duration::from_secs(30){
-                                                                            bluetooth_device.access = Some(Instant::now());
-                                                                            func(bluetooth_device.clone());
-                                                                        } else {
-                                                                            println!("Device {} out of time window", addr);
-                                                                        }
-                                                                    } else {
-                                                                        println!("Device {} low rssi", addr);
-                                                                    }
-                                                                }
-                                                            };
-                                                        } else {
-                                                            devices.insert(addr.to_string(), Arc::new(Mutex::new(BluetoothDevice::new(addr.to_string()))));
-                                                        }
-                                                    } 
-                                                    _ => {
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        thread::sleep(Duration::from_millis(100));
-                                    }
-                                    println!("Bluetooth module finished");
-                                    return Ok(());
-                                }
-                                Err(err) => {
-                                    println!("Bluetooth error discovering devices: {}",err);
-                                }
-                            }    
-                        }
-                    }         
-                }             
-                Err("Bluetooth thread ended")
-            });
+                println!("Bluetooth thread ended");    
+            }
+            ()
         });
+
         Ok(())
     }
 
     fn unload(&mut self) -> Result<(), String>{
-        if let Some(adv_handle) = &*self.adv_handle {
-            println!("Stopping bluetooth advertising.");
-            drop(adv_handle);
+        if let Some(monitor_handle) = &*self.monitor_handle {
+            println!("Stopping bluetooth le monitoring.");
+            drop(monitor_handle);
         }
         Ok(())
     }
