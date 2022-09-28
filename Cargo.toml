@@ -22,9 +22,15 @@ serde_derive = "1.0.144"
 serde_json = "1.0.85"
 serialport = "3.3.0"
 futures = "*"
-bluer = {version = "0.15.0", features = ["full"]}
 tokio = { version = "1.21.1", features = ["full"] }
 async-trait = "0.1.57"
+
+[dependencies.bluer]
+git = "https://github.com/otaviojr/bluer.git"
+branch = "monitor1"
+version = "0.15.0"
+features = ["full"]
+
 
 [dependencies.bodyparser]
 git = "https://github.com/iron/body-parser.git"

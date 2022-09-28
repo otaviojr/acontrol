@@ -50,6 +50,8 @@ use std::process;
 use clap::{Arg,App};
 use std::collections::HashMap;
 
+use crate::{bt::Bluetooth, fingerprint::Fingerprint, nfc::NfcReader,audio::Audio, display::Display, persist::Persist};
+
 const DEFAULT_LOGS_PATH:&str = "/var/log/acontrol";
 const DEFAULT_DATA_PATH:&str = "/var/lib/acontrol";
 
@@ -65,13 +67,6 @@ extern "C" fn handle_sigint(_:i32) {
 
 #[tokio::main]
 async fn main(){
-  let bt_drv;
-  let fingerprint_drv;
-  let nfcreader_drv;
-  let audio_drv;
-  let persist_drv;
-  let display_drv;
-
   let sig_action = signal::SigAction::new(signal::SigHandler::Handler(handle_sigint),
                                           signal::SaFlags::empty(),
                                           signal::SigSet::empty());
@@ -156,72 +151,47 @@ async fn main(){
   let nfc = matches.value_of("nfc-module").unwrap();
   let audio = matches.value_of("audio-module").unwrap();
 
-  let bluetooth_b = bt::bluetooth_by_name(bluetooth);
-  let fingerprint_b = fingerprint::fingerprint_by_name(fingerprint);
-  let nfcreader_b = nfc::nfcreader_by_name(nfc);
-  let audio_b = audio::audio_by_name(audio);
-  let display_drv_b = display::display_by_name("neopixel");
+  let bt_drv = bt::bluetooth_by_name(bluetooth);
+  let fingerprint_drv = fingerprint::fingerprint_by_name(fingerprint);
+  let nfcreader_drv = nfc::nfcreader_by_name(nfc);
+  let audio_drv = audio::audio_by_name(audio);
+  let display_drv = display::display_by_name("neopixel");
+  let persist_drv = persist::persist_by_name("sqlite");
 
-  if bluetooth_b.is_none() {
-    eprintln!("bluetooth module \"{}\" not found!", fingerprint);
-    process::exit(-1);
-  } else {
-    bt_drv = bluetooth_b.unwrap();
+  if let Some(ref drv) = bt_drv
+  {
+    println!("Bluetooth driver: {}",drv.signature());
   }
 
-  if fingerprint_b.is_none() {
-    eprintln!("fingerprint module \"{}\" not found!", fingerprint);
-    process::exit(-1);
-  } else {
-    fingerprint_drv = fingerprint_b.unwrap();
+  if let Some(ref drv) = fingerprint_drv {
+    println!("Fingerprint driver: {}",drv.signature());
   }
 
-  if nfcreader_b.is_none() {
-    eprintln!("nfc module \"{}\" not found!", nfc);
-    process::exit(-1); 
-  } else {
-    nfcreader_drv = nfcreader_b.unwrap();
+  if let Some(ref drv) = nfcreader_drv {
+    println!("Nfc driver: {}",drv.signature());
   }
 
-  if audio_b.is_none() {
-    eprintln!("audio module \"{}\" not found!", audio);
-    process::exit(-1);
-  } else {
-    audio_drv = audio_b.unwrap();
+  if let Some(ref drv) = audio_drv {
+    println!("Audio driver: {}", drv.signature());
   }
 
-  if display_drv_b.is_none() {
-    eprintln!("Error creating display driver");
-    process::exit(-1);
-  } else {
-    display_drv = display_drv_b.unwrap();
-  }
-
-  println!("Bluetooth driver: {}",bt_drv.signature());
-  println!("Fingerprint driver: {}",fingerprint_drv.signature());
-  println!("Nfc driver: {}",nfcreader_drv.signature());
-  println!("Audio driver: {}", audio_drv.signature());
-  println!("Display driver: {}", display_drv.signature());
-
-  let persist_drv_b = persist::persist_by_name("sqlite");
-  if persist_drv_b.is_none() {
-    eprintln!("Error creating persistence driver");
-    process::exit(-1);
-  } else {
-    persist_drv = persist_drv_b.unwrap();
+  if let Some(ref drv) = display_drv {
+    println!("Display driver: {}", drv.signature());
   }
 
   let mut params: HashMap<String,String> = HashMap::new();
   params.insert("LOGS_PATH".to_string(), DEFAULT_LOGS_PATH.to_string());
   params.insert("DATA_PATH".to_string(), DEFAULT_DATA_PATH.to_string());
 
-  if !system::acontrol_system_init(&params, bt_drv, fingerprint_drv, 
-					nfcreader_drv, audio_drv, persist_drv, display_drv).await {
-    process::exit(-1);
-  }
+  {
+    if !system::acontrol_system_init(&params, bt_drv, fingerprint_drv, 
+      nfcreader_drv, audio_drv, persist_drv, display_drv).await {
+      process::exit(-1);
+    }
 
-  if !system::acontrol_system_set_mifare_keys(&mifare_key_bytes, &mifare_key_bytes) {
-    process::exit(-1);
+    if !system::acontrol_system_set_mifare_keys(&mifare_key_bytes, &mifare_key_bytes) {
+      process::exit(-1);
+    }
   }
 
   let server_b = server::create_server_by_name("generic");
