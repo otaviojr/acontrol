@@ -1,6 +1,3 @@
-use lazy_static::__Deref;
-
-use crate::nfc::CardType;
 
 /**
  * @file   system.rs
@@ -29,6 +26,8 @@ use crate::nfc::CardType;
  * THE SOFTWARE.
  *
  */
+use crate::nfc::CardType;
+
 use super::bt::{Bluetooth, BluetoothDevice};
 use super::fingerprint::{Fingerprint, FingerprintState, FingerprintData};
 use super::nfc::{NfcReader};
@@ -36,7 +35,7 @@ use super::audio::{Audio};
 use super::persist::{Persist};
 use super::display::{Display, Animation, AnimationType, AnimationColor};
 
-use std::sync::{Mutex, Arc, MutexGuard};
+use std::sync::{Mutex};
 use std::collections::HashMap;
 
 use std::process::Command;
