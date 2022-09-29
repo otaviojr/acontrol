@@ -1,10 +1,13 @@
+use crate::acontrol_system_log;
+use crate::log::LogType;
+
 /**
- * @file   gt521fx/mod.rs
+ * @file   fingerprint/gt521fx.rs
  * @author Otavio Ribeiro
  * @date   24 Dec 2017
  * @brief  gt521fx fingerprint sensor driver
  *
- * Copyright (c) 2019 Otávio Ribeiro <otavio.ribeiro@gmail.com>
+ * Copyright (c) 2022 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -425,10 +428,8 @@ impl Gt521fxThreadSafe {
     if let Some(ref mut port) = self.port {
       let _ret = (*port).clear(ClearBuffer::All);
 
-      //println!("Sending: {:X?}", data);
-
       if let Err(err) = (*port).write(&data[..]) {
-        println!("Error sending data: {}", err);
+        return Err(std::io::Error::new(ErrorKind::InvalidData, format!("Error sending data: {}", err)));
       }
       let now = Instant::now();
 
@@ -446,7 +447,7 @@ impl Gt521fxThreadSafe {
             }
           },
           Err(err) => {
-            println!("Error reading from serial port: {}", err);
+            return Err(std::io::Error::new(ErrorKind::InvalidInput, format!("Error reading from serial: {}", err)));
           }
         }
 
@@ -457,7 +458,7 @@ impl Gt521fxThreadSafe {
 
       let mut buf: Vec<u8> = vec!(0;1024);
       if let Err(err) = (*port).read(&mut buf[..]) {
-        println!("Error reading from serial: {}", err);
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, format!("Error reading from serial: {}", err)));
       }
 
       //println!("Received: {:X?}", buf);
@@ -514,12 +515,12 @@ impl Fingerprint for Gt521fx {
 
     match gt521fx_locked.send_command(Command::Open, 0x1, Some(&mut open_data)) {
       Ok(_response) => {
-        println!("Fingerprint firmware version = {:X}", open_data.firmware_version);
-        println!("Fingerprint serial: {:X?}",open_data.device_serial_num);
-        println!("Fingerprint device initialized successfully");
+        acontrol_system_log!(LogType::Info, "Fingerprint firmware version = {:X}", open_data.firmware_version);
+        acontrol_system_log!(LogType::Info, "Fingerprint serial: {:X?}",open_data.device_serial_num);
+        acontrol_system_log!(LogType::Info, "Fingerprint device initialized successfully");
       },
       Err(err) => {
-        println!("Error initializing fingerprint device: {}",err);
+        return Err(format!("Error initializing fingerprint device: {}",err));
       }
     }
 
@@ -573,13 +574,13 @@ impl Fingerprint for Gt521fx {
                   let mut result = None;
 
                   if let Ok(ref mut gt521fx_locked) = gt521fx.lock() {
-                    println!("Checking finger");
+                    acontrol_system_log!(LogType::Info, "Checking finger");
                     result = Some(gt521fx_locked.send_command(Command::CaptureFinger, 0x01, None));
                   }
 
                   match result {
                     Some(Err(_err)) => {
-                      println!("Erro checking fingerprint");
+                      acontrol_system_log!(LogType::Error, "Erro checking fingerprint");
                       func(&FingerprintState::ERROR, None);
                       state_locked.set(FingerprintDriverState::IDLE);
                       (**expires_locked) = None;
@@ -589,7 +590,7 @@ impl Fingerprint for Gt521fx {
                         let mut result = None;
 
                         if let Ok(ref mut gt521fx_locked) = gt521fx.lock() {
-                          println!("Checking finger");
+                          acontrol_system_log!(LogType::Info, "Checking finger");
                           if **state_locked == FingerprintDriverState::ENROLL1 {
                             result = Some(gt521fx_locked.send_command(Command::Enroll1, 0x00, None));
                           } else if **state_locked == FingerprintDriverState::ENROLL2 {
@@ -601,7 +602,7 @@ impl Fingerprint for Gt521fx {
 
                         match result {
                           Some(Err(err)) => {
-                            println!("Enroll error: {}",err);
+                            acontrol_system_log!(LogType::Error, "Enroll error: {}",err);
                             func(&FingerprintState::ERROR, None);
                             state_locked.set(FingerprintDriverState::IDLE);
                             (**expires_locked) = None;
@@ -621,9 +622,9 @@ impl Fingerprint for Gt521fx {
                               }
                             } else {
                               if response.parameter <= 2999 {
-                                println!("Enrollment error: ID duplicated - {}", response.parameter);
+                                acontrol_system_log!(LogType::Error, "Enrollment error: ID duplicated - {}", response.parameter);
                               } else {
-                                println!("Enroll error: {}", (Error::from(response.parameter)).name());
+                                acontrol_system_log!(LogType::Error, "Enroll error: {}", (Error::from(response.parameter)).name());
                               }
                               func(&FingerprintState::ERROR, None);
                               state_locked.set(FingerprintDriverState::IDLE);
@@ -642,13 +643,13 @@ impl Fingerprint for Gt521fx {
                   let mut result = None;
 
                   if let Ok(ref mut gt521fx_locked) = gt521fx.lock() {
-                    println!("Checking finger");
+                    acontrol_system_log!(LogType::Info, "Checking finger");
                     result = Some(gt521fx_locked.send_command(Command::IsPressFinger, 0x00, None));
                   }
 
                   match result {
                     Some(Err(_err)) => {
-                      println!("Erro checking fingerprint");
+                      acontrol_system_log!(LogType::Error, "Erro checking fingerprint");
                       func(&FingerprintState::ERROR, None);
                       state_locked.set(FingerprintDriverState::IDLE);
                       (**expires_locked) = None;
@@ -671,7 +672,7 @@ impl Fingerprint for Gt521fx {
                           }
                         } else {
                           fingerpress_counter = 0;
-                          println!("========== RELEASE FINGER ==============");
+                          acontrol_system_log!(LogType::Debug, "========== RELEASE FINGER ==============");
                         }
                       }
                     },
@@ -691,13 +692,13 @@ impl Fingerprint for Gt521fx {
                         if let Ok(value) = pin.get_value() {
                           if value != 0 {
                             if let Err(err) = gt521fx_locked.send_command(Command::CmosLed, 0x1, None) {
-                              println!("Error turning on fingerprint led: {}", err);
+                              acontrol_system_log!(LogType::Error, "Error turning on fingerprint led: {}", err);
                             }
                             state_locked.set(FingerprintDriverState::READ);
                             (**expires_locked) = Some(Instant::now());
                           } else {
                             if let Err(err) = gt521fx_locked.send_command(Command::CmosLed, 0x0, None) {
-                              println!("Error turning off fingerprint led: {}", err);
+                              acontrol_system_log!(LogType::Error, "Error turning off fingerprint led: {}", err);
                             }
                           }
                         }
@@ -713,7 +714,7 @@ impl Fingerprint for Gt521fx {
 
                     match result {
                       Err(_err) => {
-                        println!("Erro checking fingerprint");
+                        acontrol_system_log!(LogType::Error, "Erro checking fingerprint");
                         func(&FingerprintState::ERROR, None);
                       },
                       Ok(ref response) => {
@@ -724,26 +725,26 @@ impl Fingerprint for Gt521fx {
 
                             match result {
                               Err(_err) => {
-                                println!("Erro checking fingerprint");
+                                acontrol_system_log!(LogType::Error, "Erro checking fingerprint");
                                 func(&FingerprintState::ERROR, None);
                               },
                               Ok(ref response) => {
                                 if response.response == Command::Ack.value() {
-                                  println!("=========>Ok, I can see your finger<==========");
+                                  acontrol_system_log!(LogType::Debug, "=========>Ok, I can see your finger<==========");
                                   let result = gt521fx_locked.send_command(Command::Identify, 0x00, None);
 
                                   match result {
                                     Err(_err) => {
-                                      println!("Error identifying fingerprint!");
+                                      acontrol_system_log!(LogType::Error, "Error identifying fingerprint!");
                                     },
                                     Ok(ref response) => {
                                       if response.response == Command::Ack.value() {
-                                        println!("============>Fingerprint IS Registered<=============");
+                                        acontrol_system_log!(LogType::Debug, "============>Fingerprint IS Registered<=============");
                                         func(&FingerprintState::AUTHORIZED, None);
                                         state_locked.set(FingerprintDriverState::IDLE);
                                         (**expires_locked) = None;
                                       } else {
-                                        println!("============>Fingerprint is NOT Registered<=============");
+                                        acontrol_system_log!(LogType::Debug, "============>Fingerprint is NOT Registered<=============");
                                         func(&FingerprintState::NOT_AUTHORIZED, None);
                                         state_locked.set(FingerprintDriverState::IDLE);
                                         (**expires_locked) = None;
@@ -751,12 +752,12 @@ impl Fingerprint for Gt521fx {
                                     },
                                   }
                                 } else {
-                                  println!("No finger!");
+                                  acontrol_system_log!(LogType::Debug, "No finger!");
                                 }
                               },
                             }
                           } else {
-                            println!("No finger!");
+                            acontrol_system_log!(LogType::Debug, "No finger!");
                           }
                         }
                       },
@@ -779,13 +780,12 @@ impl Fingerprint for Gt521fx {
     let mut gt521fx_locked = gt521fx.lock().unwrap();
 
     if let Err(err) = gt521fx_locked.send_command(Command::CmosLed, 0x0, None) {
-      println!("Error turning off fingerprint led: {}", err);
+      return Err(format!("Error turning off fingerprint led: {}", err));
     }
 
     match gt521fx_locked.send_command(Command::Close, 0x0, None) {
       Ok(_response) => {
-        println!("Fingerprint device closed successfully");
-        Ok(())
+        Err(format!("Fingerprint device closed successfully"))
       },
       Err(err) => {
         Err(format!("Error closing fingerprint device: {}",err))
@@ -805,7 +805,7 @@ impl Fingerprint for Gt521fx {
               if response.response == Command::Ack.value() {
                   return true;
               } else {
-                println!("Delete error: {}", response.parameter);
+                acontrol_system_log!(LogType::Error, "Delete error: {}", response.parameter);
               }
             },
             Err(_err) => {
@@ -816,7 +816,7 @@ impl Fingerprint for Gt521fx {
   }
 
   fn start_enroll(&mut self, data: &FingerprintData) -> bool {
-    println!("start enroll");
+    acontrol_system_log!(LogType:: Debug, "start enroll");
     let gt521fx = self.gt521fx.clone();
     let state_cloned = self.state.clone();
     let expires_cloned = self.expires.clone();
@@ -831,15 +831,16 @@ impl Fingerprint for Gt521fx {
                     if response.response == Command::Ack.value() {
 
                       if let Err(err) = gt521fx_locked.send_command(Command::CmosLed, 0x1, None) {
-                        println!("Error turning on fingerprint led: {}", err);
+                        acontrol_system_log!(LogType::Error, "Error turning on fingerprint led: {}", err);
+                        return false;
                       } else {
                         (*expires_locked) = Some(Instant::now());
                         (*state_locked).set(FingerprintDriverState::ENROLL1);
                       }
 
                     } else {
-                        println!("EnrollStart error: {}", response.parameter);
-                        (*state_locked).set(FingerprintDriverState::ENROLL_ERROR);
+                      acontrol_system_log!(LogType::Error, "EnrollStart error: {}", response.parameter);
+                      (*state_locked).set(FingerprintDriverState::ENROLL_ERROR);
                     }
                   },
                   Err(_err) => {

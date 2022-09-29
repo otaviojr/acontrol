@@ -1,10 +1,10 @@
 /**
- * @file   nfc/mod.rs
+ * @file   nfc.rs
  * @author Otavio Ribeiro
  * @date   24 Dec 2017
  * @brief  NFC/Mifare global interface
  *
- * Copyright (c) 2019 Otávio Ribeiro <otavio.ribeiro@gmail.com>
+ * Copyright (c) 2022 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal

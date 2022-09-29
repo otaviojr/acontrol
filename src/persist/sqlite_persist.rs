@@ -4,7 +4,7 @@
  * @date   24 Dec 2017
  * @brief  SQLite persistence driver
  *
- * Copyright (c) 2019 Otávio Ribeiro <otavio.ribeiro@gmail.com>
+ * Copyright (c) 2022 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +26,8 @@
  *
  */
 use super::{Persist, Card, Fingerprint, Bluetooth};
+use crate::acontrol_system_log;
+use crate::log::LogType;
 
 use std::path::Path;
 use std::collections::HashMap;
@@ -89,7 +91,7 @@ impl Persist for SQLitePersist {
   }
 
   fn unload(&mut self) -> Result<(), String> {
-    println!("Persistence driver unloading");
+    acontrol_system_log!(LogType::Info, "Persistence driver unloading");
     Ok(())
   }
 

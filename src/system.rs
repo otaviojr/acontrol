@@ -5,7 +5,7 @@
  * @date   24 Dec 2017
  * @brief  System operation/logic
  *
- * Copyright (c) 2019 Otávio Ribeiro <otavio.ribeiro@gmail.com>
+ * Copyright (c) 2022 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,15 +27,15 @@
  *
  */
 use crate::nfc::CardType;
+use crate::log::{Log, LogType};
+use crate::bt::{Bluetooth, BluetoothDevice};
+use crate::fingerprint::{Fingerprint, FingerprintState, FingerprintData};
+use crate::nfc::{NfcReader};
+use crate::audio::{Audio};
+use crate::persist::{Persist};
+use crate::display::{Display, Animation, AnimationType, AnimationColor};
 
-use super::bt::{Bluetooth, BluetoothDevice};
-use super::fingerprint::{Fingerprint, FingerprintState, FingerprintData};
-use super::nfc::{NfcReader};
-use super::audio::{Audio};
-use super::persist::{Persist};
-use super::display::{Display, Animation, AnimationType, AnimationColor};
-
-use std::sync::{Mutex};
+use std::sync::{Mutex, Arc};
 use std::collections::HashMap;
 
 use std::process::Command;
@@ -57,13 +57,37 @@ pub enum BluetoothSystemState {
   AUTHORIZE,
 }
 
-struct AControlSystem {
+#[macro_export]
+macro_rules! acontrol_system_log {
+  ($type:expr, $message:literal $(,$args:expr)*) => {{
+    let asystem = crate::system::acontrol_system_get();
+    let log_drv = asystem.log_drv.clone();
+    if let Ok(ref mut drv_locked) = log_drv.lock() {
+      if let Some(ref mut drv) = **drv_locked {
+        let _ = drv.log($type, format!($message $(,$args)*));
+      };
+    };
+  }};
+
+  ($log_drv: expr, $type:expr, $message:literal $(,$args:expr)*) => {{
+
+    let log_drv = $log_drv;
+    if let Ok(ref mut drv_locked) = log_drv.lock() {
+      if let Some(ref mut drv) = **drv_locked {
+        let _ = drv.log($type, format!($message $(,$args)*));
+      };
+    };
+  }};
+}
+
+pub struct AControlSystem {
   bt_drv: Mutex<Option<Box<dyn Bluetooth + Send + Sync>>>,
   fingerprint_drv: Mutex<Option<Box<dyn Fingerprint + Send + Sync>>>,
   nfc_drv: Mutex<Option<Box<dyn NfcReader + Send + Sync>>>,
   audio_drv: Mutex<Option<Box<dyn Audio + Send + Sync>>>,
   persist_drv:  Mutex<Option<Box<dyn Persist + Send + Sync>>>,
   display_drv: Mutex<Option<Box<dyn Display + Send + Sync>>>,
+  pub log_drv: Arc<Mutex<Option<Box<dyn Log + Send + Sync>>>>,
   nfc_state: Mutex<NFCSystemState>,
   nfc_state_params: Mutex<HashMap<String,String>>,
   fingerprint_data: Mutex<FingerprintData>,
@@ -76,13 +100,14 @@ impl AControlSystem {
 }
 
 lazy_static!{
-  static ref ACONTROL_SYSTEM: AControlSystem = AControlSystem {
+  pub static ref ACONTROL_SYSTEM: AControlSystem = AControlSystem {
     bt_drv: Mutex::new(Option::None),
     fingerprint_drv: Mutex::new(Option::None),
     nfc_drv: Mutex::new(Option::None),
     audio_drv: Mutex::new(Option::None),
     persist_drv:  Mutex::new(Option::None),
     display_drv: Mutex::new(Option::None),
+    log_drv: Arc::new(Mutex::new(Option::None)),
     nfc_state: Mutex::new(NFCSystemState::READ),
     nfc_state_params: Mutex::new(HashMap::new()),
     fingerprint_data: Mutex::new(FingerprintData::empty()),
@@ -97,13 +122,13 @@ lazy_static!{
 
 pub fn acontrol_system_end() -> bool {
   let asystem = acontrol_system_get();
-  println!("Cleaning all suffs");
+  acontrol_system_log!(LogType::Info, "Cleaning all suffs");
 
 
   if let Ok(ref mut drv_lock) = asystem.bt_drv.lock() {
     if let Some(ref mut drv) = **drv_lock {
       if let Err(err) = drv.unload() {
-        eprintln!("Error unloading bluetooth device (=> {})", err);
+        acontrol_system_log!(LogType::Error, "Error unloading bluetooth device (=> {})", err);
         return false;  
       }
     };
@@ -112,7 +137,7 @@ pub fn acontrol_system_end() -> bool {
   if let Ok(ref mut drv_lock) = asystem.audio_drv.lock() {
     if let Some(ref mut drv) = **drv_lock {
       if let Err(err) = drv.unload() {
-        eprintln!("Error unloading audio device (=> {})", err);
+        acontrol_system_log!(LogType::Error, "Error unloading audio device (=> {})", err);
         return false;  
       }
     };
@@ -121,7 +146,7 @@ pub fn acontrol_system_end() -> bool {
   if let Ok(ref mut drv_lock) = asystem.nfc_drv.lock() {
     if let Some(ref mut drv) = **drv_lock {
       if let Err(err) = drv.unload() {
-        eprintln!("Error unloading nfc device (=> {})", err);
+        acontrol_system_log!(LogType::Error, "Error unloading nfc device (=> {})", err);
         return false;  
       }
     };
@@ -130,7 +155,7 @@ pub fn acontrol_system_end() -> bool {
   if let Ok(ref mut drv_lock) = asystem.fingerprint_drv.lock() {
     if let Some(ref mut drv) = **drv_lock {
       if let Err(err) = drv.unload() {
-        eprintln!("Error unloading fingerprint device (=> {})", err);
+        acontrol_system_log!(LogType::Error, "Error unloading fingerprint device (=> {})", err);
         return false;  
       }
     };
@@ -139,7 +164,7 @@ pub fn acontrol_system_end() -> bool {
   if let Ok(ref mut drv_lock) = asystem.persist_drv.lock() {
     if let Some(ref mut drv) = **drv_lock {
       if let Err(err) = drv.unload() {
-        eprintln!("Error unloading persistence device (=> {})", err);
+        acontrol_system_log!(LogType::Error, "Error unloading persistence device (=> {})", err);
         return false;  
       }
     };
@@ -151,7 +176,10 @@ pub fn  acontrol_system_set_mifare_keys(key_a: &Vec<u8>, key_b: &Vec<u8>) -> boo
   let asystem = acontrol_system_get();
   if let Ok(ref mut drv_lock) = asystem.nfc_drv.lock() {
     if let Some(ref mut drv) = **drv_lock {
-      drv.set_auth_keys(key_a, key_b);
+      if let Err(err) = drv.set_auth_keys(key_a, key_b) {
+        acontrol_system_log!(LogType::Error, "Error setting mifare key: {}", err);
+        return false;
+      }
       return true;
     };
   }
@@ -162,48 +190,46 @@ fn find_bt_device(device: BluetoothDevice) -> bool {
   let asystem = acontrol_system_get();
   let mut next_bt_system_state: Option<BluetoothSystemState> = None;
 
-  println!("Device found: ADDR={:X?}", device.addr);
+  acontrol_system_log!(LogType::Debug, "Device found: ADDR={:X?}", device.addr);
 
   if let Ok(ref mut bt_state) = asystem.bt_state.lock() {
     match **bt_state {
       BluetoothSystemState::READ => {
-        acontrol_system_get_persist_drv( |persist_drv| {
-          let _ret = acontrol_system_get_display_drv( |display|{
-            let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
-          });
+        let _ret = acontrol_system_get_display_drv( |display|{
+          let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+        });
 
-          let mut query = Command::new("/acontrol/query")
-          .output()
-          .expect("failed to execute child");
+        let query = Command::new("/acontrol/query")
+        .output()
+        .expect("failed to execute child");
 
-          if String::from_utf8_lossy(query.stdout.as_slice()).trim_end().to_lowercase().eq(&String::from("close")) {
-              let mut process = Command::new("/acontrol/granted")
-              .arg("-f")
-              .stdout(Stdio::inherit())
-              .spawn()
-              .expect("failed to execute child");
-                      
-              let _ret = acontrol_system_get_audio_drv(|audio|{
-                let _ret = audio.play_granted();
-              });
+        if String::from_utf8_lossy(query.stdout.as_slice()).trim_end().to_lowercase().eq(&String::from("close")) {
+            let mut process = Command::new("/acontrol/granted")
+            .arg("-f")
+            .stdout(Stdio::inherit())
+            .spawn()
+            .expect("failed to execute child");
+                    
+            let _ret = acontrol_system_get_audio_drv(|audio|{
+              let _ret = audio.play_granted();
+            });
 
-              let _ret = acontrol_system_get_display_drv(|display|{
-                let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
-                let _ret = display.wait_animation_ends();
-              });
+            let _ret = acontrol_system_get_display_drv(|display|{
+              let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
+              let _ret = display.wait_animation_ends();
+            });
 
-              let _ret = acontrol_system_get_display_drv(|display|{
-                let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
-              });
+            let _ret = acontrol_system_get_display_drv(|display|{
+              let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+            });
 
-              let _ret = process.wait();        
-          } else {
-            println!("Device is already open: {}", String::from_utf8_lossy(query.stdout.as_slice()).to_lowercase());
-          }
-          
-          let _ret = acontrol_system_get_display_drv(|display|{
-            let _ret = display.clear_and_stop_animations();
-          });
+            let _ret = process.wait();        
+        } else {
+          acontrol_system_log!(LogType::Warning, "Device is already open: {}", String::from_utf8_lossy(query.stdout.as_slice()).to_lowercase());
+        }
+        
+        let _ret = acontrol_system_get_display_drv(|display|{
+          let _ret = display.clear_and_stop_animations();
         });
       },
       BluetoothSystemState::AUTHORIZE => {
@@ -219,14 +245,14 @@ fn find_bt_device(device: BluetoothDevice) -> bool {
   return true;
 }
 
-fn find_finger(state: &FingerprintState, value: Option<&str>) -> bool {
+fn find_finger(state: &FingerprintState, _value: Option<&str>) -> bool {
   let asystem = acontrol_system_get();
   if let Ok(ref mut last_state_locked) = asystem.fingerprint_last_state.lock() {
     if last_state_locked.is_none() || last_state_locked.unwrap() != *state {
 
       last_state_locked.replace(*state);
 
-      println!("Fingerprint Current State Changed To: {}", state.name());
+      acontrol_system_log!(LogType::Debug, "Fingerprint Current State Changed To: {}", state.name());
 
       match state {
         FingerprintState::IDLE => {
@@ -276,7 +302,7 @@ fn find_finger(state: &FingerprintState, value: Option<&str>) -> bool {
               let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Green,AnimationType::Success, "Done",3);
               let _ret = display.wait_animation_ends();
             });
-            println!("User {} added at position {}", name, pos);
+            acontrol_system_log!(LogType::Info, "User {} added at position {}", name, pos);
           }
         },
         FingerprintState::AUTHORIZED => {
@@ -339,7 +365,7 @@ fn find_finger(state: &FingerprintState, value: Option<&str>) -> bool {
   return true;
 }
 
-fn find_tag(card_type: CardType, uuid: Vec<u8>) -> bool {
+fn find_tag(_card_type: CardType, uuid: Vec<u8>) -> bool {
   let asystem = acontrol_system_get();
     if let Ok(ref mut drv_lock) = asystem.nfc_drv.lock() {
       if let Some(ref mut nfc_drv) = **drv_lock {
@@ -347,7 +373,7 @@ fn find_tag(card_type: CardType, uuid: Vec<u8>) -> bool {
       if let Ok(ref mut nfc_state) = asystem.nfc_state.lock() {
         match **nfc_state {
           NFCSystemState::READ => {
-            acontrol_system_get_persist_drv( |persist_drv| {
+            let _ = acontrol_system_get_persist_drv( |persist_drv| {
               match nfc_drv.read_data(&uuid,*NFC_CARD_SIGNATURE_BLOCK,0) {
                 Ok(ref val) => {
                   if let Ok(value) = String::from_utf8(val.to_vec()) {
@@ -355,7 +381,7 @@ fn find_tag(card_type: CardType, uuid: Vec<u8>) -> bool {
                         String::from_utf8(NFC_CARD_SIGNATURE.as_bytes().to_vec()).unwrap() {
 
                         if let Ok(card) = persist_drv.nfc_find(&uuid) {
-                          println!("Card {:?} from {} authorized!", uuid, String::from_utf8(card.name).unwrap());
+                          acontrol_system_log!(LogType::Info, "Card {:?} from {} authorized!", uuid, String::from_utf8(card.name).unwrap());
 
                           let mut process = Command::new("/acontrol/granted")
                               .arg("-c")
@@ -408,7 +434,7 @@ fn find_tag(card_type: CardType, uuid: Vec<u8>) -> bool {
                           });
                         }
                       } else {
-                        println!("Invalid card signature: {:?} - {:?}",val, NFC_CARD_SIGNATURE.as_bytes().to_vec());
+                        acontrol_system_log!(LogType::Error, "Invalid card signature: {:?} - {:?}",val, NFC_CARD_SIGNATURE.as_bytes().to_vec());
 
                         let mut process = Command::new("/acontrol/denieded")
                             .arg("-c")
@@ -435,11 +461,11 @@ fn find_tag(card_type: CardType, uuid: Vec<u8>) -> bool {
                         });
                       }
                   } else {
-                      println!("Error reading card block: {:X?}", val);
+                    acontrol_system_log!(LogType::Error, "Error reading card block: {:X?}", val);
                   }
                 },
                 Err(err) => {
-                  println!("Error reading card: {}", err);
+                  acontrol_system_log!(LogType::Error, "Error reading card: {}", err);
 
                   let mut process = Command::new("/acontrol/denieded")
                       .arg("-c")
@@ -470,15 +496,15 @@ fn find_tag(card_type: CardType, uuid: Vec<u8>) -> bool {
           },
           NFCSystemState::AUTHORIZE => {
             if let Err(err) = nfc_drv.format(&uuid) {
-              eprintln!("Error formating. Is this a new card? Let's try to write anyway");
-              eprintln!("format return: {}", err);
+              acontrol_system_log!(LogType::Error, "Error formating. Is this a new card? Let's try to write anyway");
+              acontrol_system_log!(LogType::Error, "format return: {}", err);
             }
   
             next_nfc_system_state = Some(NFCSystemState::WRITE)
           }
           NFCSystemState::WRITE => {
             if let Err(_err) = nfc_drv.write_data(&uuid, *NFC_CARD_SIGNATURE_BLOCK, &NFC_CARD_SIGNATURE.as_bytes().to_vec()) {
-              eprintln!("No... we really have a problem here. Can't write either.");
+              acontrol_system_log!(LogType::Error, "No... we really have a problem here. Can't write either.");
               let _ret = acontrol_system_get_audio_drv(|audio|{
                 let _ret = audio.play_error();
               });
@@ -487,12 +513,12 @@ fn find_tag(card_type: CardType, uuid: Vec<u8>) -> bool {
                 let _ret = display.wait_animation_ends();
               });
             } else {
-              println!("Ok... signature written successfully!");
-              acontrol_system_get_persist_drv( |persist_drv| {
+              acontrol_system_log!(LogType::Info, "Ok... signature written successfully!");
+              let _ = acontrol_system_get_persist_drv( |persist_drv| {
                 if let Ok(ref mut params) = asystem.nfc_state_params.lock() {
                   if let Err(_err) = persist_drv.nfc_find(&uuid) {
                     if let Err(err) = persist_drv.nfc_add(&uuid, &params[&String::from("name")].as_bytes().to_vec()) {
-                      eprintln!("Error persisting card info. Card not authorized! => ({})",err);
+                      acontrol_system_log!(LogType::Error, "Error persisting card info. Card not authorized! => ({})",err);
                       let _ret = acontrol_system_get_audio_drv(|audio|{
                         let _ret = audio.play_error();
                       });
@@ -501,7 +527,7 @@ fn find_tag(card_type: CardType, uuid: Vec<u8>) -> bool {
                         let _ret = display.wait_animation_ends();
                       });
                     } else {
-                      println!("Card successfully added");
+                      acontrol_system_log!(LogType::Info, "Card successfully added");
                       let _ret = acontrol_system_get_audio_drv(|audio|{
                         let _ret = audio.play_new();
                       });
@@ -511,7 +537,7 @@ fn find_tag(card_type: CardType, uuid: Vec<u8>) -> bool {
                       });
                     }
                   } else {
-                    println!("Card already white listed");
+                    acontrol_system_log!(LogType::Warning, "Card already white listed");
                   }
                 }
               });
@@ -520,8 +546,8 @@ fn find_tag(card_type: CardType, uuid: Vec<u8>) -> bool {
           },
           NFCSystemState::RESTORE => {
             if let Err(err) = nfc_drv.restore(&uuid) {
-              eprintln!("Error restoring!");
-              eprintln!("format return: {}", err);
+              acontrol_system_log!(LogType::Error, "Error restoring!");
+              acontrol_system_log!(LogType::Error, "format return: {}", err);
               let _ret = acontrol_system_get_audio_drv(|audio|{
                 let _ret = audio.play_error();
               });
@@ -551,13 +577,14 @@ fn find_tag(card_type: CardType, uuid: Vec<u8>) -> bool {
   return true;
 }
 
-pub async fn acontrol_system_init(params: &HashMap<String,String>,
+pub async fn acontrol_system_init(_params: &HashMap<String,String>,
         bt_drv: Option<Box<dyn Bluetooth+Sync+Send>>,
         fingerprint_drv: Option<Box<dyn Fingerprint+Sync+Send>>,
 				nfc_drv: Option<Box<dyn NfcReader+Sync+Send>>,
 				audio_drv: Option<Box<dyn Audio+Sync+Send>>,
 				persist_drv: Option<Box<dyn Persist+Sync+Send>>,
-        display_drv: Option<Box<dyn Display+Sync+Send>>) -> bool {
+        display_drv: Option<Box<dyn Display+Sync+Send>>,
+        log_drv: Option<Box<dyn Log+Sync+Send>>) -> bool {
 
   let mut bt_drv_final = Option::None;
   let mut fingerprint_drv_final = Option::None;
@@ -565,69 +592,102 @@ pub async fn acontrol_system_init(params: &HashMap<String,String>,
   let mut audio_drv_final = Option::None;
   let mut persist_drv_final = Option::None;
   let mut display_drv_final = Option::None;
+  let mut log_drv_final = Option::None;
+
+  let asystem = &ACONTROL_SYSTEM;
+
+  if let Some(mut drv) = log_drv {
+    if let Err(err) = drv.init() {
+      eprintln!("Error initializing log module: {}", err);
+      return false;      
+    }
+    log_drv_final = Some(drv);
+  }
+  *asystem.log_drv.lock().unwrap() = log_drv_final;
+
 
   if let Some(mut drv) = bt_drv {
-    drv.init().await;
+    if let Err(err) = drv.init().await {
+      acontrol_system_log!(LogType::Error, "Error initializing bluetooth module: {}", err);
+      return false;
+    }
     bt_drv_final = Some(drv);
   }
+  *asystem.bt_drv.lock().unwrap() = bt_drv_final;
 
   if let Some(mut drv) = fingerprint_drv {
-    drv.init();
+    if let Err(err) = drv.init() {
+      acontrol_system_log!(LogType::Error, "Error initializing fingerprint module: {}", err);
+      return false;
+    }
     fingerprint_drv_final = Some(drv);
   }
+  *asystem.fingerprint_drv.lock().unwrap() = fingerprint_drv_final;
 
   if let Some(mut drv) = nfc_drv {
-    drv.init();
+    if let Err(err) = drv.init() {
+      acontrol_system_log!(LogType::Error, "Error initializing nfc module: {}", err);
+      return false;
+    }
     nfc_drv_final = Some(drv);
   }
+  *asystem.nfc_drv.lock().unwrap() = nfc_drv_final;
 
   if let Some(mut drv) = audio_drv {
-    drv.init();
+    if let Err(err) = drv.init(){
+      acontrol_system_log!(LogType::Error, "Error initializing audio module: {}", err);
+      return false;
+    }
     audio_drv_final = Some(drv);
   }
+  *asystem.audio_drv.lock().unwrap() = audio_drv_final;
 
   if let Some(mut drv) = display_drv {
-    drv.init();
+    if let Err(err) = drv.init() {
+      acontrol_system_log!(LogType::Error, "Error initializing display module: {}", err);
+      return false;      
+    }
     display_drv_final = Some(drv);
   }
+  *asystem.display_drv.lock().unwrap() = display_drv_final;
 
   if let Some(drv) = persist_drv {
     persist_drv_final = Some(drv);
   }
-
-  let asystem = &ACONTROL_SYSTEM;
-  unsafe {
-    *asystem.audio_drv.lock().unwrap() = audio_drv_final;
-    *asystem.display_drv.lock().unwrap() = display_drv_final;
-    *asystem.fingerprint_drv.lock().unwrap() = fingerprint_drv_final;
-    *asystem.persist_drv.lock().unwrap() = persist_drv_final;
-    *asystem.nfc_drv.lock().unwrap() = nfc_drv_final;
-    *asystem.bt_drv.lock().unwrap() = bt_drv_final;
-  }
+  *asystem.persist_drv.lock().unwrap() = persist_drv_final;
 
   if let Ok(ref mut drv_locked) = asystem.bt_drv.lock() {
       if let Some(ref mut drv) = **drv_locked {
-        drv.find_devices(find_bt_device).await;
+        if let Err(err) = drv.find_devices(find_bt_device).await {
+          acontrol_system_log!(LogType::Error, "Bluetooth module error: {}", err);
+          return false;    
+        }
     };
   }
 
   if let Ok(ref mut drv_locked) = asystem.fingerprint_drv.lock() {
     if let Some(ref mut drv) = **drv_locked {
-      drv.wait_for_finger(find_finger);
+      if let Err(err) = drv.wait_for_finger(find_finger) {
+        acontrol_system_log!(LogType::Error, "Fingerprint module error: {}", err);
+        return false;    
+      }
     };
   }
 
   if let Ok(ref mut drv_locked) = asystem.nfc_drv.lock() {
     if let Some(ref mut drv) = **drv_locked {
-      drv.find_tag(find_tag);
+      if let Err(err) = drv.find_tag(find_tag) {
+        acontrol_system_log!(LogType::Error, "Fingerprint module error: {}", err);
+        return false;    
+      }
     };
   }
+
   return true;
 }
 
 pub fn acontrol_system_set_bluetooth_state(state: BluetoothSystemState, params: Option<HashMap<String,String>>) {
-  println!("Changing Bluetooth System State");
-
+  acontrol_system_log!(LogType::Debug, "Changing Bluetooth System State");
   {
     let asystem = acontrol_system_get();
     if let Some(p) = params {
@@ -656,7 +716,7 @@ pub fn acontrol_system_set_bluetooth_state(state: BluetoothSystemState, params: 
 }
 
 pub fn acontrol_system_set_nfc_state(state: NFCSystemState, params: Option<HashMap<String,String>>) {
-  println!("Changing NFC System State");
+  acontrol_system_log!(LogType::Debug, "Changing NFC System State");
 
   {
     let asystem = acontrol_system_get();
@@ -686,7 +746,7 @@ pub fn acontrol_system_set_nfc_state(state: NFCSystemState, params: Option<HashM
 
 pub fn acontrol_system_fingerprint_delete_all(_params: HashMap<String,String>) -> Result<(), String> {
   let asystem = acontrol_system_get();
-  println!("System Delete All");
+  acontrol_system_log!(LogType::Info, "System Delete All");
   
   if let Ok(ref mut drv_locked) = asystem.fingerprint_drv.lock() {
     if let Some(ref mut drv) = **drv_locked {
@@ -704,12 +764,12 @@ pub fn acontrol_system_fingerprint_delete_all(_params: HashMap<String,String>) -
 pub fn acontrol_system_fingerprint_start_enroll(params: HashMap<String,String>) -> Result<(), String> {
   let asystem = acontrol_system_get();
 
-  println!("System Start Enroll");
+  acontrol_system_log!(LogType::Info, "System Start Enroll");
   
   if let Ok(ref mut drv_lock) = asystem.fingerprint_drv.lock() {
     if let Some(ref mut drv) = **drv_lock {
       let pos = (&params[&String::from("pos")]).parse::<u16>().unwrap();
-      println!("Adding a fingerprint at pos {} to {}", pos, &params[&String::from("name")]);
+      acontrol_system_log!(LogType::Info, "Adding a fingerprint at pos {} to {}", pos, &params[&String::from("name")]);
 
       if let Ok(ref mut data_locked) = asystem.fingerprint_data.lock() {
 
@@ -774,6 +834,6 @@ pub fn acontrol_system_get_audio_drv<F, T>(f:F) -> Result<(),String>
     Ok(())
 }
 
-fn acontrol_system_get() -> &'static ACONTROL_SYSTEM {
+pub fn acontrol_system_get() -> &'static ACONTROL_SYSTEM {
   return &ACONTROL_SYSTEM;
 }

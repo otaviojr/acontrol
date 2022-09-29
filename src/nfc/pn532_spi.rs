@@ -1,4 +1,33 @@
-use super::{NfcReader, WriteSecMode, CardType};
+/**
+ * @file   nfc/pn532_spi.rs
+ * @author Otavio Ribeiro
+ * @date   24 Dec 2017
+ * @brief  NFC PN532 driver
+ *
+ * Copyright (c) 2022 Otávio Ribeiro <otavio.ribeiro@gmail.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+use crate::nfc::{NfcReader, WriteSecMode, CardType};
+use crate::acontrol_system_log;
+use crate::log::LogType;
 
 use std::mem::transmute;
 use std::collections::VecDeque;
@@ -387,9 +416,6 @@ impl Frame {
     }
 
     fn frame_type(&self) -> FrameType {
-
-        //println!("Check type: {:X?}", &self.buffer);
-
         if self.buffer.len() < 5 {
             return FrameType::Unknown;
         }
@@ -415,7 +441,6 @@ impl Frame {
     }
 
     fn data(&self) -> Result<Vec<u8>, std::io::Error> {
-        //println!("Check for data: {:X?}", &self.buffer);
         match self.frame_type() {
             FrameType::Normal => Ok(self.buffer[6..self.buffer.len()-2].to_vec()),
             _ => Err(std::io::Error::new(std::io::ErrorKind::Other, "Frame has no data"))
@@ -647,8 +672,8 @@ impl Pn532ThreadSafe {
                           //println!("tg=0x{:X}",tg);
                           //println!("sens_res=0x{:X}",sens_res);
                           //println!("sel_res=0x{:X}",sel_res);
-                          println!("id_len=0x{:X}",id_len);
-                          println!("id=0x{:X?}",id.to_vec());
+                          //println!("id_len=0x{:X}",id_len);
+                          //println!("id=0x{:X?}",id.to_vec());
                           //println!("ats_len=0x{:X}",ats_len);
                           //println!("ats=0x{:X?}",ats.to_vec());
 
@@ -681,7 +706,7 @@ impl Pn532ThreadSafe {
             if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(3)), Duration::from_millis(1000)) {
                 if frame.response_byte()? == Command::InDataExchange.response() {
                     let data = frame.data()?;
-                    println!("Auth received response: {:X?}", data);
+                    acontrol_system_log!(LogType::Debug, "Auth received response: {:X?}", data);
 
                     let status:Error = Error::from(data[2]);
 
@@ -708,7 +733,7 @@ impl Pn532ThreadSafe {
             if let Ok(frame) = self.read_frame_timeout(Some(ResponseSize::Frame.size(19)), Duration::from_millis(1000)) {
                 if frame.response_byte()? == Command::InDataExchange.response() {
                     let data = frame.data()?;
-                    println!("Read received response: {:X?}", data);
+                    acontrol_system_log!(LogType::Debug, "Read received response: {:X?}", data);
 
                     let status:Error = Error::from(data[2]);
 
@@ -742,7 +767,7 @@ impl Pn532ThreadSafe {
           if frame.response_byte()? == Command::InDataExchange.response() {
               let data = frame.data()?;
 
-              println!("Write received response: {:X?}", data);
+              acontrol_system_log!(LogType::Debug, "Write received response: {:X?}", data);
 
               let status:Error = Error::from(data[2]);
 
@@ -762,8 +787,6 @@ impl Pn532ThreadSafe {
   }
 
   fn write_sec(&mut self, uuid: &Vec<u8>, mode: WriteSecMode) -> Result<(), std::io::Error> {
-    println!("{}","write_sec: reached");
-
     let mut addr:u8 = 3;
     let mut packet:Vec<u8> = Vec::new();
     let key:MifareAuthKey;
@@ -870,20 +893,20 @@ impl NfcReader for Pn532Spi {
 
     match pn532.lock().unwrap().setup() {
         Ok(_) => {
-            println!("NFC hardware initialized");
+          acontrol_system_log!(LogType::Info, "NFC hardware initialized");
         },
-        Err(err) => println!("NFC hardware setup error: {}", err)
+        Err(err) => acontrol_system_log!(LogType::Error, "NFC hardware setup error: {}", err)
     };
 
     for _i in 0..10 {
       thread::sleep(Duration::from_millis(50));
       match pn532.lock().unwrap().version() {
           Ok(version) => {
-              println!("NFC hardware version: {}.{}", version[0], version[1]);
-              pn532_init = true;
-              break;
+            acontrol_system_log!(LogType::Info, "NFC hardware version: {}.{}", version[0], version[1]);
+            pn532_init = true;
+            break;
           },
-          Err(err) => println!("NFC hardware version error: {}", err)
+          Err(err) => acontrol_system_log!(LogType::Error, "NFC hardware version error: {}", err)
       };
     }
 
@@ -894,7 +917,7 @@ impl NfcReader for Pn532Spi {
     if let Err(_err) = pn532.lock().unwrap().initialize() {
       return Err(format!("{}", "NFC error. Error initializing device"));
     } else {
-      println!("NFC device initialized successfully");
+      acontrol_system_log!(LogType::Info, "NFC device initialized successfully");
     }
 
     Ok(())
@@ -917,7 +940,7 @@ impl NfcReader for Pn532Spi {
                     Err(err) => {
                         match err.kind() {
                             std::io::ErrorKind::TimedOut => {/*No card found*/},
-                            _ => println!("Card Detection Error: {}", err)
+                            _ => acontrol_system_log!(LogType::Error, "Card Detection Error: {}", err)
                         }
                     },
                 };
@@ -951,8 +974,6 @@ impl NfcReader for Pn532Spi {
       let pn532 = self.pn532.clone();
       let mut pn532_inner = pn532.lock().unwrap();
 
-      println!("{}","format: reached");
-
       match pn532_inner.write_sec(uuid, WriteSecMode::Format) {
           Ok(_) => Ok(()),
           Err(err) => Err(format!("{}",err))
@@ -963,8 +984,6 @@ impl NfcReader for Pn532Spi {
       let pn532 = self.pn532.clone();
       let mut pn532_inner = pn532.lock().unwrap();
 
-      println!("{}","format: reached");
-
       match pn532_inner.write_sec(uuid, WriteSecMode::Restore) {
           Ok(_) => Ok(()),
           Err(err) => Err(format!("{}",err))
@@ -974,8 +993,6 @@ impl NfcReader for Pn532Spi {
   fn read_data(&mut self, uuid: &Vec<u8>, addr: u8, blocks: u8) -> Result<Vec<u8>, String> {
       let pn532 = self.pn532.clone();
       let mut pn532_inner = pn532.lock().unwrap();
-
-      println!("{}","read_data: reached");
 
       let mut cur_addr:u8 = addr;
       let mut buffer: Vec<u8> = Vec::new();
@@ -1005,8 +1022,6 @@ impl NfcReader for Pn532Spi {
   fn write_data(&mut self, uuid: &Vec<u8>, addr: u8, data: &Vec<u8>) -> Result<u8, String> {
       let pn532 = self.pn532.clone();
       let mut pn532_inner = pn532.lock().unwrap();
-
-      println!("{}","write_data: reached");
 
       let mut cur_addr:u8 = addr;
       let mut buffer:VecDeque<u8> = VecDeque::new();
@@ -1047,13 +1062,13 @@ impl NfcReader for Pn532Spi {
   }
 
   fn unload(&mut self) -> Result<(), String>{
-      println!("NFC driver unloading");
-      let pn532 = self.pn532.clone();
-      let pin = pn532.lock().unwrap().ss.unwrap();
-      if let Err(err) = pin.unexport() {
-        return Err(format!("{}(=>{})", "NFC driver error",err));
-      }
-      Ok(())
+    acontrol_system_log!(LogType::Info, "NFC driver unloading");
+    let pn532 = self.pn532.clone();
+    let pin = pn532.lock().unwrap().ss.unwrap();
+    if let Err(err) = pin.unexport() {
+      return Err(format!("{}(=>{})", "NFC driver error",err));
+    }
+    Ok(())
   }
 
   fn signature(&self) -> String {

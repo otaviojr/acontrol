@@ -30,6 +30,9 @@ use router::Router;
 
 use serde_json;
 
+use crate::acontrol_system_log;
+use crate::log::LogType;
+
 use super::super::system;
 use super::{Server,WebServerDefaultResponse,WebCard,WebServerNfcListResponse};
 
@@ -148,7 +151,7 @@ impl WebServer {
   fn fingerprint_delete_all(_req: &mut Request) -> IronResult<Response> {
       let params: HashMap<String,String> = HashMap::new();
 
-      println!("Calling system fingerprint delete all");
+      acontrol_system_log!(LogType::Info, "Calling system fingerprint delete all");
 
       let mut resp: Response = match system::acontrol_system_fingerprint_delete_all(params) {
         Ok(_) => Response::with((iron::status::Ok,
@@ -172,7 +175,7 @@ impl WebServer {
     let mut resp: Option<Response> = None;
     let json_body = req.get::<bodyparser::Json>();
 
-    println!("Server Start Enroll");
+    acontrol_system_log!(LogType::Info, "Server Start Enroll");
 
     match json_body {
         Ok(Some(json_body)) => {
@@ -210,7 +213,7 @@ impl WebServer {
     }
 
     if resp.is_none() {
-      println!("Calling system start enroll");
+      acontrol_system_log!(LogType::Info,"Calling system start enroll");
       match system::acontrol_system_fingerprint_start_enroll(params) {
         Ok(()) => {
           resp = Some(Response::with((iron::status::Ok,

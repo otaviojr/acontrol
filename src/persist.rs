@@ -1,5 +1,5 @@
 /**
- * @file   persist/mod.rs
+ * @file   persist.rs
  * @author Otavio Ribeiro
  * @date   24 Dec 2017
  * @brief  Persistence global interface

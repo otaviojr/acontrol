@@ -1,5 +1,5 @@
 /**
- * @file   bt/mod.rs
+ * @file   bt.rs
  * @author Otavio Ribeiro
  * @date   16 Set 2022
  * @brief  Bluetooth global interface
@@ -28,10 +28,8 @@
 
 mod bluez;
 
-use std::collections::HashMap;
 use async_trait::async_trait;
 use std::time::Instant;
-use std::sync::{Mutex,Arc};
 
 #[derive(Eq, Hash, PartialEq)]
 #[derive(Clone)]

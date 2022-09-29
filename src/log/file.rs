@@ -1,8 +1,8 @@
 /**
- * @file   audio.rs
+ * @file   log/file.rs
  * @author Otavio Ribeiro
- * @date   24 Dec 2017
- * @brief  Audio global interface
+ * @date   24 Sep 2022
+ * @brief  Log to a file module
  *
  * Copyright (c) 2022 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
@@ -25,23 +25,45 @@
  * THE SOFTWARE.
  *
  */
-mod buzzer;
 
-pub trait Audio {
-  fn init(&mut self) -> Result<(),String>;
-  fn play_new(&mut self) -> Result<(), String>;
-  fn play_granted(&mut self) -> Result<(), String>;
-  fn play_denied(&mut self) -> Result<(), String>;
-  fn play_success(&mut self) -> Result<(), String>;
-  fn play_error(&mut self) -> Result<(), String>;
-  fn play_alert(&mut self) -> Result<(), String>;
-  fn unload(&mut self) -> Result<(),String>;
-  fn signature(&self) -> String;
+use crate::log::{Log, LogType};
+use std::collections::HashMap;
+
+pub struct FileLog {
 }
 
-pub fn audio_by_name(name: &str) -> Option<Box<dyn Audio+Sync+Send>> {
-    match name {
-      "buzzer" => return Some(Box::new(buzzer::Buzzer::new())),
-      _ => return None
+impl FileLog {
+    pub fn new(_params: HashMap<String, String>) -> Self {
+        return FileLog {};
+      }
     }
+
+unsafe impl Sync for FileLog {}
+
+unsafe impl Send for FileLog {}
+
+impl Drop for FileLog {
+  fn drop(&mut self) {
+    println!("Unloading audio driver");
+    let _res = self.unload();
+  }
+}
+
+impl Log for FileLog {
+  fn init(&mut self) -> Result<(), String> {
+    Ok(())
+  }
+
+  fn log(&mut self, _log_type: LogType, _message: String) -> Result<(), String> {
+    Ok(())
+  }
+
+  fn unload(&mut self) -> Result<(), String>{
+    println!("Log driver unloading");
+    Ok(())
+  }
+
+  fn signature(&self) -> String {
+    return String::from("File Log Module");
+  }
 }

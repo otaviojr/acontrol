@@ -1,10 +1,10 @@
 /**
- * @file   buzzer/mod.rs
+ * @file   audio/buzzer.rs
  * @author Otavio Ribeiro
  * @date   24 Dec 2017
  * @brief  Buzzer driver. Depends on the buzzer/pcmlinux kernel driver
  *
- * Copyright (c) 2019 Otávio Ribeiro <otavio.ribeiro@gmail.com>
+ * Copyright (c) 2022 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +27,9 @@
  */
 
 mod sounds;
+
+use crate::acontrol_system_log;
+use crate::log::LogType;
 
 use super::{Audio};
 
@@ -121,7 +124,7 @@ impl Buzzer {
 
 impl Drop for Buzzer {
   fn drop(&mut self) {
-    println!("Unloading audio driver");
+    acontrol_system_log!(LogType::Info, "Unloading audio driver");
     let _res = self.unload();
   }
 }
@@ -147,12 +150,12 @@ impl Audio for Buzzer {
       unsafe {
         if let Some(ref driver_fd) = buzzer_locked.get_driver_fd() {
           if let Err(error) = buzzer_ioctl::get_version(*driver_fd, &mut version) {
-            println!("Error get buzzer driver version {}", error);
+            acontrol_system_log!(LogType::Error, "Error get buzzer driver version {}", error);
             return Err(format!("{}","Buzzer device driver not found!"));
           }
         }
       }
-      println!("Buzzer driver version {} found!", String::from_utf8(version.to_vec()).unwrap());
+      acontrol_system_log!(LogType::Info, "Buzzer driver version {} found!", String::from_utf8(version.to_vec()).unwrap());
     }
 
     let _ret = Sounds::play_piratescaribean(self);
@@ -161,11 +164,11 @@ impl Audio for Buzzer {
   }
 
   fn play_new(&mut self) -> Result<(), String> {
-    Sounds::play_supermario(self)
+    Sounds::play_harrypotter(self)
   }
 
   fn play_granted(&mut self) -> Result<(), String> {
-    Sounds::play_supermario(self)
+    Sounds::play_harrypotter(self)
   }
 
   fn play_denied(&mut self) -> Result<(), String> {
@@ -173,7 +176,7 @@ impl Audio for Buzzer {
   }
 
   fn play_success(&mut self) -> Result<(), String> {
-    Sounds::play_supermario(self)
+    Sounds::play_harrypotter(self)
   }
 
   fn play_error(&mut self) -> Result<(), String> {
@@ -186,7 +189,7 @@ impl Audio for Buzzer {
 
 
   fn unload(&mut self) -> Result<(), String>{
-    println!("Audio driver unloading");
+    acontrol_system_log!(LogType::Info, "Audio driver unloading");
     Ok(())
   }
 

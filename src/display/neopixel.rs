@@ -4,7 +4,7 @@
  * @date   24 Dec 2017
  * @brief  Neopixel driver. Depends on the neopixel/pwm linux kernel driver.
  *
- * Copyright (c) 2019 Otávio Ribeiro <otavio.ribeiro@gmail.com>
+ * Copyright (c) 2022 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,7 +25,9 @@
  * THE SOFTWARE.
  *
  */
-use super::{Display, Animation, AnimationType, AnimationColor};
+use crate::display::{Display, Animation, AnimationType, AnimationColor};
+use crate::acontrol_system_log;
+use crate::log::LogType;
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -162,7 +164,7 @@ impl NeoPixelInterface {
           *num_leds_locked = Some(ret);
         }
       }
-      println!("get_num_leds {}", ret);
+      acontrol_system_log!(LogType::Debug, "get_num_leds {}", ret);
     }
 
     Ok(ret)
@@ -472,13 +474,13 @@ impl Display for NeoPixel {
     unsafe {
       if let Some(ref driver_fd) = self.interface.get_driver_fd() {
         if let Err(error) = neopixel_ioctl::get_version(*driver_fd, &mut version) {
-          println!("Error get neopixel driver version {}", error);
+          acontrol_system_log!(LogType::Error, "Error get neopixel driver version {}", error);
           return Err(format!("{}","NeoPixel device driver not found!"));
         }
       }
     }
 
-    println!("NeoPixel driver version {} found!", String::from_utf8(version.to_vec()).unwrap());
+    acontrol_system_log!(LogType::Info, "NeoPixel driver version {} found!", String::from_utf8(version.to_vec()).unwrap());
 
     let _ret = self.test_hardware();
 

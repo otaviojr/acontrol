@@ -1,10 +1,10 @@
 /**
- * @file   nfrc522/mod.rs
+ * @file   nfc/nfrc522.rs
  * @author Otavio Ribeiro
  * @date   24 Dec 2017
  * @brief  NFRC522 driver
  *
- * Copyright (c) 2019 Otávio Ribeiro <otavio.ribeiro@gmail.com>
+ * Copyright (c) 2022 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,7 +25,9 @@
  * THE SOFTWARE.
  *
  */
-use super::{NfcReader, WriteSecMode, CardType};
+use crate::nfc::{NfcReader, WriteSecMode, CardType};
+use crate::acontrol_system_log;
+use crate::log::LogType;
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -651,8 +653,6 @@ impl MiFare for Mfrc522ThreadSafe {
   }
 
   fn write_sec(&mut self, uuid: &Vec<u8>, mode: WriteSecMode) -> Result<(), String> {
-    println!("{}","write_sec: reached");
-
     let mut addr:u8 = 3;
     let mut packet:Vec<u8> = Vec::new();
     let key:MifareAuthKey;
@@ -745,12 +745,12 @@ impl NfcReader for Mfrc522 {
     for _i in 0..10 {
       thread::sleep(Duration::from_millis(50));
       if let Ok(version) = mfrc522.lock().unwrap().version() {
-        println!("NFC hardware version: 0x{:X}", version);
+        acontrol_system_log!(LogType::Info, "NFC hardware version: 0x{:X}", version);
         if version == 0x91 || version == 0x92 {
           mfrc522_init = true;
           break;
         } else {
-          println!("{}(=>0x{:X})", "NFC Hardware with an invalid version", version);
+          acontrol_system_log!(LogType::Error, "{}(=>0x{:X})", "NFC Hardware with an invalid version", version);
         }
       }
     }
@@ -762,7 +762,7 @@ impl NfcReader for Mfrc522 {
     if let Err(_err) = mfrc522.lock().unwrap().initialize() {
       return Err(format!("{}", "NFC error. Error initializing device"));
     } else {
-      println!("NFC device initialized successfully");
+      acontrol_system_log!(LogType::Info, "NFC device initialized successfully");
     }
 
     Ok(())
@@ -781,31 +781,31 @@ impl NfcReader for Mfrc522 {
           let mut mfrc522_inner = mfrc522.lock().unwrap();
 
           if let Err(_err) = mfrc522_inner.reset() {
-            println!("Error reseting reader");
+            acontrol_system_log!(LogType::Error, "Error reseting reader");
             break;
           }
 
           //println!("Searching tag...");
           ret = match mfrc522_inner.send_req_a() {
             Ok(val) => {
-              println!("Card Answer {:?}", val);
+              acontrol_system_log!(LogType::Debug, "Card Answer {:?}", val);
               let ret: Result<(), String> = match mfrc522_inner.anticoll(PICC::ANTICOLL1.value(), &Vec::new()){
                 Ok(val) => {
-                  println!("ANTICOLL CASCADE 1 value: {:?}", val);
+                  acontrol_system_log!(LogType::Debug, "ANTICOLL CASCADE 1 value: {:?}", val);
                   if val[0] == 0x88 { complete = false; uuid.extend_from_slice(&val[1..val.len()-1]); } else { complete = true; uuid.extend_from_slice(&val[..val.len()-1]); }
                   let ret:Result<(), String> = match mfrc522_inner.select(PICC::ANTICOLL1.value(),&uuid) {
                     Ok(val) => {
                       let ret1: Result<(), String>;
-                      println!("SELECT CASCADE 1 answer: {:?}",val);
+                      acontrol_system_log!(LogType::Debug, "SELECT CASCADE 1 answer: {:?}",val);
                       if complete == false {
                         ret1 = match mfrc522_inner.anticoll(PICC::ANTICOLL2.value(), &uuid){
                           Ok(val) => {
-                            println!("ANTICOLL CASCADE 2 value: {:?}", val);
+                            acontrol_system_log!(LogType::Debug, "ANTICOLL CASCADE 2 value: {:?}", val);
                             if val[0] == 0x88 { complete = false; uuid.extend_from_slice(&val[1..val.len()-1]); } else { complete = true; uuid.extend_from_slice(&val[..val.len()-1]); }
                             let ret: Result<(), String> = match mfrc522_inner.select(PICC::ANTICOLL2.value(),&uuid) {
                               Ok(val) => {
                                 let ret2:Result<(),String>;
-                                println!("SELECT CASCADE 2 answer: {:?}",val);
+                                acontrol_system_log!(LogType::Debug, "SELECT CASCADE 2 answer: {:?}",val);
                                 if complete == false {
                                   ret2 = Err(format!("{}","Tripple byte card not implemented yet!"));
                                 } else {
@@ -840,10 +840,6 @@ impl NfcReader for Mfrc522 {
           func(CardType::Mifare, uuid);
         }
 
-        //if let Err(val) = ret {
-          //eprintln!("{}", val);
-        //}
-
         thread::sleep(Duration::from_millis(500));
       }
     });
@@ -868,8 +864,6 @@ impl NfcReader for Mfrc522 {
     let mfrc522 = self.mfrc522.clone();
     let mut mfrc522_inner = mfrc522.lock().unwrap();
 
-    println!("{}","format: reached");
-
     mfrc522_inner.write_sec(uuid, WriteSecMode::Format)
   }
 
@@ -877,16 +871,12 @@ impl NfcReader for Mfrc522 {
     let mfrc522 = self.mfrc522.clone();
     let mut mfrc522_inner = mfrc522.lock().unwrap();
 
-    println!("{}","format: reached");
-
     mfrc522_inner.write_sec(uuid, WriteSecMode::Restore)
   }
 
   fn read_data(&mut self, uuid: &Vec<u8>, addr: u8, blocks: u8) -> Result<Vec<u8>, String> {
     let mfrc522 = self.mfrc522.clone();
     let mut mfrc522_inner = mfrc522.lock().unwrap();
-
-    println!("{}","read_data: reached");
 
     let mut cur_addr:u8 = addr;
     let mut buffer: Vec<u8> = Vec::new();
@@ -919,8 +909,6 @@ impl NfcReader for Mfrc522 {
   fn write_data(&mut self, uuid: &Vec<u8>, addr: u8, data: &Vec<u8>) -> Result<u8, String> {
     let mfrc522 = self.mfrc522.clone();
     let mut mfrc522_inner = mfrc522.lock().unwrap();
-
-    println!("{}","write_data: reached");
 
     let mut cur_addr:u8 = addr;
     let mut buffer:VecDeque<u8> = VecDeque::new();
@@ -961,7 +949,7 @@ impl NfcReader for Mfrc522 {
   }
 
   fn unload(&mut self) -> Result<(), String>{
-    println!("NFC driver unloading");
+    acontrol_system_log!(LogType::Info, "NFC driver unloading");
     let mfrc522 = self.mfrc522.clone();
     let pin = mfrc522.lock().unwrap().ss.unwrap();
     if let Err(err) = pin.unexport() {

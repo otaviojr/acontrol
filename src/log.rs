@@ -1,8 +1,8 @@
 /**
- * @file   audio.rs
+ * @file   log.rs
  * @author Otavio Ribeiro
- * @date   24 Dec 2017
- * @brief  Audio global interface
+ * @date   29 Sep 2022
+ * @brief  Log global interface
  *
  * Copyright (c) 2022 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
@@ -25,23 +25,47 @@
  * THE SOFTWARE.
  *
  */
-mod buzzer;
+mod file;
 
-pub trait Audio {
+use std::collections::HashMap;
+
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+pub enum LogType {
+    Debug,
+    Info,
+    Warning,
+    Error,
+    Fatal
+}
+
+#[allow(dead_code)]
+impl LogType {
+  fn name(&self) -> &'static str {
+    match *self {
+      LogType::Debug => "Debug",
+      LogType::Info => "Info",
+      LogType::Warning => "Warning",
+      LogType::Error => "Error",
+      LogType::Fatal => "Fatal",
+    }
+  }
+
+  fn value(&self) -> u16 {
+    return (*self) as u16;
+  }
+}
+
+pub trait Log {
   fn init(&mut self) -> Result<(),String>;
-  fn play_new(&mut self) -> Result<(), String>;
-  fn play_granted(&mut self) -> Result<(), String>;
-  fn play_denied(&mut self) -> Result<(), String>;
-  fn play_success(&mut self) -> Result<(), String>;
-  fn play_error(&mut self) -> Result<(), String>;
-  fn play_alert(&mut self) -> Result<(), String>;
+  fn log(&mut self, log_type: LogType, message: String) -> Result<(), String>;
   fn unload(&mut self) -> Result<(),String>;
   fn signature(&self) -> String;
 }
 
-pub fn audio_by_name(name: &str) -> Option<Box<dyn Audio+Sync+Send>> {
+pub fn log_by_name(name: &str, params: HashMap<String, String>) -> Option<Box<dyn Log+Sync+Send>> {
     match name {
-      "buzzer" => return Some(Box::new(buzzer::Buzzer::new())),
+      "file" => return Some(Box::new(file::FileLog::new(params))),
       _ => return None
     }
 }

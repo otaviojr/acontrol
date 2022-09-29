@@ -1,10 +1,10 @@
 /**
- * @file   sounds/mod.rs
+ * @file   audio/buzzer/sounds.rs
  * @author Otavio Ribeiro
  * @date   24 Dec 2017
  * @brief  System sounds
  *
- * Copyright (c) 2019 Otávio Ribeiro <otavio.ribeiro@gmail.com>
+ * Copyright (c) 2022 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -425,6 +425,7 @@ impl Sounds {
     Sounds::play_sound(buzzer, tones, periods)
   }
 
+  #[allow(dead_code)]
   pub fn play_harrypotter(buzzer: &mut Buzzer) -> Result<(), String> {
 
     let tones: Vec<Tone> = vec!(
@@ -451,6 +452,7 @@ impl Sounds {
     Sounds::play_sound(buzzer, tones, periods)
   }
   
+  #[allow(dead_code)]
   pub fn play_supermario(buzzer: &mut Buzzer) -> Result<(),String> {
 
     let mut tones: Vec<Tone> = vec!(
@@ -481,6 +483,7 @@ impl Sounds {
     Sounds::play_sound(buzzer, tones, periods)
   }
 
+  #[allow(dead_code)]
   pub fn play_starwars(buzzer: &mut Buzzer) -> Result<(), String>  {
 
     let tones_1s: Vec<Tone> = vec!(
@@ -543,6 +546,7 @@ impl Sounds {
     Sounds::play_sound(buzzer, tones, periods)
   }
 
+  #[allow(dead_code)]
   pub fn play_doremifa(buzzer: &mut Buzzer) -> Result<(), String> {
 
     let mut tones: Vec<Tone> = vec!(
@@ -562,6 +566,7 @@ impl Sounds {
     Sounds::play_sound(buzzer, tones, periods)
   }
 
+  #[allow(dead_code)]
   pub fn play_bip(buzzer: &mut Buzzer) -> Result<(), String> {
     let tones: Vec<Tone> = vec!(
       Tone::NOTE_C4, Tone::NOTE_NULL, Tone::NOTE_D4, Tone::NOTE_NULL, Tone::NOTE_E4, Tone::NOTE_NULL, Tone::NOTE_F4, Tone::NOTE_NULL, 

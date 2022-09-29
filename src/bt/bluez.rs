@@ -1,5 +1,6 @@
+
 /**
- * @file   bluez/mod.rs
+ * @file   bt/bluez.rs
  * @author Otavio Ribeiro
  * @date   16 Set 2022
  * @brief  BlueZ driver
@@ -25,21 +26,18 @@
  * THE SOFTWARE.
  *
  */
-use super::{Bluetooth, BluetoothData, BluetoothDevice};
-
+use crate::bt::{Bluetooth, BluetoothData, BluetoothDevice};
+use crate::{acontrol_system_log, log::LogType};
 use async_trait::async_trait;
 
 use tokio::sync::{mpsc,Mutex};
 use bluer::{Session, Adapter, monitor::{Monitor, RegisteredMonitorHandle, Pattern}};
-
-use std::{collections::HashMap};
 use std::sync::{Arc};
 
 pub struct BlueZ {
     session: Arc<Mutex<Option<Session>>>,
     adapter: Arc<Mutex<Option<Adapter>>>,
     monitor_handle: Box<Option<RegisteredMonitorHandle>>,
-    devices: Arc<Mutex<HashMap<String,Arc<Mutex<BluetoothDevice>>>>>,
     event_tx: mpsc::Sender<bluer::Address>,
     event_rx: Arc<Mutex<mpsc::Receiver<bluer::Address>>>,
 }
@@ -51,7 +49,6 @@ impl BlueZ {
         return BlueZ { session: Arc::new(Mutex::new(Option::None)), 
                         adapter: Arc::new(Mutex::new(Option::None)), 
                         monitor_handle: Box::new(Option::None),
-                        devices: Arc::new(Mutex::new(HashMap::new())),
                         event_tx: e_tx, event_rx: Arc::new(tokio::sync::Mutex::new(e_rx)),
                      };
     }
@@ -63,26 +60,26 @@ impl Bluetooth for BlueZ {
         if let Ok(session) = Session::new().await {
             if let Ok(adapter) = session.default_adapter().await {
                 if adapter.set_powered(true).await.is_ok() {
-                    println!("Bluetooth: registering monitor");
+                    acontrol_system_log!(LogType:: Info, "Bluetooth: registering monitor");
                     if let Ok(mut monitor_handle) = adapter.register_monitor().await {
-                        let mut tx = self.event_tx.clone();
-                        monitor_handle.add_monitor(Monitor {
+                        let tx = self.event_tx.clone();
+                        let _ = monitor_handle.add_monitor(Monitor {
                             activate: Some(Box::new(move || {
                                 Box::pin(async {
-                                    println!("Monitor 1: Activate funcion called");
+                                    acontrol_system_log!(LogType::Debug, "Monitor 1: Activate funcion called");
                                     Ok(())
                                 })
                             })),
                             release: Some(Box::new(move || {
                                 Box::pin(async {
-                                    println!("Monitor 1: Release funcion called");
+                                    acontrol_system_log!(LogType::Debug, "Monitor 1: Release funcion called");
                                     Ok(())
                                 })
                             })),
                             device_found: Some(Box::new(move |device| {
-                                let mut tx1 = tx.clone();
+                                let tx1 = tx.clone();
                                 Box::pin(async move {
-                                    println!("Monitor 1: DeviceFound funcion called: {}",device.addr);
+                                    acontrol_system_log!(LogType::Debug,"Monitor 1: DeviceFound funcion called: {}",device.addr);
                                     let _ = tx1.send(device.addr).await;
                                     Ok(())
                                 })
@@ -102,15 +99,15 @@ impl Bluetooth for BlueZ {
                         self.session = Arc::new(Mutex::new(Some(session)));
                         self.adapter = Arc::new(Mutex::new(Some(adapter)));
                     } else {
-                        println!("Monitor: Somethings gets wrong with the monitor");
+                        acontrol_system_log!(LogType::Error, "Monitor: Somethings gets wrong with the monitor");
                     }
                     return Ok(());
                 }
             } else {
-                println!("BlueZ: no default adapter");
+                acontrol_system_log!(LogType::Error, "BlueZ: no default adapter");
             }
         } else {
-            println!("BlueZ: Session error");
+            acontrol_system_log!(LogType::Error, "BlueZ: Session error");
         }
 
         Err(String::from("BlueZ: Error initializing bluetooth module"))
@@ -119,34 +116,52 @@ impl Bluetooth for BlueZ {
     async fn find_devices(&mut self, func: fn(device: BluetoothDevice) -> bool) -> Result<(),String>{
         let adapter_mutex = self.adapter.clone();
         let rx = self.event_rx.clone();
+
         let _ = tokio::spawn(async move {
             let ref adapter_lock = adapter_mutex.lock().await;
             if let Some(ref adapter) = **adapter_lock {
                 let mut rx1 = rx.lock().await;
                 while let Some(addr) = rx1.recv().await {
                     let device = adapter.device(addr).unwrap();
-                    println!("Monitor thread: DeviceFound funcion called: {}",addr);
-                    println!("-------------------------");
-                    println!("    Address:            {}", addr);
-                    println!("    Address type:       {}", device.address_type().await.unwrap());
-                    println!("    Name:               {:?}", device.name().await.unwrap_or_default());
-                    println!("    Icon:               {:?}", device.icon().await.unwrap_or_default());
-                    println!("    Class:              {:?}", device.class().await.unwrap_or_default());
-                    println!("    UUIDs:              {:?}", device.uuids().await.unwrap_or_default());
-                    println!("    Paired:             {:?}", device.is_paired().await.unwrap_or_default());
-                    println!("    Connected:          {:?}", device.is_connected().await.unwrap_or_default());
-                    println!("    Trusted:            {:?}", device.is_trusted().await.unwrap_or_default());
-                    println!("    Modalias:           {:?}", device.modalias().await.unwrap_or_default());
-                    println!("    RSSI:               {:?}", device.rssi().await.unwrap_or_default());
-                    println!("    TX power:           {:?}", device.tx_power().await.unwrap_or_default());
-                    println!("    Manufacturer data:  {:?}", device.manufacturer_data().await.unwrap_or_default());
-                    println!("    Service data:       {:?}", device.service_data().await.unwrap_or_default());
-                    println!("-------------------------");
+
+                    let address_type = device.address_type().await.unwrap();
+                    let name = device.name().await.unwrap_or_default();
+                    let icon = device.icon().await.unwrap_or_default();
+                    let class = device.class().await.unwrap_or_default();
+                    let uuids = device.uuids().await.unwrap_or_default();
+                    let paired = device.is_paired().await.unwrap_or_default();
+                    let connected = device.is_connected().await.unwrap_or_default();
+                    let trusted = device.is_trusted().await.unwrap_or_default();
+                    let modalias = device.modalias().await.unwrap_or_default();
+                    let rssi = device.rssi().await.unwrap_or_default();
+                    let tx_power = device.tx_power().await.unwrap_or_default();
+                    let manufacturer_data = device.manufacturer_data().await.unwrap_or_default();
+                    let service_data = device.service_data().await.unwrap_or_default();
+
+
+                    acontrol_system_log!(LogType::Debug, "Monitor thread: DeviceFound funcion called: {}",addr);
+                    acontrol_system_log!(LogType::Debug, "-------------------------");
+                    acontrol_system_log!(LogType::Debug, "    Address:            {}", addr);
+                    acontrol_system_log!(LogType::Debug, "    Address type:       {}", address_type);
+                    acontrol_system_log!(LogType::Debug, "    Name:               {:?}", name);
+                    acontrol_system_log!(LogType::Debug, "    Icon:               {:?}", icon);
+                    acontrol_system_log!(LogType::Debug, "    Class:              {:?}", class);
+                    acontrol_system_log!(LogType::Debug, "    UUIDs:              {:?}", uuids);
+                    acontrol_system_log!(LogType::Debug, "    Paired:             {:?}", paired);
+                    acontrol_system_log!(LogType::Debug, "    Connected:          {:?}", connected);
+                    acontrol_system_log!(LogType::Debug, "    Trusted:            {:?}", trusted);
+                    acontrol_system_log!(LogType::Debug, "    Modalias:           {:?}", modalias);
+                    acontrol_system_log!(LogType::Debug, "    RSSI:               {:?}", rssi);
+                    acontrol_system_log!(LogType::Debug, "    TX power:           {:?}", tx_power);
+                    acontrol_system_log!(LogType::Debug, "    Manufacturer data:  {:?}", manufacturer_data);
+                    acontrol_system_log!(LogType::Debug, "    Service data:       {:?}", service_data);
+                    acontrol_system_log!(LogType::Debug, "-------------------------");
+
                     let bd = BluetoothDevice::new(addr.to_string());
                     func(bd);
                 }
 
-                println!("Bluetooth thread ended");    
+                acontrol_system_log!(LogType::Warning, "Bluetooth thread ended");    
             }
             ()
         });
@@ -156,7 +171,7 @@ impl Bluetooth for BlueZ {
 
     fn unload(&mut self) -> Result<(), String>{
         if let Some(monitor_handle) = &*self.monitor_handle {
-            println!("Stopping bluetooth le monitoring.");
+            acontrol_system_log!(LogType::Info, "Stopping bluetooth le monitoring.");
             drop(monitor_handle);
         }
         Ok(())
@@ -166,7 +181,7 @@ impl Bluetooth for BlueZ {
         return false;
     }
 
-    fn start_enroll(&mut self, data: &BluetoothData) -> bool{
+    fn start_enroll(&mut self, _data: &BluetoothData) -> bool{
         return false;
     }
 

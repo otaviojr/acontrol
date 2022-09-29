@@ -4,7 +4,7 @@
  * @date   24 Dec 2017
  * @brief  System entry point
  *
- * Copyright (c) 2019 Otávio Ribeiro <otavio.ribeiro@gmail.com>
+ * Copyright (c) 2022 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -34,6 +34,7 @@ pub mod server;
 pub mod persist;
 pub mod system;
 pub mod display;
+pub mod log;
 
 #[macro_use]
 extern crate nix;
@@ -49,8 +50,6 @@ use nix::sys::signal;
 use std::process;
 use clap::{Arg,App};
 use std::collections::HashMap;
-
-use crate::{bt::Bluetooth, fingerprint::Fingerprint, nfc::NfcReader,audio::Audio, display::Display, persist::Persist};
 
 const DEFAULT_LOGS_PATH:&str = "/var/log/acontrol";
 const DEFAULT_DATA_PATH:&str = "/var/lib/acontrol";
@@ -158,6 +157,9 @@ async fn main(){
   let display_drv = display::display_by_name("neopixel");
   let persist_drv = persist::persist_by_name("sqlite");
 
+  let log_params:HashMap<String,String> = HashMap::new();
+  let log_drv = log::log_by_name("file", log_params);
+
   if let Some(ref drv) = bt_drv
   {
     println!("Bluetooth driver: {}",drv.signature());
@@ -179,13 +181,17 @@ async fn main(){
     println!("Display driver: {}", drv.signature());
   }
 
+  if let Some(ref drv) = log_drv {
+    println!("Log driver: {}", drv.signature());
+  }
+
   let mut params: HashMap<String,String> = HashMap::new();
   params.insert("LOGS_PATH".to_string(), DEFAULT_LOGS_PATH.to_string());
   params.insert("DATA_PATH".to_string(), DEFAULT_DATA_PATH.to_string());
 
   {
     if !system::acontrol_system_init(&params, bt_drv, fingerprint_drv, 
-      nfcreader_drv, audio_drv, persist_drv, display_drv).await {
+      nfcreader_drv, audio_drv, persist_drv, display_drv, log_drv).await {
       process::exit(-1);
     }
 
