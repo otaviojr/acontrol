@@ -46,6 +46,7 @@ extern crate clap;
 #[macro_use]
 extern crate serde_derive;
 
+use log::LogType;
 use nix::sys::signal;
 use std::process;
 use clap::{Arg,App};
@@ -158,7 +159,7 @@ async fn main(){
   let persist_drv = persist::persist_by_name("sqlite");
 
   let log_params:HashMap<String,String> = HashMap::new();
-  let log_drv = log::log_by_name("file", log_params);
+  let log_drv = log::log_by_name("file", LogType::Debug, log_params);
 
   if let Some(ref drv) = bt_drv
   {

@@ -29,6 +29,8 @@
 use std::thread;
 use std::time::Duration;
 
+use crate::{acontrol_system_log, log::LogType};
+
 use super::{Buzzer, AudioThreadCommand};
 
 #[derive(Clone, Copy)]
@@ -160,9 +162,9 @@ impl Sounds {
 
       //Wait for the last thread to finish.
       //Will exit immediately if the thread have already ended.
-      println!("WAITING PREVIOUS SOUND TO LEAVE");
+      acontrol_system_log!(LogType::Debug, "WAITING PREVIOUS SOUND TO LEAVE");
       let _ret = thread.join();
-      println!("LAST SOUND LEAVE. STARTING NEW THREAD!");
+      acontrol_system_log!(LogType::Debug, "LAST SOUND LEAVE. STARTING NEW THREAD!");
 
       //zero out unreceived messages.
       //If thread has already gone, the last exit message will be received by
@@ -189,7 +191,7 @@ impl Sounds {
             Ok(msg) => {
               match msg {
                 AudioThreadCommand::Stop => {
-                  println!("THREAD INTERRUPTED! WILL START A NEW SOUND?");
+                  acontrol_system_log!(LogType::Debug, "THREAD INTERRUPTED! WILL START A NEW SOUND?");
                   return Err(String::from("Interrupted"));
                 },
               }
@@ -428,7 +430,7 @@ impl Sounds {
   #[allow(dead_code)]
   pub fn play_harrypotter(buzzer: &mut Buzzer) -> Result<(), String> {
 
-    let tones: Vec<Tone> = vec!(
+    let mut tones: Vec<Tone> = vec!(
       Tone::NOTE_B4, Tone::NOTE_E5, Tone::NOTE_G5, Tone::NOTE_FS5,Tone::NOTE_E5, 
       Tone::NOTE_B5, Tone::NOTE_A5, Tone::NOTE_FS5,Tone::NOTE_E5, Tone::NOTE_G5, 
       Tone::NOTE_FS5,Tone::NOTE_DS5,Tone::NOTE_F5, Tone::NOTE_B4, Tone::NOTE_B4, 
@@ -443,11 +445,14 @@ impl Sounds {
       Tone::NOTE_B5, Tone::NOTE_AS5,Tone::NOTE_AS4,Tone::NOTE_G5, Tone::NOTE_E5, 
     );
 
-    let periods: Vec<i32> = vec!(333,500,166,333,666,333,1000,1000,500,166,333,666,
+    let mut periods: Vec<i32> = vec!(333,500,166,333,666,333,1000,1000,500,166,333,666,
       333,1666,333,500,166,333,666,333,666,333,666,333,500,166,333,666,333,1666,333,
       666,333,666,333,666,333,666,333,500,166,333,666,333,1666,333,666,333,666,333,
       666,333,666,333,500,166,333,666,333,1666,
     );
+
+    tones.truncate(30);
+    periods.truncate(30);
 
     Sounds::play_sound(buzzer, tones, periods)
   }

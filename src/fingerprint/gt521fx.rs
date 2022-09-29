@@ -78,7 +78,7 @@ impl FingerprintDriverState {
 
   fn set(&mut self, next: FingerprintDriverState) -> bool {
     *self = next;
-    println!("FingerprintDriverState changed to {}",(*self).name());
+    acontrol_system_log!(LogType::Debug, "FingerprintDriverState changed to {}",(*self).name());
     return true;
   }
 }
@@ -709,7 +709,7 @@ impl Fingerprint for Gt521fx {
                 },
                 FingerprintDriverState::READ => {
                   if let Ok(ref mut gt521fx_locked) = gt521fx.lock() {
-                    println!("Checking finger");
+                    acontrol_system_log!(LogType::Debug, "Checking finger");
                     let result = gt521fx_locked.send_command(Command::IsPressFinger, 0x00, None);
 
                     match result {

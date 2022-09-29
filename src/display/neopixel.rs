@@ -67,15 +67,24 @@ mod neopixel_ioctl {
 
 #[derive(Clone, Copy, Debug)]
 pub enum NeoPixelThreadCommand {
-  Stop,
+  Stop
 }
 
 unsafe impl Send for NeoPixelThreadCommand {}
+
+pub enum NeoPixelThreadState {
+  Stop,
+  SilentStop
+}
+
+unsafe impl Send for NeoPixelThreadState {}
 
 pub struct NeoPixelInterface {
   animation: Mutex<Option<std::thread::JoinHandle<Result<(), String>>>>,
   animation_tx: Mutex<mpsc::Sender<NeoPixelThreadCommand>>,
   animation_rx: Mutex<mpsc::Receiver<NeoPixelThreadCommand>>,
+  animation_ends_tx: Mutex<mpsc::Sender<NeoPixelThreadState>>,
+  animation_ends_rx: Mutex<mpsc::Receiver<NeoPixelThreadState>>,
   driver_fd: Mutex<Option<RawFd>>,
   num_leds: Mutex<Option<i32>>,
 }
@@ -228,7 +237,8 @@ impl NeoPixel {
 
   pub fn new() -> Self {
     let (tx,rx):(mpsc::Sender<NeoPixelThreadCommand>, mpsc::Receiver<NeoPixelThreadCommand>) = mpsc::channel::<NeoPixelThreadCommand>();
-    return NeoPixel { devfile:  None, interface: Arc::new( NeoPixelInterface { animation: Mutex::new(None), driver_fd: Mutex::new(None), animation_tx: Mutex::new(tx), animation_rx: Mutex::new(rx), num_leds: Mutex::new(None) } ) };
+    let (tx1,rx1):(mpsc::Sender<NeoPixelThreadState>, mpsc::Receiver<NeoPixelThreadState>) = mpsc::channel::<NeoPixelThreadState>();
+    return NeoPixel { devfile:  None, interface: Arc::new( NeoPixelInterface { animation: Mutex::new(None), driver_fd: Mutex::new(None), animation_tx: Mutex::new(tx), animation_rx: Mutex::new(rx), animation_ends_tx: Mutex::new(tx1), animation_ends_rx: Mutex::new(rx1), num_leds: Mutex::new(None) } ) };
   }
 
   fn stop_animation(&mut self) -> Result<(), String> {
@@ -265,9 +275,10 @@ impl NeoPixel {
 
     let animation = thread::spawn( move || {
       unsafe {
-        let mut next = true;
         let mut p = Box::from_raw(Box::into_raw(params));
         let mut wait: u64 = 0;
+        let mut next = true;
+        let mut send: bool = true;
 
         loop {
           if Ok(false) == f(&mut *p) {
@@ -279,6 +290,7 @@ impl NeoPixel {
               match msg {
                 NeoPixelThreadCommand::Stop => {
                   next = false;
+                  send = false;
                 },
               }
             },
@@ -295,6 +307,11 @@ impl NeoPixel {
 
           if next == false  {
             let _ret = interface.clear();
+            let mut state:NeoPixelThreadState = NeoPixelThreadState::Stop;
+            if !send {
+              state = NeoPixelThreadState::SilentStop;
+            }
+            let _ = interface.animation_ends_tx.lock().unwrap().clone().send(state);
             break;
           }
 
@@ -532,6 +549,22 @@ impl Display for NeoPixel {
     if let Some(animation) = (*interface.animation.lock().unwrap()).take() {
       let _ret = animation.join();
     }
+    Ok(())
+  }
+
+  fn when_animation_ends(&mut self, func: fn() ) -> Result<(), String> {
+
+    let interface = self.interface.clone();
+
+    let _ = thread::spawn( move || {
+      if let Ok(state) = interface.animation_ends_rx.lock().unwrap().recv() {
+        match state {
+          NeoPixelThreadState::Stop => func(),
+          NeoPixelThreadState::SilentStop => ()
+        }
+      }
+    });
+
     Ok(())
   }
 

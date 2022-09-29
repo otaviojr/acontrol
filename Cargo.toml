@@ -24,6 +24,7 @@ serialport = "3.3.0"
 futures = "*"
 tokio = { version = "1.21.1", features = ["full"] }
 async-trait = "0.1.57"
+chrono = "0.4"
 
 [dependencies.bluer]
 git = "https://github.com/otaviojr/bluer.git"

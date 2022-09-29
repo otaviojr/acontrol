@@ -1,8 +1,8 @@
 /**
- * @file   log/file.rs
+ * @file   log/console.rs
  * @author Otavio Ribeiro
  * @date   24 Sep 2022
- * @brief  File log module
+ * @brief  Console log module
  *
  * Copyright (c) 2022 Otávio Ribeiro <otavio.ribeiro@gmail.com>
  *
@@ -29,27 +29,27 @@
 use crate::{log::{Log, LogType, LogUtils}};
 use std::collections::HashMap;
 
-pub struct FileLog {
+pub struct ConsoleLog {
 }
 
 
-impl FileLog {
+impl ConsoleLog {
   pub fn new(_params: HashMap<String, String>) -> Self {
-      return FileLog {};
+      return ConsoleLog {};
   }
 }
 
-unsafe impl Sync for FileLog {}
-unsafe impl Send for FileLog {}
+unsafe impl Sync for ConsoleLog {}
+unsafe impl Send for ConsoleLog {}
 
-impl Drop for FileLog {
+impl Drop for ConsoleLog {
   fn drop(&mut self) {
     println!("Unloading log module driver");
     let _res = self.unload();
   }
 }
 
-impl Log for FileLog {
+impl Log for ConsoleLog {
   fn init(&mut self) -> Result<(), String> {
     Ok(())
   }
@@ -60,11 +60,11 @@ impl Log for FileLog {
   }
 
   fn unload(&mut self) -> Result<(), String>{
-    println!("Log driver unloading");
+    println!("Console driver unloading");
     Ok(())
   }
 
   fn signature(&self) -> String {
-    return String::from("File Log Module");
+    return String::from("Console Log Module");
   }
 }

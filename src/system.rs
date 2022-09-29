@@ -39,7 +39,6 @@ use std::sync::{Mutex, Arc};
 use std::collections::HashMap;
 
 use std::process::Command;
-use std::process::Stdio;
 
 #[derive(PartialEq)]
 #[allow(dead_code)]
@@ -65,17 +64,9 @@ macro_rules! acontrol_system_log {
     if let Ok(ref mut drv_locked) = log_drv.lock() {
       if let Some(ref mut drv) = **drv_locked {
         let _ = drv.log($type, format!($message $(,$args)*));
-      };
-    };
-  }};
-
-  ($log_drv: expr, $type:expr, $message:literal $(,$args:expr)*) => {{
-
-    let log_drv = $log_drv;
-    if let Ok(ref mut drv_locked) = log_drv.lock() {
-      if let Some(ref mut drv) = **drv_locked {
-        let _ = drv.log($type, format!($message $(,$args)*));
-      };
+      } else {
+        println!($message $(,$args)*);
+      }
     };
   }};
 }
@@ -130,6 +121,8 @@ pub fn acontrol_system_end() -> bool {
       if let Err(err) = drv.unload() {
         acontrol_system_log!(LogType::Error, "Error unloading bluetooth device (=> {})", err);
         return false;  
+      } else {
+        *asystem.bt_drv.lock().unwrap() = Option::None;
       }
     };
   }
@@ -139,6 +132,8 @@ pub fn acontrol_system_end() -> bool {
       if let Err(err) = drv.unload() {
         acontrol_system_log!(LogType::Error, "Error unloading audio device (=> {})", err);
         return false;  
+      } else {
+        *asystem.audio_drv.lock().unwrap() = Option::None;
       }
     };
   }
@@ -148,6 +143,8 @@ pub fn acontrol_system_end() -> bool {
       if let Err(err) = drv.unload() {
         acontrol_system_log!(LogType::Error, "Error unloading nfc device (=> {})", err);
         return false;  
+      } else {
+        *asystem.nfc_drv.lock().unwrap() = Option::None;
       }
     };
   }
@@ -157,6 +154,8 @@ pub fn acontrol_system_end() -> bool {
       if let Err(err) = drv.unload() {
         acontrol_system_log!(LogType::Error, "Error unloading fingerprint device (=> {})", err);
         return false;  
+      } else {
+        *asystem.fingerprint_drv.lock().unwrap() = Option::None;
       }
     };
   }
@@ -166,6 +165,19 @@ pub fn acontrol_system_end() -> bool {
       if let Err(err) = drv.unload() {
         acontrol_system_log!(LogType::Error, "Error unloading persistence device (=> {})", err);
         return false;  
+      } else {
+        *asystem.persist_drv.lock().unwrap() = Option::None;
+      }
+    };
+  }
+
+  if let Ok(ref mut drv_lock) = asystem.log_drv.lock() {
+    if let Some(ref mut drv) = **drv_lock {
+      if let Err(err) = drv.unload() {
+        acontrol_system_log!(LogType::Error, "Error unloading persistence device (=> {})", err);
+        return false;  
+      } else {
+        *asystem.log_drv.lock().unwrap() = Option::None;
       }
     };
   }
@@ -204,26 +216,30 @@ fn find_bt_device(device: BluetoothDevice) -> bool {
         .expect("failed to execute child");
 
         if String::from_utf8_lossy(query.stdout.as_slice()).trim_end().to_lowercase().eq(&String::from("close")) {
-            let mut process = Command::new("/acontrol/granted")
-            .arg("-f")
-            .stdout(Stdio::inherit())
-            .spawn()
-            .expect("failed to execute child");
                     
-            let _ret = acontrol_system_get_audio_drv(|audio|{
-              let _ret = audio.play_granted();
-            });
+          let _ret = acontrol_system_get_audio_drv(|audio|{
+            let _ret = audio.play_granted();
+          });
 
-            let _ret = acontrol_system_get_display_drv(|display|{
-              let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
-              let _ret = display.wait_animation_ends();
+          let _ret = acontrol_system_get_display_drv(|display|{
+            let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
+            let _ret = display.when_animation_ends( || {
+              let _ret = acontrol_system_get_display_drv( |display|{
+                let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+              });
             });
+          });
 
-            let _ret = acontrol_system_get_display_drv(|display|{
-              let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
-            });
+          let granted = Command::new("/acontrol/granted")
+          .arg("-f")
+          .output()
+          .expect("failed to execute child");
 
-            let _ret = process.wait();        
+          let messages = String::from_utf8_lossy(granted.stdout.as_slice());
+          for message in messages.lines() {
+            acontrol_system_log!(LogType::Info, "granted: {}", message);
+          }
+
         } else {
           acontrol_system_log!(LogType::Warning, "Device is already open: {}", String::from_utf8_lossy(query.stdout.as_slice()).to_lowercase());
         }
@@ -307,26 +323,28 @@ fn find_finger(state: &FingerprintState, _value: Option<&str>) -> bool {
         },
         FingerprintState::AUTHORIZED => {
 
-          let mut process = Command::new("/acontrol/granted")
-              .arg("-f")
-              .stdout(Stdio::inherit())
-              .spawn()
-              .expect("failed to execute child");
-
           let _ret = acontrol_system_get_audio_drv(|audio|{
             let _ret = audio.play_granted();
           });
 
           let _ret = acontrol_system_get_display_drv( |display|{
             let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
-            let _ret = display.wait_animation_ends();
+            let _ret = display.when_animation_ends( || {
+              let _ret = acontrol_system_get_display_drv( |display|{
+                let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+              });
+            });
           });
 
-          let _ret = acontrol_system_get_display_drv( |display|{
-            let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
-          });
+          let granted = Command::new("/acontrol/granted")
+          .arg("-f")
+          .output()
+          .expect("failed to execute child");
 
-          let _ret = process.wait();
+          let messages = String::from_utf8_lossy(granted.stdout.as_slice());
+          for message in messages.lines() {
+            acontrol_system_log!(LogType::Info, "granted: {}", message);
+          }
 
           let _ret = acontrol_system_get_display_drv( |display|{
             let _ret = display.clear_and_stop_animations();
@@ -335,25 +353,27 @@ fn find_finger(state: &FingerprintState, _value: Option<&str>) -> bool {
         }
         FingerprintState::NOT_AUTHORIZED => {
 
-          let mut process = Command::new("/acontrol/denieded")
-              .arg("-f")
-              .stdout(Stdio::inherit())
-              .spawn()
-              .expect("failed to execute child");
-
           let _ret = acontrol_system_get_audio_drv(|audio|{
             let _ret = audio.play_denied();
           });
           let _ret = acontrol_system_get_display_drv( |display|{
             let _ret = display.show_animation(Animation::BlinkLoop,AnimationColor::Red,AnimationType::Error,"Done",3);
-            let _ret = display.wait_animation_ends();
+            let _ret = display.when_animation_ends( || {
+              let _ret = acontrol_system_get_display_drv( |display|{
+                let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+              });
+            });
           });
 
-          let _ret = acontrol_system_get_display_drv( |display|{
-            let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
-          });
+          let denieded = Command::new("/acontrol/denieded")
+          .arg("-f")
+          .output()
+          .expect("failed to execute child");
 
-          let _ret = process.wait();
+          let messages = String::from_utf8_lossy(denieded.stdout.as_slice());
+          for message in messages.lines() {
+            acontrol_system_log!(LogType::Info, "denieded: {}", message);
+          }
 
           let _ret = acontrol_system_get_display_drv( |display|{
             let _ret = display.clear_and_stop_animations();
@@ -383,25 +403,26 @@ fn find_tag(_card_type: CardType, uuid: Vec<u8>) -> bool {
                         if let Ok(card) = persist_drv.nfc_find(&uuid) {
                           acontrol_system_log!(LogType::Info, "Card {:?} from {} authorized!", uuid, String::from_utf8(card.name).unwrap());
 
-                          let mut process = Command::new("/acontrol/granted")
-                              .arg("-c")
-                              .stdout(Stdio::inherit())
-                              .spawn()
-                              .expect("failed to execute child");
-
                           let _ret = acontrol_system_get_audio_drv(|audio|{
                             let _ret = audio.play_granted();
                           });
                           let _ret = acontrol_system_get_display_drv( |display|{
                             let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
-                            let _ret = display.wait_animation_ends();
+                            let _ret = display.when_animation_ends( || {
+                              let _ret = acontrol_system_get_display_drv( |display|{
+                                let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                              });
+                            });
                           });
-
-                          let _ret = acontrol_system_get_display_drv( |display|{
-                            let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
-                          });
-
-                          let _ret = process.wait();
+                          let granted = Command::new("/acontrol/granted")
+                          .arg("-f")
+                          .output()
+                          .expect("failed to execute child");
+                
+                          let messages = String::from_utf8_lossy(granted.stdout.as_slice());
+                          for message in messages.lines() {
+                            acontrol_system_log!(LogType::Info, "granted: {}", message);
+                          }
 
                           let _ret = acontrol_system_get_display_drv( |display|{
                             let _ret = display.clear_and_stop_animations();
@@ -409,25 +430,27 @@ fn find_tag(_card_type: CardType, uuid: Vec<u8>) -> bool {
                         } else {
                           println!("Card {:?} not found!", uuid);
 
-                          let mut process = Command::new("/acontrol/denieded")
-                              .arg("-c")
-                              .stdout(Stdio::inherit())
-                              .spawn()
-                              .expect("failed to execute child");
-
                           let _ret = acontrol_system_get_audio_drv(|audio|{
                             let _ret = audio.play_denied();
                           });
                           let _ret = acontrol_system_get_display_drv( |display|{
                             let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
-                            let _ret = display.wait_animation_ends();
+                            let _ret = display.when_animation_ends( || {
+                              let _ret = acontrol_system_get_display_drv( |display|{
+                                let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                              });
+                            });
                           });
 
-                          let _ret = acontrol_system_get_display_drv( |display|{
-                            let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
-                          });
-
-                          let _ret = process.wait();
+                          let denieded = Command::new("/acontrol/denieded")
+                          .arg("-f")
+                          .output()
+                          .expect("failed to execute child");
+                
+                          let messages = String::from_utf8_lossy(denieded.stdout.as_slice());
+                          for message in messages.lines() {
+                            acontrol_system_log!(LogType::Info, "denieded: {}", message);
+                          }
 
                           let _ret = acontrol_system_get_display_drv( |display|{
                             let _ret = display.clear_and_stop_animations();
@@ -436,25 +459,27 @@ fn find_tag(_card_type: CardType, uuid: Vec<u8>) -> bool {
                       } else {
                         acontrol_system_log!(LogType::Error, "Invalid card signature: {:?} - {:?}",val, NFC_CARD_SIGNATURE.as_bytes().to_vec());
 
-                        let mut process = Command::new("/acontrol/denieded")
-                            .arg("-c")
-                            .stdout(Stdio::inherit())
-                            .spawn()
-                            .expect("failed to execute child");
-
                         let _ret = acontrol_system_get_audio_drv(|audio|{
                           let _ret = audio.play_denied();
                         });
                         let _ret = acontrol_system_get_display_drv( |display|{
                           let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
-                          let _ret = display.wait_animation_ends();
+                          let _ret = display.when_animation_ends( || {
+                            let _ret = acontrol_system_get_display_drv( |display|{
+                              let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                            });
+                          });
                         });
 
-                        let _ret = acontrol_system_get_display_drv( |display|{
-                          let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
-                        });
-
-                        let _ret = process.wait();
+                        let denieded = Command::new("/acontrol/denieded")
+                        .arg("-f")
+                        .output()
+                        .expect("failed to execute child");
+              
+                        let messages = String::from_utf8_lossy(denieded.stdout.as_slice());
+                        for message in messages.lines() {
+                          acontrol_system_log!(LogType::Info, "denieded: {}", message);
+                        }
 
                         let _ret = acontrol_system_get_display_drv( |display|{
                           let _ret = display.clear_and_stop_animations();
@@ -467,25 +492,27 @@ fn find_tag(_card_type: CardType, uuid: Vec<u8>) -> bool {
                 Err(err) => {
                   acontrol_system_log!(LogType::Error, "Error reading card: {}", err);
 
-                  let mut process = Command::new("/acontrol/denieded")
-                      .arg("-c")
-                      .stdout(Stdio::inherit())
-                      .spawn()
-                      .expect("failed to execute child");
-
                   let _ret = acontrol_system_get_audio_drv(|audio|{
                     let _ret = audio.play_denied();
                   });
                   let _ret = acontrol_system_get_display_drv( |display|{
                     let _ret = display.show_animation(Animation::Blink,AnimationColor::Red,AnimationType::Error,"Done",3);
-                    let _ret = display.wait_animation_ends();
+                    let _ret = display.when_animation_ends( || {
+                      let _ret = acontrol_system_get_display_drv( |display|{
+                        let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
+                      });
+                    });
                   });
 
-                  let _ret = acontrol_system_get_display_drv( |display|{
-                    let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
-                  });
-
-                  let _ret = process.wait();
+                  let denieded = Command::new("/acontrol/denieded")
+                  .arg("-f")
+                  .output()
+                  .expect("failed to execute child");
+        
+                  let messages = String::from_utf8_lossy(denieded.stdout.as_slice());
+                  for message in messages.lines() {
+                    acontrol_system_log!(LogType::Info, "denieded: {}", message);
+                  }
 
                   let _ret = acontrol_system_get_display_drv( |display|{
                     let _ret = display.clear_and_stop_animations();

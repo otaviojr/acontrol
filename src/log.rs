@@ -26,8 +26,10 @@
  *
  */
 mod file;
+mod console;
 
 use std::collections::HashMap;
+use chrono::{DateTime,Utc};
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
@@ -56,6 +58,20 @@ impl LogType {
   }
 }
 
+struct LogUtils {
+}
+
+impl LogUtils {
+  fn current_date_time() -> String {
+    let now:DateTime<Utc> = Utc::now();
+    now.to_rfc3339()
+  }
+
+  fn formatted_message(log_type: LogType, message: String) -> String {
+    format!("{} - [{}] - {}",LogUtils::current_date_time(), log_type.name(),message)
+  }
+}
+
 pub trait Log {
   fn init(&mut self) -> Result<(),String>;
   fn log(&mut self, log_type: LogType, message: String) -> Result<(), String>;
@@ -63,9 +79,46 @@ pub trait Log {
   fn signature(&self) -> String;
 }
 
-pub fn log_by_name(name: &str, params: HashMap<String, String>) -> Option<Box<dyn Log+Sync+Send>> {
+pub struct MainLog {
+  inner_log: Box<dyn Log>,
+  log_level: LogType
+}
+
+impl MainLog {
+  pub fn new(log_level: LogType, inner_log: Box<dyn Log>) -> Self {
+    return MainLog { log_level: log_level, inner_log: inner_log};
+  }
+}
+
+unsafe impl Sync for MainLog {}
+unsafe impl Send for MainLog {}
+
+impl Log for MainLog {
+  fn init(&mut self) -> Result<(),String>{
+    self.inner_log.init()
+  }
+
+  fn log(&mut self, log_type: LogType, message: String) -> Result<(), String>{
+    if log_type.value() >= self.log_level.value(){
+      self.inner_log.log(log_type, message)
+    } else {
+      Ok(())
+    }
+  }
+
+  fn unload(&mut self) -> Result<(),String>{
+    self.inner_log.unload()
+  }
+
+  fn signature(&self) -> String {
+    self.inner_log.signature()
+  }
+}
+
+pub fn log_by_name(name: &str, log_level: LogType, params: HashMap<String, String>) -> Option<Box<dyn Log+Sync+Send>> {
     match name {
-      "file" => return Some(Box::new(file::FileLog::new(params))),
+      "console" => return Some(Box::new(MainLog::new(log_level, Box::new(console::ConsoleLog::new(params))))),
+      "file" => return Some(Box::new(MainLog::new(log_level, Box::new(file::FileLog::new(params))))),
       _ => return None
     }
 }

@@ -82,6 +82,7 @@ pub trait Display : Sync + Send {
   fn init(&mut self) -> Result<(), String>;
   fn show_animation(&mut self, animation: Animation, color: AnimationColor, animation_type: AnimationType, message: &str, dismiss: u64) -> Result<(), String>;
   fn wait_animation_ends(&mut self) -> Result<(), String>;
+  fn when_animation_ends(&mut self, func: fn() ) -> Result<(), String>;
   fn clear_and_stop_animations(&mut self) -> Result<(), String>;
   fn unload(&mut self) -> Result<(), String>;
   fn signature(&self) -> String;
