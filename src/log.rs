@@ -115,7 +115,7 @@ impl Log for MainLog {
   }
 }
 
-pub fn log_by_name(name: &str, log_level: LogType, params: HashMap<String, String>) -> Option<Box<dyn Log+Sync+Send>> {
+pub fn log_by_name(name: &str, log_level: LogType, params: &HashMap<String, String>) -> Option<Box<dyn Log+Sync+Send>> {
     match name {
       "console" => return Some(Box::new(MainLog::new(log_level, Box::new(console::ConsoleLog::new(params))))),
       "file" => return Some(Box::new(MainLog::new(log_level, Box::new(file::FileLog::new(params))))),

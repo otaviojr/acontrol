@@ -208,6 +208,7 @@ impl Sounds {
     Ok(())
   }
 
+  #[allow(dead_code)]
   pub fn play_piratescaribean(buzzer: &mut Buzzer) -> Result<(), String> {
     let mut tones: Vec<Tone> = vec!(
       Tone::NOTE_E4, Tone::NOTE_G4, Tone::NOTE_A4, Tone::NOTE_A4,

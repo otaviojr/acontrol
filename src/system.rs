@@ -202,7 +202,7 @@ fn find_bt_device(device: BluetoothDevice) -> bool {
   let asystem = acontrol_system_get();
   let mut next_bt_system_state: Option<BluetoothSystemState> = None;
 
-  acontrol_system_log!(LogType::Debug, "Device found: ADDR={:X?}", device.addr);
+  acontrol_system_log!(LogType::Info, "Bluetooth device found: ADDR={:X?}", device.addr);
 
   if let Ok(ref mut bt_state) = asystem.bt_state.lock() {
     match **bt_state {
@@ -224,7 +224,7 @@ fn find_bt_device(device: BluetoothDevice) -> bool {
           let _ret = acontrol_system_get_display_drv(|display|{
             let _ret = display.show_animation(Animation::Blink,AnimationColor::Green,AnimationType::Success, "Done",3);
             let _ret = display.when_animation_ends( || {
-              let _ret = acontrol_system_get_display_drv( |display|{
+              let _ret = acontrol_system_get_display_drv( |display| {
                 let _ret = display.show_animation(Animation::MaterialSpinner, AnimationColor::Orange, AnimationType::Waiting, "Waiting",0);
               });
             });
@@ -322,6 +322,7 @@ fn find_finger(state: &FingerprintState, _value: Option<&str>) -> bool {
           }
         },
         FingerprintState::AUTHORIZED => {
+          acontrol_system_log!(LogType::Info, "Fingerprint authorized");
 
           let _ret = acontrol_system_get_audio_drv(|audio|{
             let _ret = audio.play_granted();
@@ -352,7 +353,7 @@ fn find_finger(state: &FingerprintState, _value: Option<&str>) -> bool {
 
         }
         FingerprintState::NOT_AUTHORIZED => {
-
+          acontrol_system_log!(LogType::Info, "Fingerprint not authorized");
           let _ret = acontrol_system_get_audio_drv(|audio|{
             let _ret = audio.play_denied();
           });
@@ -836,6 +837,7 @@ pub fn acontrol_system_get_display_drv<F, T>(f:F) -> Result<(),String>
   where F: FnOnce(&mut Box<dyn Display + Send + Sync>) -> T {
     let asystem = acontrol_system_get();
 
+    acontrol_system_log!(LogType::Debug, "acontrol_system_get_display_drv entered");
     if let Ok(ref mut drv_lock) = asystem.display_drv.lock() {
       if let Some(ref mut drv) = **drv_lock {
         f(drv);
@@ -843,6 +845,7 @@ pub fn acontrol_system_get_display_drv<F, T>(f:F) -> Result<(),String>
     } else {
       return Err(String::from("Display module not found"));
     }
+    acontrol_system_log!(LogType::Debug, "acontrol_system_get_display_drv exited");
 
     Ok(())
 }

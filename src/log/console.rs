@@ -34,7 +34,7 @@ pub struct ConsoleLog {
 
 
 impl ConsoleLog {
-  pub fn new(_params: HashMap<String, String>) -> Self {
+  pub fn new(_params: &HashMap<String, String>) -> Self {
       return ConsoleLog {};
   }
 }

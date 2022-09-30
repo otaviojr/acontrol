@@ -139,7 +139,7 @@ impl Bluetooth for BlueZ {
                     let service_data = device.service_data().await.unwrap_or_default();
 
 
-                    acontrol_system_log!(LogType::Debug, "Monitor thread: DeviceFound funcion called: {}",addr);
+                    acontrol_system_log!(LogType::Debug, "Bluetooth monitor thread: DeviceFound funcion called: {}",addr);
                     acontrol_system_log!(LogType::Debug, "-------------------------");
                     acontrol_system_log!(LogType::Debug, "    Address:            {}", addr);
                     acontrol_system_log!(LogType::Debug, "    Address type:       {}", address_type);

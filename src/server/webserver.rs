@@ -250,12 +250,9 @@ impl Server for WebServer {
   }
 
   fn init(&self) -> Result<(), String> {
-    println!("{}",self.signature());
+    acontrol_system_log!(LogType::Info,"{}",self.signature());
 
     let mut router = Router::new();
-
-    //router.get("/", WebServer::hello_world, "index");
-    //router.get("/:query", WebServer::hello_world, "query");
 
     router.get("/nfc/card", WebServer::nfc_list, "nfc_list");
     router.post("/nfc/card/authorize", WebServer::nfc_authorize,"nfc_authorize");

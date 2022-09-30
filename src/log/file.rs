@@ -34,7 +34,7 @@ pub struct FileLog {
 
 
 impl FileLog {
-  pub fn new(_params: HashMap<String, String>) -> Self {
+  pub fn new(_params: &HashMap<String, String>) -> Self {
       return FileLog {};
   }
 }

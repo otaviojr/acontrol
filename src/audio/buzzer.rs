@@ -158,7 +158,7 @@ impl Audio for Buzzer {
       acontrol_system_log!(LogType::Info, "Buzzer driver version {} found!", String::from_utf8(version.to_vec()).unwrap());
     }
 
-    let _ret = Sounds::play_piratescaribean(self);
+    //let _ret = Sounds::play_piratescaribean(self);
     
     Ok(())
   }

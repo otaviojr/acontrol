@@ -283,6 +283,7 @@ impl NeoPixel {
         loop {
           if Ok(false) == f(&mut *p) {
             next = false;
+            send = true;
           }
 
           match interface.animation_rx.lock().unwrap().try_recv() {
@@ -298,7 +299,7 @@ impl NeoPixel {
           }
 
           match finish(next, &mut *p) {
-            Ok(timing) => if timing >= 0 { wait = timing as u64 } else { next = false },
+            Ok(timing) => if timing >= 0 { wait = timing as u64 } else { next = false; send = true },
             Err(err) => {
               let _ret = interface.clear();
               return Err(err)
@@ -307,11 +308,12 @@ impl NeoPixel {
 
           if next == false  {
             let _ret = interface.clear();
+
             let mut state:NeoPixelThreadState = NeoPixelThreadState::Stop;
             if !send {
               state = NeoPixelThreadState::SilentStop;
             }
-            let _ = interface.animation_ends_tx.lock().unwrap().clone().send(state);
+            let _ = interface.animation_ends_tx.lock().unwrap().send(state);
             break;
           }
 
@@ -552,23 +554,37 @@ impl Display for NeoPixel {
     Ok(())
   }
 
-  fn when_animation_ends(&mut self, func: fn() ) -> Result<(), String> {
-
+  fn when_animation_ends(&self, func: fn() ) -> Result<(), String> {
     let interface = self.interface.clone();
 
+    //clear stop  channel
+    while let Ok(_state) = interface.animation_ends_rx.lock().unwrap().try_recv() {
+    }
+    
     let _ = thread::spawn( move || {
+      acontrol_system_log!(LogType::Debug, "when_animation_ends waiting for stop signal");
       if let Ok(state) = interface.animation_ends_rx.lock().unwrap().recv() {
         match state {
-          NeoPixelThreadState::Stop => func(),
-          NeoPixelThreadState::SilentStop => ()
+          NeoPixelThreadState::Stop => {
+            acontrol_system_log!(LogType::Debug, "when_animation_ends received stop signal");
+            func();
+            acontrol_system_log!(LogType::Debug, "when_animation_ends callback function returned");
+          },
+          NeoPixelThreadState::SilentStop => {
+            acontrol_system_log!(LogType::Debug, "when_animation_ends received stop silent signal");
+          }
         }
+      } else {
+        acontrol_system_log!(LogType::Error, "Display: Error receiving stop signal");
       }
+      acontrol_system_log!(LogType::Debug, "when_animation_ends thread ends");
     });
 
     Ok(())
   }
 
   fn clear_and_stop_animations(&mut self) -> Result<(), String> {
+    acontrol_system_log!(LogType::Debug, "clear_and_stop_animations request to stop animation");
     let _ret = self.stop_animation();
     let _ret = self.clear();
     Ok(())

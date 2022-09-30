@@ -146,6 +146,10 @@ async fn main(){
     process::exit(-1);
   }
 
+  let mut params: HashMap<String,String> = HashMap::new();
+  params.insert("LOGS_PATH".to_string(), DEFAULT_LOGS_PATH.to_string());
+  params.insert("DATA_PATH".to_string(), DEFAULT_DATA_PATH.to_string());
+
   let bluetooth = matches.value_of("bluetooth-module").unwrap();
   let fingerprint = matches.value_of("fingerprint-module").unwrap();
   let nfc = matches.value_of("nfc-module").unwrap();
@@ -158,8 +162,7 @@ async fn main(){
   let display_drv = display::display_by_name("neopixel");
   let persist_drv = persist::persist_by_name("sqlite");
 
-  let log_params:HashMap<String,String> = HashMap::new();
-  let log_drv = log::log_by_name("file", LogType::Debug, log_params);
+  let log_drv = log::log_by_name("file", LogType::Debug, &params);
 
   if let Some(ref drv) = bt_drv
   {
@@ -185,10 +188,6 @@ async fn main(){
   if let Some(ref drv) = log_drv {
     println!("Log driver: {}", drv.signature());
   }
-
-  let mut params: HashMap<String,String> = HashMap::new();
-  params.insert("LOGS_PATH".to_string(), DEFAULT_LOGS_PATH.to_string());
-  params.insert("DATA_PATH".to_string(), DEFAULT_DATA_PATH.to_string());
 
   {
     if !system::acontrol_system_init(&params, bt_drv, fingerprint_drv, 
