@@ -28,7 +28,7 @@
 mod file;
 mod console;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, thread::{self, JoinHandle}, sync::{mpsc, Arc, Mutex}};
 use chrono::{DateTime,Utc};
 
 #[derive(Clone, Copy)]
@@ -74,19 +74,26 @@ impl LogUtils {
 
 pub trait Log {
   fn init(&mut self) -> Result<(),String>;
-  fn log(&mut self, log_type: LogType, message: String) -> Result<(), String>;
+  fn log(&self, log_type: LogType, message: String) -> Result<(), String>;
   fn unload(&mut self) -> Result<(),String>;
   fn signature(&self) -> String;
 }
 
+struct MainLogMessage {
+  log_type: LogType,
+  message: String
+}
+
 pub struct MainLog {
-  inner_log: Box<dyn Log>,
-  log_level: LogType
+  inner_log: Arc<Mutex<Box<dyn Log+Sync+Send>>>,
+  log_level: LogType,
+  handle: Option<JoinHandle<Result<(), String>>>,
+  tx: Option<mpsc::Sender<MainLogMessage>>
 }
 
 impl MainLog {
-  pub fn new(log_level: LogType, inner_log: Box<dyn Log>) -> Self {
-    return MainLog { log_level: log_level, inner_log: inner_log};
+  pub fn new(log_level: LogType, inner_log: Box<dyn Log+Sync+Send>) -> Self {
+    return MainLog { log_level: log_level, inner_log: Arc::new(Mutex::new(inner_log)), handle: None, tx: None};
   }
 }
 
@@ -95,23 +102,45 @@ unsafe impl Send for MainLog {}
 
 impl Log for MainLog {
   fn init(&mut self) -> Result<(),String>{
-    self.inner_log.init()
+    self.inner_log.lock().unwrap().init()?;
+    let (tx, rx) = mpsc::channel::<MainLogMessage>();
+    self.tx = Some(tx);
+    let inner_log_clone = self.inner_log.clone();
+    self.handle = Some(thread::spawn( move || {
+      loop{
+        if let Ok(message) = rx.recv() {
+          if let Ok(inner_log) = inner_log_clone.lock() {
+            let _ = inner_log.log(message.log_type, message.message);
+          }
+        }
+      }
+    }));
+    Ok(())
   }
 
-  fn log(&mut self, log_type: LogType, message: String) -> Result<(), String>{
+  fn log(&self, log_type: LogType, message: String) -> Result<(), String>{
     if log_type.value() >= self.log_level.value(){
-      self.inner_log.log(log_type, message)
-    } else {
-      Ok(())
+      if let Some(ref tx) = self.tx {
+        if let Err(err) = tx.send(MainLogMessage {
+          log_type: log_type,
+          message: message
+        }) {
+          return Err(format!("Log: Error persisting log message: {}", err));
+        }
+        return Ok(());
+      } else {
+        return Err("Log: Error thread not found".to_owned());
+      }
     }
+    Ok(())
   }
 
   fn unload(&mut self) -> Result<(),String>{
-    self.inner_log.unload()
+    self.inner_log.lock().unwrap().unload()
   }
 
   fn signature(&self) -> String {
-    self.inner_log.signature()
+    self.inner_log.lock().unwrap().signature()
   }
 }
 

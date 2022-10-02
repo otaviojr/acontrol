@@ -54,7 +54,7 @@ impl Log for ConsoleLog {
     Ok(())
   }
 
-  fn log(&mut self, log_type: LogType, message: String) -> Result<(), String> {
+  fn log(&self, log_type: LogType, message: String) -> Result<(), String> {
     println!("{}",LogUtils::formatted_message(log_type, message));
     Ok(())
   }

@@ -429,7 +429,7 @@ fn find_tag(_card_type: CardType, uuid: Vec<u8>) -> bool {
                             let _ret = display.clear_and_stop_animations();
                           });
                         } else {
-                          println!("Card {:?} not found!", uuid);
+                          acontrol_system_log!(LogType::Error, "Card {:?} not found!", uuid);
 
                           let _ret = acontrol_system_get_audio_drv(|audio|{
                             let _ret = audio.play_denied();
