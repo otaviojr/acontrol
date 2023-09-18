@@ -26,16 +26,22 @@
  *
  */
 
-use crate::{log::{Log, LogType, LogUtils}};
-use std::collections::HashMap;
+use crate::{log::{Log, LogType}};
+use std::{collections::HashMap, path::{PathBuf}, fs::{OpenOptions}, io::Write};
+
+use super::LogUtils;
 
 pub struct FileLog {
+  log_file: PathBuf,
 }
 
 
 impl FileLog {
   pub fn new(_params: &HashMap<String, String>) -> Self {
-      return FileLog {};
+      let mut path = PathBuf::from("/var/log/acontrol");
+      path.push("acontrol.log");
+      let _ = std::fs::remove_file(path.as_os_str());
+      return FileLog {log_file: path };
   }
 }
 
@@ -54,9 +60,22 @@ impl Log for FileLog {
     Ok(())
   }
 
-  fn log(&mut self, log_type: LogType, message: String) -> Result<(), String> {
-    println!("{}",LogUtils::formatted_message(log_type, message));
-    Ok(())
+  fn log(&self, log_type: LogType, message: String) -> Result<(), String> {
+    match OpenOptions::new()
+    .create(true)
+    .write(true)
+    .append(true)
+    .open(self.log_file.as_os_str()) {
+      Ok(mut file) => {
+        let mut final_message: String = message;
+        final_message.push_str("\r\n");
+        if let Err(err) = file.write_all(LogUtils::formatted_message(log_type,final_message).as_bytes()) {
+          return Err(format!("Log Error: {}", err));
+        }
+        Ok(())
+      },
+      Err(err) => Err(format!("Log Error: {}", err))
+    }
   }
 
   fn unload(&mut self) -> Result<(), String>{
